@@ -15,3 +15,8 @@ SPDX-License-Identifier = "CC-BY-4.0"
 path = ["schemas/envelope-0.1.json", "schemas/gate-decision-0.1.json", "packages/core/src/bounded_embodiment/schemas/envelope-0.1.json", "packages/core/src/bounded_embodiment/schemas/gate-decision-0.1.json"]
 SPDX-FileCopyrightText = "2026 Robot Registry Foundation contributors (rcan-spec)"
 SPDX-License-Identifier = "CC-BY-4.0"
+
+[[annotations]]
+path = ["examples/robots/so101/*.urdf"]
+SPDX-FileCopyrightText = "TheRobotStudio (SO-ARM100, github.com/TheRobotStudio/SO-ARM100)"
+SPDX-License-Identifier = "Apache-2.0"

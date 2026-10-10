@@ -11,3 +11,5 @@ dist/
 htmlcov/
 /runs/
 /sessions/
+.claude/
+examples/robots/*/assets/

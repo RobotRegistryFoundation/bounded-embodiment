@@ -1,0 +1,5 @@
+vectors/** -text
+schemas/** -text
+profiles/** -text
+packages/core/src/bounded_embodiment/schemas/** -text
+packages/core/src/bounded_embodiment/profiles/** -text

@@ -1,0 +1,31 @@
+[build-system]
+requires = ["hatchling>=1.25"]
+build-backend = "hatchling.build"
+
+[project]
+name = "bounded-embodiment-kit"
+version = "0.1.0.dev0"
+description = "The lab bench for the Bounded Embodiment tests: adapters, instruments, the runner and its watchdog."
+readme = "README.md"
+requires-python = ">=3.10"
+license = "Apache-2.0"
+authors = [{ name = "Craig Merry" }]
+dependencies = ["bounded-embodiment~=0.1.0.dev0", "numpy>=1.24"]
+
+[project.optional-dependencies]
+camera = ["opencv-python-headless>=4.9,<4.14"]
+oakd = ["depthai>=2.24", "opencv-python-headless>=4.9,<4.14"]
+lerobot = ["lerobot>=0.6.1; python_version >= '3.12'", "pyserial>=3.5"]
+test = ["pytest>=8"]
+
+[project.entry-points."bounded_embodiment.cli"]
+kit = "bounded_embodiment_kit.cli:register"
+
+[project.urls]
+Repository = "https://github.com/RobotRegistryFoundation/bounded-embodiment"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/bounded_embodiment_kit"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

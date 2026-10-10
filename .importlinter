@@ -1,0 +1,28 @@
+[importlinter]
+root_packages =
+    bounded_embodiment
+    bounded_embodiment_kit
+include_external_packages = True
+
+[importlinter:contract:core-is-pure]
+name = Core imports no kit, no numpy, no hardware and no RCAN
+type = forbidden
+source_modules =
+    bounded_embodiment
+forbidden_modules =
+    bounded_embodiment_kit
+    numpy
+    cv2
+    serial
+    depthai
+    lerobot
+    rcan
+
+[importlinter:contract:kit-imports-no-gates]
+name = The kit never imports a gate or RCAN
+type = forbidden
+source_modules =
+    bounded_embodiment_kit
+forbidden_modules =
+    reference_gates
+    rcan

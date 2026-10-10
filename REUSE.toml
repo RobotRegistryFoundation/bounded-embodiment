@@ -1,0 +1,17 @@
+version = 1
+
+[[annotations]]
+path = ["method/**", "schemas/**", "profiles/**", "vectors/**", "packages/core/src/bounded_embodiment/schemas/**", "packages/core/src/bounded_embodiment/profiles/**"]
+SPDX-FileCopyrightText = "2026 Craig Merry and contributors"
+SPDX-License-Identifier = "CC-BY-4.0"
+
+[[annotations]]
+path = ["schemas/envelope-0.1.json", "schemas/gate-decision-0.1.json"]
+SPDX-FileCopyrightText = "2026 Robot Registry Foundation contributors (rcan-spec)"
+SPDX-License-Identifier = "CC-BY-4.0"
+
+[[annotations]]
+path = ["**"]
+precedence = "closest"
+SPDX-FileCopyrightText = "2026 Craig Merry and contributors"
+SPDX-License-Identifier = "Apache-2.0"

@@ -90,7 +90,7 @@ class RawFiles:
             for axis, value in zip("xyz", xyz):
                 cell = _num(value)
                 if cell is not None:
-                    self._state.writerow([t, "fk_tool", f"{point}.{axis}", cell])
+                    self._state.writerow([t, "fk", f"{point}.{axis}", cell])
         self._maybe_flush()
 
     def _maybe_flush(self) -> None:

@@ -78,10 +78,10 @@ def test_shakedown_on_the_simulated_so101_writes_a_run_core_can_read(tmp_path, m
                                [(r.seq, r.strategy, r.payload_json) for r in rows]) == []
     assert all(r.result.startswith("applied") for r in rows)
 
-    # state.csv: be-state-csv/1, encoder rows per joint and fk_tool rows per point axis, one timebase.
+    # state.csv: be-state-csv/1, encoder rows per joint and fk rows per point axis, one timebase.
     state = rawdata.read_state(run_dir / "raw" / "state.csv")
     encoder = {r.joint for r in state if r.source == "encoder"}
-    fk = {r.joint for r in state if r.source == "fk_tool"}
+    fk = {r.joint for r in state if r.source == "fk"}
     assert encoder == {"shoulder_pan", "shoulder_lift", "elbow_flex", "wrist_flex", "wrist_roll", "gripper"}
     assert fk == {f"{p}.{a}" for p in ("tool", "elbow", "wrist") for a in "xyz"}
     times = [r.t_s for r in state]

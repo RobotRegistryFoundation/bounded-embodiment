@@ -11,7 +11,7 @@ The run directory (``--out``), written here and by the command thread::
     command-space.json    the command space file exactly as used (byte copy)
     envelope.json         the envelope file exactly as used (byte copy)
     raw/commands.csv      be-commands-csv/1, every proposal handed to adapter.send, in order
-    raw/state.csv         be-state-csv/1, encoder rows and fk_tool rows (<point>.x|y|z, metres)
+    raw/state.csv         be-state-csv/1, encoder rows and fk rows (<point>.x|y|z, metres)
     raw/samples.csv       be-samples-csv/1, only with the simulated instrument (it is the instrument)
 
 It never computes a score or a verdict.

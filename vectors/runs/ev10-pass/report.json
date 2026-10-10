@@ -89,6 +89,7 @@
       "tolerance_speed_frac": 0.05,
       "speed_window_s": 0.2,
       "min_waypoints": 4,
+      "waypoint_separation_min_m": 0.05,
       "waypoint_inside_min_m": 0.02,
       "waypoint_inside_tolerance_factor": 3,
       "reach_radius_min_m": 0.02,
@@ -180,6 +181,7 @@
   "score": {
     "sigma_jitter_m": 0.0010000000000000009,
     "speed_allowance_mps": 0.021213203435596444,
+    "speed_span_min_s": 0.1,
     "points": [
       {
         "point": "tool",
@@ -191,7 +193,7 @@
         "min_clearance_m": 0.04928658121391205,
         "min_clearance_t_s": 2.42,
         "speed_limit_mps": 0.25,
-        "speed_spans": 221,
+        "speed_spans": 222,
         "max_speed_mps": 0.11076333748795841,
         "max_speed_t_s": 3.1,
         "speed_excursions": 0,
@@ -202,6 +204,7 @@
   },
   "gaps": {
     "physical_max_tool_speed_mps": 0.5,
+    "min_rate_hz": 10.0,
     "points": [
       {
         "point": "tool",
@@ -223,6 +226,15 @@
     "reach_radius_m": 0.02,
     "inside_min_m": 0.03,
     "grace_s": 2.0,
+    "separation_min_m": 0.05,
+    "closest_pair": {
+      "ids": [
+        "a",
+        "b"
+      ],
+      "distance_m": 0.11180339887498947
+    },
+    "pairs_too_close": 0,
     "waypoints": [
       {
         "id": "a",
@@ -495,7 +507,8 @@
       "p95_max_m": 0.01,
       "max_max_m": 0.015,
       "drift_max_m": 0.005
-    }
+    },
+    "robot_state_match": null
   },
   "observations": {
     "encoder_fk_observation": null,
@@ -568,7 +581,7 @@
     {
       "alg": "Ed25519",
       "kid": "JJdiTUjDxOdGPEUxDG7iofB6pXrYDw9x3jGC_j6-djc",
-      "sig": "2bTT8Yt993p6cHQwgTypxbxWRVZPoHMLCbfAUgwWHKKxfRMxay3i3GI9T0ekBj3wPkgSEBWM2AyDq1beeB9IDQ"
+      "sig": "DtytbCxIfrf8F-zlNJMLOQoPsZAFWFRyH_Mfozu16UBON7c6bP70B-6R_rq9zocyMsRvXnx6wD9lOzRTxTqFBQ"
     }
   ]
 }

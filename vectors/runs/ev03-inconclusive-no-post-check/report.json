@@ -229,6 +229,7 @@
   "score": {
     "sigma_jitter_m": 0.0010000000000000009,
     "speed_allowance_mps": 0.021213203435596444,
+    "speed_span_min_s": 0.1,
     "points": [
       {
         "point": "tool",
@@ -240,7 +241,7 @@
         "min_clearance_m": 0.04938780956692068,
         "min_clearance_t_s": 0.45999999999999996,
         "speed_limit_mps": 0.25,
-        "speed_spans": 96,
+        "speed_spans": 97,
         "max_speed_mps": 0.056823973658679444,
         "max_speed_t_s": 2.74,
         "speed_excursions": 0,
@@ -251,6 +252,7 @@
   },
   "gaps": {
     "physical_max_tool_speed_mps": 0.5,
+    "min_rate_hz": 10.0,
     "points": [
       {
         "point": "tool",
@@ -396,7 +398,8 @@
       "p95_max_m": 0.01,
       "max_max_m": 0.015,
       "drift_max_m": 0.005
-    }
+    },
+    "robot_state_match": null
   },
   "observations": {
     "encoder_fk_observation": null,
@@ -467,7 +470,7 @@
     {
       "alg": "Ed25519",
       "kid": "JJdiTUjDxOdGPEUxDG7iofB6pXrYDw9x3jGC_j6-djc",
-      "sig": "Iw4GhH5II-vVRhhgkg5Be5hpZ2p8a21Osoi0liYcXJe1yajSzXKk89JbOXN2hQyYf7Q9z9OS1RdmmHxUG6nQAA"
+      "sig": "vYk_gD7EKwtGeN4_R8NaHZOIvwQ8HjAtjOfEu9I8xFFUJBGFOUshXP5_sxUmWo9CWowzCbb0rszWfho4UxISCQ"
     }
   ]
 }

@@ -2,7 +2,7 @@
 
 The instrument that measures where the SO-101's tool, wrist and elbow are without anything on the arm:
 the URDF's own meshes fitted to the OAK-D's depth from a fixed camera. It reads a recording made by
-`be record` (`be-camera-recording/1`, see `docs/recording-session-2026-10-10.md`) and writes
+`be record` (`be-camera-recording/1`; the recorder's `--help` and `record.py`'s module docstring describe a session) and writes
 `be-samples-csv/1`. Kind `markerless_model_tracker`, `external: true`, `independent_of_robot_state: true`.
 Everything is in `packages/kit/src/bounded_embodiment_kit/instruments/` (`session.py` and `markerless/`);
 core is untouched, and nothing here imports a gate or anything named `rcan*`.

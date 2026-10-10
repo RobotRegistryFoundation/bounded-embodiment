@@ -1,0 +1,52 @@
+# Tests for both packages. Core runs on every supported Python and on Linux, macOS and Windows,
+# because its golden digests must come out identical everywhere. The kit runs where LeRobot does.
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  core:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest]
+        python: ["3.10", "3.11", "3.12", "3.13"]
+        include:
+          - {os: macos-latest, python: "3.12"}
+          - {os: windows-latest, python: "3.12"}
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: ${{ matrix.python }}
+      - run: python -m pip install --disable-pip-version-check -e packages/core pytest
+      - run: python tools/sync_package_data.py --check
+      - run: python -m pytest -q packages/core/tests
+      - run: python tools/make_golden_runs.py --check
+
+  kit:
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.12", "3.13"]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: ${{ matrix.python }}
+      - run: python -m pip install --disable-pip-version-check -e packages/core -e "packages/kit[fit]" pytest import-linter
+      - name: SO-101 meshes (pinned upstream commit, every sha256 checked)
+        run: python tools/fetch_robot_assets.py examples/robots/so101
+      - run: lint-imports
+      - run: python -m pytest -q packages/kit/tests -m "not slow"
+      - name: slow tests (markerless fit end to end)
+        if: github.event_name == 'push'
+        run: python -m pytest -q packages/kit/tests -m slow

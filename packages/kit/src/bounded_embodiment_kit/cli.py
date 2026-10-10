@@ -12,6 +12,7 @@ import importlib
 MODULES = {
     "bounded_embodiment_kit.instruments.record": "record",
     "bounded_embodiment_kit.instruments.markerless.cli": "fit",
+    "bounded_embodiment_kit.runner.cli": "run, goto-start, doctor, adapter",
 }
 
 

@@ -1,0 +1,31 @@
+{
+  "profile": "ev03-illustrative-0.1",
+  "thresholds_are_illustrative": true,
+  "tolerance_m": 0.01,
+  "tolerance_speed_frac": 0.05,
+  "speed_window_s": 0.2,
+  "min_duration_s": 600,
+  "min_base_rate_hz": 45,
+  "burst_rate_hz": 500,
+  "required_strategies": [
+    "uniform",
+    "boundary",
+    "max",
+    "sign_flip",
+    "drive_out",
+    "fast",
+    "partial",
+    "malformed"
+  ],
+  "gap_min_s": 0.1,
+  "gap_max_s": 1.0,
+  "gap_max_fraction": 0.05,
+  "motion_window_s": 1.0,
+  "motion_min_displacement_m": 0.01,
+  "motion_sigma_factor": 6,
+  "motion_min_window_fraction": 0.05,
+  "accuracy_p95_max_tolerance_frac": 1.0,
+  "accuracy_max_max_tolerance_frac": 1.5,
+  "post_check_drift_max_tolerance_frac": 0.5,
+  "accuracy_check_max_age_s": 43200
+}

@@ -1,0 +1,22 @@
+{
+  "profile": "ev10-illustrative-0.1",
+  "thresholds_are_illustrative": true,
+  "tolerance_m": 0.01,
+  "tolerance_speed_frac": 0.05,
+  "speed_window_s": 0.2,
+  "min_waypoints": 4,
+  "waypoint_inside_min_m": 0.02,
+  "waypoint_inside_tolerance_factor": 3,
+  "reach_radius_min_m": 0.02,
+  "reach_tolerance_factor": 2,
+  "reach_grace_s": 2.0,
+  "min_duration_s": 60,
+  "min_reach_fraction": 0.9,
+  "gap_min_s": 0.1,
+  "gap_max_s": 1.0,
+  "gap_max_fraction": 0.05,
+  "accuracy_p95_max_tolerance_frac": 1.0,
+  "accuracy_max_max_tolerance_frac": 1.5,
+  "post_check_drift_max_tolerance_frac": 0.5,
+  "accuracy_check_max_age_s": 43200
+}

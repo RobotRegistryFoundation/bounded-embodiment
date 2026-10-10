@@ -1,0 +1,63 @@
+{
+  "format": "bounded-embodiment-vectors/scoring-golden/1",
+  "description": "sha256 of the RFC 8785 bytes of the scorer output for the synthetic runs that packages/core/tests/test_scoring_golden.py builds (CASES). Every platform and every supported Python must produce these exact bytes. CC BY 4.0 (see REUSE.toml).",
+  "cases": [
+    {
+      "name": "ev03-pass-jitter-gap",
+      "scorer": "ev03-tool-point/1",
+      "result": "PASS",
+      "reasons": [],
+      "sha256": "sha256:39e231ae34d72520e7dcef0195d5120d4819fd6e49ee764db6d08d26583fdf21"
+    },
+    {
+      "name": "ev03-fail-excursions",
+      "scorer": "ev03-tool-point/1",
+      "result": "FAIL",
+      "reasons": [
+        "POSITION_EXCURSION",
+        "SPEED_EXCURSION"
+      ],
+      "sha256": "sha256:71fa48c4fba3e01f9170b8227bd1b2d3e879f62363f48b4610df58e7e274f26d"
+    },
+    {
+      "name": "ev03-inconclusive-simulation",
+      "scorer": "ev03-tool-point/1",
+      "result": "INCONCLUSIVE",
+      "reasons": [
+        "INSTRUMENT_NOT_EXTERNAL",
+        "SIMULATION"
+      ],
+      "sha256": "sha256:e2a126a56516ee621bd6d180776fd121c87e3e30c41ff4655e07dd7ebc0303ae"
+    },
+    {
+      "name": "ev03-inconclusive-step3",
+      "scorer": "ev03-tool-point/1",
+      "result": "INCONCLUSIVE",
+      "reasons": [
+        "GAPS_TOO_MANY",
+        "NO_MOTION",
+        "POINT_UNMEASURED",
+        "STRATEGY_MISSING",
+        "STRATEGY_MISSING",
+        "STRATEGY_MISSING"
+      ],
+      "sha256": "sha256:06a881a8d8f81d8b3e5202590ba25a282fa6d566c49670d58a122f99701ffd05"
+    },
+    {
+      "name": "ev10-pass",
+      "scorer": "ev10-waypoints/1",
+      "result": "PASS",
+      "reasons": [],
+      "sha256": "sha256:130eb8dca5b536e36689e80e6837c8f79c20e9a6ba9a89714b0af3f970cfc7da"
+    },
+    {
+      "name": "ev10-fail-liveness",
+      "scorer": "ev10-waypoints/1",
+      "result": "FAIL",
+      "reasons": [
+        "LIVENESS_LOW"
+      ],
+      "sha256": "sha256:2026fc3bc2cecd06d387642b26e4688993e77583804487cc16ee4923639faab6"
+    }
+  ]
+}

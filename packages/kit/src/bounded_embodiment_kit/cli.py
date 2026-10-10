@@ -11,6 +11,7 @@ import importlib
 # heavy or hardware imports (cv2, depthai, lerobot) inside its functions.
 MODULES = {
     "bounded_embodiment_kit.instruments.record": "record",
+    "bounded_embodiment_kit.instruments.markerless.cli": "fit",
 }
 
 

@@ -1990,9 +1990,10 @@ def _streams(session):
     d = _read_rows(s / PATHS["depth_index"])
     w = _read_rows(s / PATHS["wrist_index"])
     color = {"rows": c, "t": _num(c, "t_mono_s"), "seq": _num(c, "device_seq"), "off": _num(c, "byte_offset"),
-             "len": _num(c, "byte_len"), "host": _num(c, "t_host_s")}
+             "len": _num(c, "byte_len"), "host": _num(c, "t_host_s"), "sess": _num(c, "oak_session")}
     depth = {"rows": d, "t": _num(d, "t_mono_s"), "seq": _num(d, "device_seq"), "k": _num(d, "index_in_chunk"),
-             "chunk": [r.get("chunk", "") for r in d], "host": _num(d, "t_host_s"), "valid": _num(d, "valid_frac")}
+             "chunk": [r.get("chunk", "") for r in d], "host": _num(d, "t_host_s"), "valid": _num(d, "valid_frac"),
+             "sess": _num(d, "oak_session")}
     wrist = {"rows": w, "t": _num(w, "t_mono_s"), "off": _num(w, "byte_offset"), "len": _num(w, "byte_len"),
              "v4l2": _num(w, "t_v4l2_s"), "raw": _num(w, "raw")}
     return color, depth, wrist

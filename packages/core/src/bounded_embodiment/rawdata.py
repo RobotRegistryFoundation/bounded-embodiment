@@ -29,6 +29,7 @@ the header (a blank line is a row with no fields). Cells are checked as follows:
 
 A reader collects the problems it finds (at most ``MAX_FINDINGS`` errors) and raises
 ``RawDataError``, whose ``findings`` say where each one is (``where`` is ``"<file>:<line>"``).
+``fk_samples_from_state`` turns the ``fk`` rows of be-state-csv/1 into samples, as strictly.
 
 Finding codes: ``RAW_UNREADABLE`` (cannot read, or bad gzip), ``RAW_ENCODING`` (not UTF-8, or a
 byte order mark), ``RAW_HEADER`` (missing or different header), ``RAW_SYNTAX`` (CSV quoting
@@ -47,7 +48,7 @@ import math
 import os
 import re
 import zlib
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
 from pathlib import Path
 from typing import NamedTuple
 
@@ -65,6 +66,7 @@ __all__ = [
     "RawDataError",
     "Sample",
     "StateRow",
+    "fk_samples_from_state",
     "read",
     "read_accuracy",
     "read_commands",
@@ -130,7 +132,9 @@ class Command(NamedTuple):
 
 
 class StateRow(NamedTuple):
-    """One ``be-state-csv/1`` row (long format). ``source`` is ``encoder`` or ``fk_tool``."""
+    """One ``be-state-csv/1`` row (long format). ``source`` is ``encoder`` (``joint`` a joint
+    name) or ``fk`` (``joint`` is ``<point id>.x|y|z``, ``value`` metres in the envelope
+    frame)."""
 
     t_s: float
     source: str
@@ -390,15 +394,86 @@ def read_commands(src: str | os.PathLike | bytes) -> list[Command]:
 
 
 def read_state(src: str | os.PathLike | bytes) -> list[StateRow]:
-    """Read ``be-state-csv/1``. No cell may be empty; ``source`` is ``encoder`` or
-    ``fk_tool``."""
+    """Read ``be-state-csv/1``. No cell may be empty; ``source`` is ``encoder`` or ``fk``. On
+    ``fk`` rows ``joint`` is ``<point id>.x``, ``<point id>.y`` or ``<point id>.z`` and ``value``
+    is metres in the envelope frame (``fk_samples_from_state`` turns them into samples)."""
+
+    def check(row: StateRow, line: int, problems: _Problems) -> None:
+        if row.source == "fk" and _fk_joint(row.joint) is None:
+            problems.add(
+                "RAW_VALUE",
+                line,
+                f"joint {row.joint!r}: an fk row names '<point>.x', '<point>.y' or '<point>.z'",
+            )
+
     columns = (
         ("t_s", _number),
-        ("source", _one_of("encoder", "fk_tool")),
+        ("source", _one_of("encoder", "fk")),
         ("joint", _identifier),
         ("value", _number),
     )
-    return _read_rows(src, STATE, StateRow, columns)
+    return _read_rows(src, STATE, StateRow, columns, check)
+
+
+_FK_JOINT = re.compile(r"(.+)\.([xyz])")
+
+
+def _fk_joint(joint: str) -> tuple[str, str] | None:
+    """(point id, axis) of an fk row's joint name, or None if it is not '<point>.<x|y|z>'."""
+    m = _FK_JOINT.fullmatch(joint) if isinstance(joint, str) else None
+    return None if m is None else (m.group(1), m.group(2))
+
+
+def fk_samples_from_state(rows: Iterable[StateRow]) -> list[Sample]:
+    """The encoder forward kinematics in be-state-csv/1 rows, as samples for scoring.
+
+    The ``fk`` rows of one ``(t_s, point)`` (joints ``<point>.x``, ``<point>.y``,
+    ``<point>.z``) become one ``Sample(t_s, point, x, y, z, 1, None)``, in the order each
+    ``(t_s, point)`` first appears; ``encoder`` rows are skipped. Strict: every ``(t_s, point)``
+    needs exactly one row per axis, and any other source (``fk_tool`` included), joint name or
+    non-finite number raises ``RawDataError`` (``where`` is ``"state rows:<index>"``)."""
+    problems = _Problems("state rows")
+    groups: dict[tuple[float, str], dict[str, float]] = {}
+    for i, row in enumerate(rows):
+        try:
+            r = StateRow(*row)
+        except TypeError:
+            problems.add("RAW_ROW", i, "a be-state-csv/1 row has 4 fields")
+            continue
+        if r.source == "encoder":
+            continue
+        if r.source != "fk":
+            problems.add("RAW_VALUE", i, f"source {r.source!r} is not 'encoder' or 'fk'")
+            continue
+        parsed = _fk_joint(r.joint)
+        if parsed is None:
+            problems.add(
+                "RAW_VALUE", i, f"joint {r.joint!r}: an fk row names '<point>.x|y|z'"
+            )
+            continue
+        if not all(
+            isinstance(v, (int, float)) and not isinstance(v, bool) and math.isfinite(v)
+            for v in (r.t_s, r.value)
+        ):
+            problems.add("RAW_VALUE", i, "t_s and value must be finite numbers")
+            continue
+        point, axis = parsed
+        axes = groups.setdefault((r.t_s, point), {})
+        if axis in axes:
+            problems.add("RAW_DUPLICATE", i, f"{point}.{axis} at t_s={r.t_s!r} appears twice")
+            continue
+        axes[axis] = r.value
+    for (t, point), axes in groups.items():
+        missing = [f"{point}.{a}" for a in ("x", "y", "z") if a not in axes]
+        if missing:
+            problems.add(
+                "RAW_VALUE", None, f"fk {point!r} at t_s={t!r} has no {', '.join(missing)}"
+            )
+    problems.raise_if_any()
+    return [
+        Sample(t, point, axes["x"], axes["y"], axes["z"], 1, None)
+        for (t, point), axes in groups.items()
+    ]
 
 
 def read_accuracy(src: str | os.PathLike | bytes) -> list[AccuracyRow]:

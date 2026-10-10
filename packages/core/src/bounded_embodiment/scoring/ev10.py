@@ -41,6 +41,7 @@ PROFILE_KEYS = {
     "tolerance_speed_frac": NUMBER,
     "speed_window_s": POSITIVE,
     "min_waypoints": NUMBER,
+    "waypoint_separation_min_m": NUMBER,
     "waypoint_inside_min_m": NUMBER,
     "waypoint_inside_tolerance_factor": NUMBER,
     "reach_radius_min_m": NUMBER,
@@ -79,7 +80,7 @@ def score(inp: ScoringInput) -> dict:
         "coverage": blocks["coverage"],
         "accuracy": blocks["accuracy"],
         "liveness": blocks["liveness"],
-        "observations": ev03.observations(p, blocks["window_tuple"], unscored),
+        "observations": ev03.observations(p, blocks["fk_by_point"], unscored),
         "verdict": verdict,
     }
     return jcs_safe(out)
@@ -113,12 +114,13 @@ def liveness(
     waypoints: list[tuple[str, Point3]],
 ) -> dict:
     """Rules: each waypoint must be "at least max(waypoint_inside_tolerance_factor·tol,
-    waypoint_inside_min_m) inside" (the clearance of the measured point at the waypoint); "a
-    visit is reached if some valid sample of that point within [visit start, visit end +
-    reach_grace_s] is within max(reach_tolerance_factor·tol, reach_radius_min_m) of the
-    waypoint". Only in-window samples count, as everywhere. The reach fraction is reached visits
-    / visits (None without visits); distinct_waypoints_visited counts waypoint ids with a
-    visit."""
+    waypoint_inside_min_m) inside" (the clearance of the measured point at the waypoint); no
+    two declared waypoints may be closer than waypoint_separation_min_m (reported: the closest
+    pair, the first in declared order on a tie, and how many pairs are closer); "a visit is
+    reached if some valid sample of that point within [visit start, visit end + reach_grace_s]
+    is within max(reach_tolerance_factor·tol, reach_radius_min_m) of the waypoint". Only
+    in-window samples count, as everywhere. The reach fraction is reached visits / visits (None
+    without visits); distinct_waypoints_visited counts waypoint ids with a visit."""
     profile, env = p.profile, p.envelope
     tol = profile["tolerance_m"]
     radius = max(profile["reach_tolerance_factor"] * tol, profile["reach_radius_min_m"])
@@ -164,12 +166,24 @@ def liveness(
                 "visits_reached": len([v for v in mine if v["reached"]]),
             }
         )
+    separation = profile["waypoint_separation_min_m"]
+    closest_pair, too_close = None, 0
+    for i in range(len(waypoints)):
+        for k in range(i + 1, len(waypoints)):
+            d = distance(waypoints[i][1], waypoints[k][1])
+            if d < separation:
+                too_close += 1
+            if closest_pair is None or d < closest_pair["distance_m"]:
+                closest_pair = {"ids": [waypoints[i][0], waypoints[k][0]], "distance_m": d}
     total = len(visit_entries)
     return {
         "point": point,
         "reach_radius_m": radius,
         "inside_min_m": inside_min,
         "grace_s": grace,
+        "separation_min_m": separation,
+        "closest_pair": closest_pair,
+        "pairs_too_close": too_close,
         "waypoints": waypoint_entries,
         "visits": visit_entries,
         "visits_total": total,

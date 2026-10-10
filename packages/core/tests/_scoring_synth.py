@@ -20,7 +20,7 @@ from dataclasses import replace
 
 from bounded_embodiment.envelope import Envelope, load
 from bounded_embodiment.profiles import load_profile
-from bounded_embodiment.rawdata import AccuracyRow, Command, Sample
+from bounded_embodiment.rawdata import AccuracyRow, Command, Sample, StateRow
 from bounded_embodiment.scoring import Declared, ScoringInput
 
 STRATEGIES = (
@@ -369,3 +369,15 @@ def to_csv(header: Sequence[str], rows: Sequence[tuple]) -> bytes:
     for row in rows:
         writer.writerow(["" if v is None else repr(v) if isinstance(v, float) else v for v in row])
     return out.getvalue().encode("utf-8")
+
+
+def fk_state_rows(fk: Sequence[Sample]) -> list[StateRow]:
+    """be-state-csv/1 rows (long format) carrying fk samples: per sample an encoder row, then
+    the fk rows <point>.x, <point>.y and <point>.z (metres, envelope frame)."""
+    rows = []
+    for s in fk:
+        rows.append(StateRow(s.t_s, "encoder", "elbow_flex", 0.0))
+        rows.append(StateRow(s.t_s, "fk", f"{s.point}.x", s.x_m))
+        rows.append(StateRow(s.t_s, "fk", f"{s.point}.y", s.y_m))
+        rows.append(StateRow(s.t_s, "fk", f"{s.point}.z", s.z_m))
+    return rows

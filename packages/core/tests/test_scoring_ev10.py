@@ -30,9 +30,10 @@ def result(out: dict) -> tuple[str, list[str]]:
 
 
 def grid_waypoints(n: int) -> list[dict]:
-    """n waypoints at least 50 mm inside the tool box, 50 mm apart."""
+    """n waypoints at least 40 mm inside the tool box, 60 mm apart (more than the 50 mm
+    separation minimum: a 50 mm grid would sit on it, and FP rounding decides which side)."""
     spots = [(x, y, z)
-             for z in (0.15, 0.20) for y in (-0.05, 0.0, 0.05) for x in (0.25, 0.30, 0.35)]
+             for z in (0.14, 0.20) for y in (-0.06, 0.0, 0.06) for x in (0.24, 0.30, 0.36)]
     return [{"id": f"w{i}", "position_m": list(spots[i])} for i in range(n)]
 
 
@@ -90,14 +91,45 @@ def test_stopping_just_inside_the_reach_radius_passes():
 
 @pytest.mark.parametrize(("n", "ok"), [(10, True), (8, False)])
 def test_reach_fraction_limit(n, ok):
-    """One waypoint declared 30 mm off where the arm goes: 9/10 = 0.9 passes, 7/8 fails."""
+    """One waypoint declared 120 mm above where the arm goes (and 60 mm from every other
+    declared waypoint): 9/10 = 0.9 passes, 7/8 fails."""
     wps = grid_waypoints(n)
     inp = ev10_input(waypoints=wps, cycles=1)
     moved = [dict(w) for w in wps]
-    moved[0] = {"id": "w0", "position_m": [0.25, -0.05, 0.18]}
+    moved[0] = {"id": "w0", "position_m": [0.24, -0.06, 0.26]}
     out = ev10.score(replace(inp, waypoints=moved))
+    assert out["liveness"]["pairs_too_close"] == 0
     assert out["liveness"]["visits_reached"] == n - 1
     assert result(out) == (("PASS", []) if ok else ("FAIL", ["LIVENESS_LOW"]))
+
+
+@pytest.mark.parametrize(("gap", "ok"), [(0.0501, True), (0.0499, False)])
+def test_waypoint_separation_edge(gap, ok):
+    wps = [dict(w) for w in EV10_WAYPOINTS]
+    wps[1] = {"id": "b", "position_m": [0.25 + gap, -0.05, 0.15]}  # gap from a, along x
+    out = ev10.score(ev10_input(waypoints=wps))
+    live = out["liveness"]
+    assert live["separation_min_m"] == 0.05
+    assert live["closest_pair"]["ids"] == ["a", "b"]
+    assert math.isclose(live["closest_pair"]["distance_m"], gap, rel_tol=1e-9)
+    assert live["pairs_too_close"] == (0 if ok else 1)
+    if ok:
+        assert result(out) == ("PASS", [])
+    else:
+        assert result(out) == ("INCONCLUSIVE", ["WAYPOINTS_TOO_CLOSE"])
+        assert out["verdict"]["reasons"][0]["detail"].startswith(
+            "waypoints 'a' and 'b' are 0.0499 m apart (1 pair(s) closer than 0.0500 m)")
+
+
+def test_waypoints_stacked_on_the_start_pose_cannot_pass_a_frozen_gate():
+    """Four waypoint ids at the pose a frozen gate holds would all be "reached"; the separation
+    rule makes that run INCONCLUSIVE instead of a PASS."""
+    here = [0.30, 0.0, 0.175]  # CENTRE, where ev10_input starts and a frozen arm stays
+    stacked = [{"id": k, "position_m": list(here)} for k in "abcd"]
+    out = ev10.score(ev10_input(waypoints=stacked, freeze=True))
+    assert out["liveness"]["reach_fraction"] == 1.0
+    assert out["liveness"]["pairs_too_close"] == 6
+    assert result(out) == ("INCONCLUSIVE", ["WAYPOINTS_TOO_CLOSE"])
 
 
 def test_too_few_waypoints_is_inconclusive_even_when_liveness_is_low():

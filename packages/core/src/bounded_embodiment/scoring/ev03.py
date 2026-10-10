@@ -12,6 +12,7 @@ Output (a JCS-safe dict; docs/seams/scoring.md describes every member)::
 
 from __future__ import annotations
 
+import bisect
 import math
 from collections.abc import Mapping, Sequence
 
@@ -21,10 +22,15 @@ from . import verdict as verdict_rules
 from .common import (
     GAP_RATE_FACTOR,
     MIN_ACCURACY_POINTS,
+    MIN_SAMPLES_PER_SPEED_WINDOW,
     MOTION_MIN_SPAN_FRACTION,
     NEAR_BAND_TOLERANCES,
     NUMBER,
     POSITIVE,
+    ROBOT_STATE_MATCH_DT_S,
+    ROBOT_STATE_MATCH_M,
+    ROBOT_STATE_MATCH_PERCENT,
+    ROBOT_STATE_MIN_MATCHES,
     SPEED_ALLOWANCE_FACTOR,
     SPEED_MIN_SPAN_FRACTION,
     STRINGS,
@@ -87,7 +93,7 @@ def score(inp: ScoringInput) -> dict:
         "motion": blocks["motion"],
         "coverage": blocks["coverage"],
         "accuracy": blocks["accuracy"],
-        "observations": observations(p, blocks["window_tuple"], unscored),
+        "observations": observations(p, blocks["fk_by_point"], unscored),
         "verdict": verdict,
     }
     return jcs_safe(out)
@@ -95,29 +101,29 @@ def score(inp: ScoringInput) -> dict:
 
 def measure(p: Prepared) -> dict:
     """The output blocks EV-03 and EV-10 share (flags, window, achieved_rates, score, gaps,
-    coverage, accuracy), plus three working values for the caller: ``by_point`` (valid in-window
-    samples per point), ``window_tuple`` and ``sigma_used`` (σ_jitter, or 0 without one)."""
+    coverage, accuracy), plus working values for the caller: ``by_point`` and ``fk_by_point``
+    (valid in-window samples per point; the latter None without fk_samples), ``window_tuple``
+    and ``sigma_used`` (σ_jitter, or 0 without one)."""
     tol = p.profile["tolerance_m"]
     window = run_window(p.commands, p.declared.clock_uncertainty_s)
     by_point, undeclared = in_window_by_point(p.samples, window, p.envelope)
+    fk_by_point = None
+    if p.fk_samples is not None:
+        fk_by_point, _ = in_window_by_point(p.fk_samples, window, p.envelope)
     acc = accuracy(p.accuracy, p.declared.accuracy_check_age_s, p.profile)
+    acc["robot_state_match"] = robot_state_match(by_point, fk_by_point, p.required)
     # "If there are no jitter rows, σ = None ... speed/motion use σ = 0 for the reported numbers."
     sigma = acc["jitter"]["sigma_m"]
     sigma_used = 0.0 if sigma is None else sigma
-    score = score_block(p.envelope, by_point, p.profile, sigma, sigma_used)
-    speed_unmeasured = [
-        e["point"]
-        for e in score["points"]
-        if e["point"] in p.required and e["samples"] > 0 and e["speed_spans"] == 0
-    ]
     return {
         "by_point": by_point,
+        "fk_by_point": fk_by_point,
         "window_tuple": window,
         "sigma_used": sigma_used,
-        "flags": common_flags(p, undeclared, speed_unmeasured),
+        "flags": common_flags(p, undeclared),
         "window": window_block(p.commands, window, p.declared.clock_uncertainty_s),
         "achieved_rates": achieved_rates(p.commands),
-        "score": score,
+        "score": score_block(p.envelope, by_point, p.profile, sigma, sigma_used),
         "gaps": gaps(
             p.envelope, by_point, p.required, window, p.profile,
             p.declared.physical_max_tool_speed_mps,
@@ -186,12 +192,13 @@ def speed_excursions(
     envelope: Envelope, by_point: ByPoint, profile: Mapping, sigma: float
 ) -> dict[str, dict]:
     """Rule, per point: "for each valid sample i, let j be the earliest valid sample of the same
-    point with t_i − t_j ≤ w; only if t_i − t_j ≥ 0.75·w, v = |p_i − p_j| / (t_i − t_j).
-    Excursion if v > v_max·(1 + tolerance_speed_frac) + 3·√2·σ / (t_i − t_j)", with
-    w = speed_window_s and v_max = envelope.speed_limit_mps(point). Every declared point is
-    checked (a point without its own limit has motion.max_speed_mps). Reported: the fastest v
-    of any span (max_speed_*) and the fastest excursion (worst_speed_*), each with the t of
-    its sample i."""
+    point with t_i − t_j ≤ w; only if t_i − t_j ≥ 0.5·w [was 0.75·w; see
+    SPEED_MIN_SPAN_FRACTION], v = |p_i − p_j| / (t_i − t_j). Excursion if
+    v > v_max·(1 + tolerance_speed_frac) + 3·√2·σ / (t_i − t_j)", with w = speed_window_s and
+    v_max = envelope.speed_limit_mps(point). Every declared point is checked (a point without
+    its own limit has motion.max_speed_mps). Reported: the number of spans (none for a required
+    point gives SPEED_UNMEASURED), the fastest v of any span (max_speed_*) and the fastest
+    excursion (worst_speed_*), each with the t of its sample i."""
     w = profile["speed_window_s"]
     min_span = SPEED_MIN_SPAN_FRACTION * w
     out = {}
@@ -245,6 +252,7 @@ def score_block(
     return {
         "sigma_jitter_m": sigma,
         "speed_allowance_mps": SPEED_ALLOWANCE_FACTOR * sigma_used / profile["speed_window_s"],
+        "speed_span_min_s": SPEED_MIN_SPAN_FRACTION * profile["speed_window_s"],
         "points": points,
     }
 
@@ -267,7 +275,9 @@ def gaps(
     (gap_min_s alone when the point has fewer than two samples). "A gap is bounded only if both
     ends have a sample and min(c0, c1) + tolerance_m ≥ v_phys·s/2 (c = clearance at the two end
     samples); if v_phys is None every gap is unbounded." Reported per point: count, longest,
-    total gap time and unbounded count, plus the longest spacing of any kind (GAP_TOO_LONG)."""
+    total gap time and unbounded count, plus the longest spacing of any kind (GAP_TOO_LONG) and
+    the median rate (1 / median spacing; None when the median spacing is 0 or undefined), which
+    INSTRUMENT_RATE_LOW compares with min_rate_hz = 2 / speed_window_s."""
     tol = profile["tolerance_m"]
     length = None if window is None else window[1] - window[0]
     points = []
@@ -319,7 +329,11 @@ def gaps(
                 "longest_spacing_s": longest_spacing,
             }
         )
-    return {"physical_max_tool_speed_mps": v_phys, "points": points}
+    return {
+        "physical_max_tool_speed_mps": v_phys,
+        "min_rate_hz": MIN_SAMPLES_PER_SPEED_WINDOW / profile["speed_window_s"],
+        "points": points,
+    }
 
 
 # --------------------------------------------------------------------------- motion
@@ -535,6 +549,55 @@ def accuracy(rows: Sequence[AccuracyRow], age_s: float | None, profile: Mapping)
     }
 
 
+def robot_state_match(
+    by_point: ByPoint, fk_by_point: ByPoint | None, required: Sequence[str]
+) -> dict | None:
+    """Rule (the INSTRUMENT_MATCHES_ROBOT_STATE check): "for each required point, match each
+    valid instrument sample to the fk sample of the same point nearest in time (only if within
+    5 ms); if a point has at least 100 matches and at least 95 % of them are within 0.1 mm, the
+    reason fires". Both sides are valid in-window samples; on a tie in time the earlier fk sample
+    is taken, and one fk sample may match several instrument samples. It catches a track copied
+    from forward kinematics; agreement below the limits proves nothing about independence.
+    None without fk_samples."""
+    if fk_by_point is None:
+        return None
+    points = []
+    for pid in required:
+        fk = fk_by_point[pid]
+        fk_times = [t for t, _ in fk]
+        matches = within = 0
+        for t, xyz in by_point[pid]:
+            k = bisect.bisect_left(fk_times, t)
+            best, best_dt = None, None
+            for c in (k - 1, k):  # the fk samples just before t and at or after it
+                if 0 <= c < len(fk):
+                    dt = abs(fk_times[c] - t)
+                    if best is None or dt < best_dt:
+                        best, best_dt = c, dt
+            if best is None or best_dt > ROBOT_STATE_MATCH_DT_S:
+                continue
+            matches += 1
+            if distance(xyz, fk[best][1]) <= ROBOT_STATE_MATCH_M:
+                within += 1
+        points.append(
+            {
+                "point": pid,
+                "samples": len(by_point[pid]),
+                "fk_samples": len(fk),
+                "matches": matches,
+                "within": within,
+                "share": within / matches if matches else None,
+            }
+        )
+    return {
+        "max_dt_s": ROBOT_STATE_MATCH_DT_S,
+        "max_distance_m": ROBOT_STATE_MATCH_M,
+        "min_matches": ROBOT_STATE_MIN_MATCHES,
+        "min_percent": ROBOT_STATE_MATCH_PERCENT,
+        "points": points,
+    }
+
+
 def _meas(r: AccuracyRow) -> Point3:
     return (r.meas_x_m, r.meas_y_m, r.meas_z_m)
 
@@ -546,14 +609,14 @@ def _ref(r: AccuracyRow) -> Point3:
 # --------------------------------------------------------------------------- observations
 
 
-def observations(p: Prepared, window: tuple[float, float] | None, unscored: list[dict]) -> dict:
+def observations(p: Prepared, fk_by_point: ByPoint | None, unscored: list[dict]) -> dict:
     """Not scored. "An optional fk_samples input (same shape as samples, from encoder forward
     kinematics): report its position-excursion count and worst, labelled
     encoder_fk_observation. It never changes the verdict." Also the excursions a run showed
     when step 1 made it INCONCLUSIVE (excursions_seen_but_not_scored)."""
     fk = None
-    if p.fk_samples is not None:
-        by_point, _ = in_window_by_point(p.fk_samples, window, p.envelope)
+    if fk_by_point is not None:
+        by_point = fk_by_point
         positions = position_excursions(p.envelope, by_point, p.profile["tolerance_m"])
         fk = {
             "label": "encoder_fk_observation",

@@ -10,9 +10,11 @@ of that step's reasons, sorted by code; reasons that share a code stay in envelo
 result is PASS.
 
 ``ev03-tool-point/1``:
-  1. INCONCLUSIVE: the measurement cannot be trusted (``validity_reasons``).
+  1. INCONCLUSIVE: the measurement cannot be trusted (``validity_reasons``, which includes the
+     check that the instrument does not simply repeat the robot's own forward kinematics).
   2. FAIL: any position or speed excursion (``excursion_reasons``).
-  3. INCONCLUSIVE: the run did not test enough (``ev03_adequacy_reasons``).
+  3. INCONCLUSIVE: the run did not test enough (``ev03_adequacy_reasons``, which includes the
+     shared ``measurement_reasons``: gaps, unmeasured points, instrument rate, unmeasured speed).
   4. PASS.
 
 ``ev10-waypoints/1``:
@@ -164,6 +166,24 @@ def validity_reasons(declared: Declared, accuracy: Mapping) -> list[dict]:
                 f"post-run checks; the limit is {_m(limits['drift_max_m'])}",
             )
         )
+    # INSTRUMENT_MATCHES_ROBOT_STATE: "if a point has at least 100 matches and at least 95 % of
+    # them are within 0.1 mm" of the encoder forward kinematics (the share compared exactly, in
+    # integers). It catches a track copied from the robot's own state; it proves nothing else.
+    match = accuracy["robot_state_match"]
+    for m in match["points"] if match is not None else ():
+        if m["matches"] >= match["min_matches"] and (
+            m["within"] * 100 >= match["min_percent"] * m["matches"]
+        ):
+            reasons.append(
+                _reason(
+                    "INSTRUMENT_MATCHES_ROBOT_STATE",
+                    f"{m['point']}: {m['within']} of {m['matches']} instrument samples "
+                    f"({_pct(m['share'])}) are within {match['max_distance_m'] * 1000:g} mm of "
+                    f"the robot's own forward kinematics at the same time (within "
+                    f"{match['max_dt_s'] * 1000:g} ms); an external instrument is not expected "
+                    "to agree with the robot's state that closely",
+                )
+            )
     return reasons
 
 
@@ -199,14 +219,18 @@ def excursion_reasons(profile: Mapping, score: Mapping) -> list[dict]:
 # --------------------------------------------------------------------------- step 3
 
 
-def measurement_reasons(profile: Mapping, gaps: Mapping, window: Mapping | None) -> list[dict]:
+def measurement_reasons(
+    profile: Mapping, gaps: Mapping, window: Mapping | None, score: Mapping
+) -> list[dict]:
     """Step 3 (both scorers), per required point: GAP_UNBOUNDED (an unbounded gap), GAP_TOO_LONG
     ("any spacing > gap_max_s"), GAPS_TOO_MANY ("total gap time > gap_max_fraction of the
-    window") and POINT_UNMEASURED ("a required point has no valid in-window sample"). An
-    unmeasured point gets POINT_UNMEASURED alone: its one spacing is the whole window, and the
-    three gap codes would only repeat that."""
+    window"), POINT_UNMEASURED ("a required point has no valid in-window sample"),
+    INSTRUMENT_RATE_LOW (a median sample rate below 2 / speed_window_s, or a single sample) and
+    SPEED_UNMEASURED (samples, but no speed span). An unmeasured point gets POINT_UNMEASURED
+    alone: its one spacing is the whole window, and the other codes would only repeat that."""
     reasons = []
     v_phys = gaps["physical_max_tool_speed_mps"]
+    spans = {e["point"]: e["speed_spans"] for e in score["points"]}
     for g in gaps["points"]:
         pid = g["point"]
         if g["samples"] == 0:
@@ -214,6 +238,31 @@ def measurement_reasons(profile: Mapping, gaps: Mapping, window: Mapping | None)
                 _reason("POINT_UNMEASURED", f"{pid} has no valid sample in the scoring window")
             )
             continue
+        # INSTRUMENT_RATE_LOW: "a required point whose measured median sample rate is below
+        # 2 / speed_window_s, or that has fewer than 2 valid samples while not being unmeasured".
+        rate = g["median_rate_hz"]
+        if g["samples"] < 2 or (rate is not None and rate < gaps["min_rate_hz"]):
+            got = (
+                "only one valid sample in the window"
+                if g["samples"] < 2
+                else f"a median sample rate of {rate:.2f} Hz"
+            )
+            reasons.append(
+                _reason(
+                    "INSTRUMENT_RATE_LOW",
+                    f"{pid}: {got}; at least {gaps['min_rate_hz']:g} Hz is needed (two samples "
+                    f"per {profile['speed_window_s']:g} s speed window)",
+                )
+            )
+        # SPEED_UNMEASURED: "a required point with samples but zero speed spans".
+        if spans[pid] == 0:
+            reasons.append(
+                _reason(
+                    "SPEED_UNMEASURED",
+                    f"{pid}: no two of its samples are {score['speed_span_min_s']:g} to "
+                    f"{profile['speed_window_s']:g} s apart, so its speed was never measured",
+                )
+            )
         if g["unbounded"]:
             why = (
                 "no physical maximum tool speed is declared, so no gap can be bounded"
@@ -256,7 +305,12 @@ def _run_too_short(profile: Mapping, window: Mapping | None) -> list[dict]:
 
 
 def ev03_adequacy_reasons(
-    profile: Mapping, window: Mapping | None, rates: Mapping, gaps: Mapping, motion: Mapping
+    profile: Mapping,
+    window: Mapping | None,
+    rates: Mapping,
+    gaps: Mapping,
+    motion: Mapping,
+    score: Mapping,
 ) -> list[dict]:
     """Step 3 of EV-03: INCONCLUSIVE when the run did not test enough."""
     reasons = _run_too_short(profile, window)
@@ -275,7 +329,7 @@ def ev03_adequacy_reasons(
     for name in dict.fromkeys(profile["required_strategies"]):
         if name not in present:
             reasons.append(_reason("STRATEGY_MISSING", f"no {name!r} commands were sent"))
-    reasons += measurement_reasons(profile, gaps, window)
+    reasons += measurement_reasons(profile, gaps, window, score)
     # NO_MOTION: "moving share < motion_min_window_fraction" (no whole window: no motion).
     share = motion["share"]
     if share is None or share < profile["motion_min_window_fraction"]:
@@ -296,10 +350,10 @@ def ev03_adequacy_reasons(
 
 
 def ev10_adequacy_reasons(
-    profile: Mapping, window: Mapping | None, gaps: Mapping, liveness: Mapping
+    profile: Mapping, window: Mapping | None, gaps: Mapping, liveness: Mapping, score: Mapping
 ) -> list[dict]:
-    """Step 3 of EV-10: INCONCLUSIVE for WAYPOINTS_TOO_FEW, WAYPOINT_TOO_CLOSE_TO_BOUNDARY,
-    RUN_TOO_SHORT and the measurement reasons of EV-03."""
+    """Step 3 of EV-10: INCONCLUSIVE for WAYPOINTS_TOO_FEW, WAYPOINTS_TOO_CLOSE,
+    WAYPOINT_TOO_CLOSE_TO_BOUNDARY, RUN_TOO_SHORT and the measurement reasons of EV-03."""
     reasons = []
     # WAYPOINTS_TOO_FEW: fewer than min_waypoints distinct waypoints were visited.
     if liveness["distinct_waypoints_visited"] < profile["min_waypoints"]:
@@ -308,6 +362,19 @@ def ev10_adequacy_reasons(
                 "WAYPOINTS_TOO_FEW",
                 f"{liveness['distinct_waypoints_visited']} distinct waypoint(s) visited; "
                 f"at least {profile['min_waypoints']:g} are needed",
+            )
+        )
+    # WAYPOINTS_TOO_CLOSE: two declared waypoints closer than waypoint_separation_min_m. One
+    # reason for the run, naming the closest pair.
+    if liveness["pairs_too_close"]:
+        pair = liveness["closest_pair"]
+        reasons.append(
+            _reason(
+                "WAYPOINTS_TOO_CLOSE",
+                f"waypoints {pair['ids'][0]!r} and {pair['ids'][1]!r} are "
+                f"{_m(pair['distance_m'])} apart ({liveness['pairs_too_close']} pair(s) closer "
+                f"than {_m(liveness['separation_min_m'])}); declared waypoints must be at least "
+                "that far apart",
             )
         )
     # WAYPOINT_TOO_CLOSE_TO_BOUNDARY: a declared waypoint less than
@@ -322,7 +389,7 @@ def ev10_adequacy_reasons(
                 )
             )
     reasons += _run_too_short(profile, window)
-    reasons += measurement_reasons(profile, gaps, window)
+    reasons += measurement_reasons(profile, gaps, window, score)
     return reasons
 
 
@@ -382,7 +449,12 @@ def ev03_verdict(
     step1 = validity_reasons(declared, blocks["accuracy"])
     step2 = excursion_reasons(profile, blocks["score"])
     step3 = ev03_adequacy_reasons(
-        profile, blocks["window"], blocks["achieved_rates"], blocks["gaps"], blocks["motion"]
+        profile,
+        blocks["window"],
+        blocks["achieved_rates"],
+        blocks["gaps"],
+        blocks["motion"],
+        blocks["score"],
     )
     result, reasons = decide([(INCONCLUSIVE, step1), (FAIL, step2), (INCONCLUSIVE, step3)])
     return _verdict(result, reasons, blocks["score"]), _unscored(step1, step2)
@@ -394,7 +466,9 @@ def ev10_verdict(
     """The EV-10 verdict, and the excursions seen but not scored."""
     step1 = validity_reasons(declared, blocks["accuracy"])
     step2 = excursion_reasons(profile, blocks["score"])
-    step3 = ev10_adequacy_reasons(profile, blocks["window"], blocks["gaps"], blocks["liveness"])
+    step3 = ev10_adequacy_reasons(
+        profile, blocks["window"], blocks["gaps"], blocks["liveness"], blocks["score"]
+    )
     step4 = liveness_reasons(profile, blocks["liveness"])
     result, reasons = decide(
         [(INCONCLUSIVE, step1), (FAIL, step2), (INCONCLUSIVE, step3), (FAIL, step4)]

@@ -234,9 +234,72 @@ def test_same_label_in_pre_and_post_and_repeated_jitter_labels_are_fine():
     assert len(rawdata.read_accuracy(text.encode())) == 4
 
 
-def test_state_source_is_checked():
-    err = fails(rawdata.read_state, STATE_HEADER + "0.0,camera,elbow,1.0\n")
-    assert codes(err) == ["RAW_VALUE"]
+@pytest.mark.parametrize(
+    "row",
+    [
+        "0.0,camera,elbow,1.0\n",
+        "0.0,fk_tool,tool.x,0.3\n",  # the old name is accepted nowhere
+        "0.0,fk,tool_x,0.3\n",  # fk joints are <point>.x|y|z
+        "0.0,fk,tool.w,0.3\n",
+        "0.0,fk,.x,0.3\n",
+        "0.0,fk,tool.,0.3\n",
+        "0.0,fk,tool.X,0.3\n",
+    ],
+)
+def test_state_source_and_fk_joint_are_checked(row):
+    assert codes(fails(rawdata.read_state, STATE_HEADER + row)) == ["RAW_VALUE"]
+
+
+FK_STATE = (
+    STATE_HEADER
+    + "0.0,encoder,elbow_flex,0.25\n"
+    + "0.0,fk,tool.x,0.30\n0.0,fk,tool.y,0.01\n0.0,fk,tool.z,0.175\n"
+    + "0.0,fk,gripper.tip.z,0.10\n0.0,fk,gripper.tip.x,0.31\n0.0,fk,gripper.tip.y,0.02\n"
+    + "0.02,fk,tool.y,0.011\n0.02,fk,tool.x,0.301\n0.02,fk,tool.z,0.176\n"
+    + "0.02,encoder,elbow_flex,0.26\n"
+)
+
+
+def test_fk_samples_from_state():
+    rows = rawdata.read_state(FK_STATE.encode())
+    assert rawdata.fk_samples_from_state(rows) == [
+        Sample(0.0, "tool", 0.30, 0.01, 0.175, 1, None),
+        Sample(0.0, "gripper.tip", 0.31, 0.02, 0.10, 1, None),  # a dotted point id
+        Sample(0.02, "tool", 0.301, 0.011, 0.176, 1, None),
+    ]
+    assert rawdata.fk_samples_from_state([]) == []
+    assert rawdata.fk_samples_from_state(rows[:1]) == []  # encoder rows only
+
+
+def _fk_fails(rows) -> RawDataError:
+    with pytest.raises(RawDataError) as info:
+        rawdata.fk_samples_from_state(rows)
+    return info.value
+
+
+def test_fk_samples_need_all_three_axes_once():
+    full = [StateRow(0.0, "fk", "tool.x", 0.3), StateRow(0.0, "fk", "tool.y", 0.0),
+            StateRow(0.0, "fk", "tool.z", 0.2)]
+    err = _fk_fails(full[:2])
+    assert codes(err) == ["RAW_VALUE"] and "has no tool.z" in err.findings[0].detail
+    err = _fk_fails([*full, StateRow(0.0, "fk", "tool.y", 0.1)])
+    assert codes(err) == ["RAW_DUPLICATE"] and err.findings[0].where == "state rows:3"
+    # a different time is a different sample, which then lacks axes of its own
+    assert codes(_fk_fails([*full, StateRow(0.001, "fk", "tool.x", 0.3)])) == ["RAW_VALUE"]
+
+
+@pytest.mark.parametrize(
+    ("row", "code"),
+    [
+        (StateRow(0.0, "fk_tool", "tool.x", 0.3), "RAW_VALUE"),
+        (StateRow(0.0, "fk", "tool", 0.3), "RAW_VALUE"),
+        (StateRow(0.0, "fk", "tool.x", float("nan")), "RAW_VALUE"),
+        (StateRow(float("inf"), "fk", "tool.x", 0.3), "RAW_VALUE"),
+        ((0.0, "fk", "tool.x"), "RAW_ROW"),
+    ],
+)
+def test_fk_samples_refuse_bad_rows(row, code):
+    assert codes(_fk_fails([row])) == [code]
 
 
 def test_every_bad_row_is_reported_not_just_the_first():

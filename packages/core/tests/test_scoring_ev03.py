@@ -169,18 +169,68 @@ def test_speed_allowance_is_reported_and_zero_without_jitter():
     assert no_jitter["score"]["speed_allowance_mps"] == 0.0
 
 
-def test_an_instrument_whose_spacing_never_fits_the_speed_window_is_flagged():
-    """Known limit of the rule as written: at 7 Hz consecutive samples are 0.143 s apart
-    (< 0.75 w = 0.15 s) and the next ones 0.286 s (> w = 0.2 s), so no speed is ever taken and a
-    tool at 2 m/s passes. The run is flagged SPEED_UNMEASURED; a flag never changes a result."""
-    jumpy = polyline([(0.22, 0.0, 0.175), (0.38, 0.0, 0.175)], 2.0)
-    out = ev03.score(ev03_input(path=jumpy, rate_hz=7.0))
-    assert point(out, "score", "tool")["speed_spans"] == 0
-    assert point(out, "score", "tool")["max_speed_mps"] is None
-    flag = next(f for f in out["flags"] if f["code"] == "SPEED_UNMEASURED")
-    assert flag["detail"].endswith(": tool, elbow")
-    assert result(out) == ("PASS", [])
-    assert "SPEED_UNMEASURED" not in [f["code"] for f in ev03.score(ev03_input())["flags"]]
+@pytest.mark.parametrize("rate_hz", [5.1, 6.0, 7.0, 8.0, 9.5, 13.5, 14.0, 20.0, 30.0, 60.0])
+def test_every_instrument_faster_than_one_sample_per_window_yields_speed_spans(rate_hz):
+    """Spans run from w/2 to w, an octave, so every spacing up to w has a multiple in it. With
+    the old 0.75·w, 6.7-10 Hz and 13.3-15 Hz never yielded a span."""
+    out = ev03.score(ev03_input(rate_hz=rate_hz))
+    assert out["score"]["speed_span_min_s"] == 0.1
+    assert point(out, "score", "tool")["speed_spans"] > 0
+    assert "SPEED_UNMEASURED" not in result(out)[1]
+
+
+def test_a_seven_hz_instrument_now_catches_a_fast_tool():
+    """At 0.75·w a 7 Hz instrument (0.143 s spacing) never measured a speed; at 0.5·w its
+    0.143 s spans count, and one 0.5 m/s sweep FAILs (step 2 comes before the step-3
+    INSTRUMENT_RATE_LOW). A fast oscillation would alias at 7 Hz, which is why such a run is
+    INCONCLUSIVE when nothing fails."""
+    sweep = polyline([(0.22, 0.0, 0.175), (0.38, 0.0, 0.175)], 0.5, closed=False)
+    out = ev03.score(ev03_input(path=sweep, rate_hz=7.0))
+    assert point(out, "score", "tool")["speed_spans"] > 0
+    assert math.isclose(point(out, "score", "tool")["worst_speed_mps"], 0.5, rel_tol=1e-9)
+    assert result(out) == ("FAIL", ["SPEED_EXCURSION"])
+
+
+@pytest.mark.parametrize(("spacing", "unmeasured"), [(0.1999, False), (0.2001, True)])
+def test_speed_unmeasured_edge(spacing, unmeasured):
+    """A spacing just over w leaves no span (SPEED_UNMEASURED); just under it, one per sample.
+    Both are under 10 Hz, so INSTRUMENT_RATE_LOW is there either way."""
+    out = ev03.score(ev03_input(rate_hz=1.0 / spacing))
+    codes = result(out)[1]
+    assert codes[:2] == ["INSTRUMENT_RATE_LOW", "INSTRUMENT_RATE_LOW"]
+    if unmeasured:
+        assert codes == ["INSTRUMENT_RATE_LOW", "INSTRUMENT_RATE_LOW", "SPEED_UNMEASURED",
+                         "SPEED_UNMEASURED"]
+        assert point(out, "score", "tool")["speed_spans"] == 0
+        detail = out["verdict"]["reasons"][2]["detail"]
+        assert detail.startswith("tool: no two of its samples are 0.1 to 0.2 s apart")
+    else:
+        assert codes == ["INSTRUMENT_RATE_LOW", "INSTRUMENT_RATE_LOW"]
+
+
+@pytest.mark.parametrize(("rate_hz", "low"), [(9.9, True), (10.1, False)])
+def test_instrument_rate_edge(rate_hz, low):
+    """INSTRUMENT_RATE_LOW below 2 / speed_window_s = 10 Hz (median sample rate)."""
+    out = ev03.score(ev03_input(rate_hz=rate_hz))
+    assert out["gaps"]["min_rate_hz"] == 10.0
+    assert math.isclose(point(out, "gaps", "tool")["median_rate_hz"], rate_hz, rel_tol=1e-9)
+    if low:
+        assert result(out) == ("INCONCLUSIVE", ["INSTRUMENT_RATE_LOW", "INSTRUMENT_RATE_LOW"])
+        assert out["verdict"]["reasons"][0]["detail"].startswith(
+            "tool: a median sample rate of 9.90 Hz; at least 10 Hz is needed")
+    else:
+        assert result(out) == ("PASS", [])
+
+
+@pytest.mark.parametrize(("n", "low"), [(1, True), (2, False)])
+def test_a_single_sample_is_a_rate_too_low(n, low):
+    """One valid in-window sample has no rate (INSTRUMENT_RATE_LOW); none is POINT_UNMEASURED."""
+    inp = ev03_input(sampled_points=("tool",))
+    elbow = [Sample(5.0 + 0.05 * k, "elbow", 0.1, 0.0, 0.3, 1, None) for k in range(n)]
+    codes = result(ev03.score(replace(inp, samples=[*inp.samples, *elbow])))[1]
+    assert ("INSTRUMENT_RATE_LOW" in codes) is low
+    assert "POINT_UNMEASURED" not in codes
+    assert "SPEED_UNMEASURED" in codes  # 1 or 2 samples 0.05 s apart: no span either way
 
 
 def test_link_points_use_the_motion_speed_limit():
@@ -294,10 +344,10 @@ def test_window_edges_count_as_spacings():
 
 
 def test_gap_threshold_follows_a_slow_instrument():
-    """At 10 Hz the threshold is 3 x 0.1 s; a missed frame (0.2 s) is not a gap."""
-    out = ev03.score(ev03_input(rate_hz=10.0, drop=lambda pid, k, t: k % 50 == 25))
+    """At 12 Hz the threshold is 3 / 12 = 0.25 s; a missed frame (0.167 s) is not a gap."""
+    out = ev03.score(ev03_input(rate_hz=12.0, drop=lambda pid, k, t: k % 50 == 25))
     tool = point(out, "gaps", "tool")
-    assert math.isclose(tool["gap_threshold_s"], 0.3, rel_tol=1e-9)
+    assert math.isclose(tool["gap_threshold_s"], 0.25, rel_tol=1e-9)
     assert tool["count"] == 0
     assert result(out) == ("PASS", [])
 
@@ -310,13 +360,27 @@ def test_missing_link_point_is_unmeasured():
     assert out["verdict"]["points_unmeasured"] == ["elbow"]
 
 
-def test_narrowed_required_points_are_flagged():
+def test_declared_required_points_can_add_but_never_remove():
+    # leaving the elbow out of the declaration does not stop it being required
     inp = ev03_input(sampled_points=("tool",))
     out = ev03.score(replace(inp, declared=declared(required_points=["tool"])))
-    assert result(out) == ("PASS", [])
-    assert out["verdict"]["points_unmeasured"] == ["elbow"]
-    assert "REQUIRED_POINTS_OMIT_ZONED" in [f["code"] for f in out["flags"]]
-    assert [g["point"] for g in out["gaps"]["points"]] == ["tool"]
+    assert result(out) == ("INCONCLUSIVE", ["POINT_UNMEASURED"])
+    assert [g["point"] for g in out["gaps"]["points"]] == ["tool", "elbow"]
+    assert [f["code"] for f in out["flags"]] == ["NONSTANDARD_PARAMS"]
+    # a point without zones is required only when declared (fixture=False: that keep-out
+    # applies to "*")
+    doc = envelope_doc(fixture=False)
+    doc["points"].append({"id": "base", "description": "a marker on the base, no zones"})
+    env = load(doc)
+    assert env.zones_for("base") == []
+    plain = ev03.score(replace(ev03_input(), envelope=env))
+    assert [g["point"] for g in plain["gaps"]["points"]] == ["tool", "elbow"]
+    assert result(plain) == ("PASS", [])
+    added = ev03.score(replace(ev03_input(), envelope=env,
+                               declared=declared(required_points=["base"])))
+    assert [g["point"] for g in added["gaps"]["points"]] == ["tool", "elbow", "base"]
+    assert result(added) == ("INCONCLUSIVE", ["POINT_UNMEASURED"])
+    assert added["verdict"]["reasons"][0]["detail"].startswith("base ")
 
 
 # --------------------------------------------------------------------------- step 1
@@ -600,6 +664,89 @@ def test_encoder_fk_is_an_observation_only():
     tool = next(e for e in obs["points"] if e["point"] == "tool")
     assert tool["position_excursions"] > 0
     assert math.isclose(tool["worst_clearance_m"], 0.4 - 0.43, abs_tol=1e-12)
+    match = out["accuracy"]["robot_state_match"]["points"][0]
+    assert match["matches"] == match["samples"] > 100 and match["within"] == 0
+
+
+# --------------------------------------------------------------------------- robot state match
+
+
+def _in_window(inp, pid="tool"):
+    return [s for s in inp.samples if s.point == pid and s.valid == 1 and s.t_s >= 0.0]
+
+
+def test_a_track_copied_from_forward_kinematics_is_inconclusive():
+    inp = ev03_input(path=EXCURSION)
+    fk = [s for s in inp.samples if s.valid == 1]
+    out = ev03.score(replace(inp, fk_samples=fk))
+    assert result(out) == ("INCONCLUSIVE", ["INSTRUMENT_MATCHES_ROBOT_STATE"] * 2)
+    match = out["accuracy"]["robot_state_match"]
+    assert (match["max_dt_s"], match["max_distance_m"], match["min_matches"],
+            match["min_percent"]) == (0.005, 0.0001, 100, 95)
+    tool = match["points"][0]
+    assert tool["matches"] == tool["within"] == tool["samples"] and tool["share"] == 1.0
+    detail = out["verdict"]["reasons"][0]["detail"]
+    assert detail.startswith(f"tool: {tool['within']} of {tool['matches']} instrument samples "
+                             "(100.0%) are within 0.1 mm of the robot's own forward kinematics")
+    assert "independen" not in detail and "proof" not in detail and "prove" not in detail
+    unscored = out["observations"]["excursions_seen_but_not_scored"]
+    assert [r["code"] for r in unscored] == ["POSITION_EXCURSION"]
+
+
+@pytest.mark.parametrize(("k", "fires"), [(99, False), (100, True)])
+def test_robot_state_match_needs_100_matches(k, fires):
+    inp = ev03_input()
+    out = ev03.score(replace(inp, fk_samples=_in_window(inp)[:k]))
+    tool, elbow = out["accuracy"]["robot_state_match"]["points"]
+    assert (tool["matches"], tool["within"], elbow["matches"]) == (k, k, 0)
+    expected = ("INCONCLUSIVE", ["INSTRUMENT_MATCHES_ROBOT_STATE"]) if fires else ("PASS", [])
+    assert result(out) == expected
+
+
+@pytest.mark.parametrize(("moved", "fires"), [(5, True), (6, False)])
+def test_robot_state_match_needs_95_percent(moved, fires):
+    inp = ev03_input()
+    fk = [s._replace(x_m=s.x_m + 0.0002) if i < moved else s
+          for i, s in enumerate(_in_window(inp)[:100])]
+    out = ev03.score(replace(inp, fk_samples=fk))
+    tool = out["accuracy"]["robot_state_match"]["points"][0]
+    assert (tool["matches"], tool["within"]) == (100, 100 - moved)
+    expected = ("INCONCLUSIVE", ["INSTRUMENT_MATCHES_ROBOT_STATE"]) if fires else ("PASS", [])
+    assert result(out) == expected
+
+
+@pytest.mark.parametrize(("offset", "fires"), [(0.000099, True), (0.000101, False)])
+def test_robot_state_match_distance_edge(offset, fires):
+    inp = ev03_input()
+    fk = [s._replace(x_m=s.x_m + offset) for s in inp.samples if s.valid == 1]
+    out = ev03.score(replace(inp, fk_samples=fk))
+    expected = (("INCONCLUSIVE", ["INSTRUMENT_MATCHES_ROBOT_STATE"] * 2) if fires
+                else ("PASS", []))
+    assert result(out) == expected
+
+
+@pytest.mark.parametrize(("dt", "fires"), [(0.0049, True), (0.0051, False)])
+def test_robot_state_match_time_edge(dt, fires):
+    """The same positions, time-stamped dt later: matched only within 5 ms."""
+    inp = ev03_input()
+    fk = [s._replace(t_s=s.t_s + dt) for s in inp.samples if s.valid == 1]
+    out = ev03.score(replace(inp, fk_samples=fk))
+    tool = out["accuracy"]["robot_state_match"]["points"][0]
+    assert tool["matches"] == (tool["samples"] if fires else 0)
+    expected = (("INCONCLUSIVE", ["INSTRUMENT_MATCHES_ROBOT_STATE"] * 2) if fires
+                else ("PASS", []))
+    assert result(out) == expected
+
+
+def test_an_independent_instrument_does_not_match_the_robot_state():
+    """1 mm of instrument noise against noise-free forward kinematics of the same motion."""
+    inp = ev03_input(noise_m=0.001)
+    fk = [s for s in ev03_input().samples if s.valid == 1]
+    out = ev03.score(replace(inp, fk_samples=fk))
+    tool = out["accuracy"]["robot_state_match"]["points"][0]
+    assert tool["matches"] == tool["samples"] and tool["share"] < 0.05
+    assert result(out) == ("PASS", [])
+    assert ev03.score(inp)["accuracy"]["robot_state_match"] is None  # no fk_samples
 
 
 # --------------------------------------------------------------------------- output shape

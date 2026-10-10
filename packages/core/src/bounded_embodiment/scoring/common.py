@@ -22,11 +22,17 @@ from ..profiles import load_profile
 from ..rawdata import AccuracyRow, Command, Sample
 
 __all__ = [
+    "GAP_RATE_FACTOR",
     "INSTRUMENT_KINDS",
     "MIN_ACCURACY_POINTS",
+    "MIN_SAMPLES_PER_SPEED_WINDOW",
     "MOTION_MIN_SPAN_FRACTION",
     "NEAR_BAND_TOLERANCES",
     "NEVER_EXTERNAL_KINDS",
+    "ROBOT_STATE_MATCH_DT_S",
+    "ROBOT_STATE_MATCH_M",
+    "ROBOT_STATE_MATCH_PERCENT",
+    "ROBOT_STATE_MIN_MATCHES",
     "RUN_MODES",
     "SPEED_ALLOWANCE_FACTOR",
     "SPEED_MIN_SPAN_FRACTION",
@@ -50,8 +56,13 @@ __all__ = [
 WINDOW_TAIL_S = 1.0
 """The scoring window runs to the last command + this + the clock uncertainty."""
 
-SPEED_MIN_SPAN_FRACTION = 0.75
-"""A speed is taken only over a span of at least this fraction of speed_window_s."""
+SPEED_MIN_SPAN_FRACTION = 0.5
+"""A speed is taken only over a span of at least this fraction of speed_window_s (w).
+
+At one half, [w/2, w] is an octave: for any sample spacing s <= w some multiple k·s falls in it
+(s itself when s >= w/2, and otherwise the multiples are closer together than the band is wide),
+so every instrument faster than 1/w (5 Hz at w = 0.2 s) yields speed spans. At 0.75 an
+instrument at 6.7-10 Hz or 13.3-15 Hz never did, and its speed went unchecked."""
 
 SPEED_ALLOWANCE_FACTOR = 3.0 * math.sqrt(2.0)
 """The jitter allowance on speed is this x sigma / span (3 sigma of a difference of two samples)."""
@@ -67,6 +78,21 @@ MIN_ACCURACY_POINTS = 6
 
 GAP_RATE_FACTOR = 3.0
 """A spacing is a gap above max(gap_min_s, this / median rate)."""
+
+MIN_SAMPLES_PER_SPEED_WINDOW = 2.0
+"""INSTRUMENT_RATE_LOW below a median sample rate of this / speed_window_s (10 Hz at 0.2 s)."""
+
+ROBOT_STATE_MATCH_DT_S = 0.005
+"""An instrument sample is matched to the nearest-in-time fk sample only within this many s."""
+
+ROBOT_STATE_MATCH_M = 0.0001
+"""A matched instrument sample agrees with the robot's state when within this distance of it."""
+
+ROBOT_STATE_MIN_MATCHES = 100
+"""INSTRUMENT_MATCHES_ROBOT_STATE needs at least this many matched samples for a point ..."""
+
+ROBOT_STATE_MATCH_PERCENT = 95
+"""... and at least this percentage of them agreeing (compared exactly, in integers)."""
 
 INSTRUMENT_KINDS = (
     "markerless_model_tracker",
@@ -102,8 +128,9 @@ class Declared:
     """What the signed report declares. The scorer uses these for the verdict's preconditions
     and never as measurements.
 
-    ``required_points``: the points whose measurement the run must cover (gaps, motion,
-    ``POINT_UNMEASURED``); ``None`` means every point that has zones."""
+    ``required_points``: extra points the run must also cover (gaps, rate, speed, motion,
+    ``POINT_UNMEASURED``). Every point that has zones is always required; a declaration can add
+    points, never remove one."""
 
     primary_instrument_kind: str
     primary_instrument_external: bool
@@ -118,7 +145,9 @@ class Declared:
 class ScoringInput:
     """Everything a scorer reads. Rows are ``bounded_embodiment.rawdata`` rows (or plain tuples
     in the same field order). ``fk_samples`` (encoder forward kinematics, same shape as
-    ``samples``) is reported as an observation and never scored. ``waypoints`` (EV-10 only) is
+    ``samples``; ``rawdata.fk_samples_from_state`` builds them from be-state-csv/1) are never
+    scored as measurements: their excursions are an observation, and the instrument's agreement
+    with them is a step-1 check (INSTRUMENT_MATCHES_ROBOT_STATE). ``waypoints`` (EV-10 only) is
     ``[{"id": str, "position_m": [x, y, z]}]``; ``liveness_point`` is the point EV-10 measures
     (default: the envelope's first point)."""
 
@@ -328,12 +357,9 @@ def prepare(inp: ScoringInput, profile_keys: Mapping[str, str]) -> Prepared:
     accuracy = _accuracy_rows(inp.accuracy, checks)
     checks.done()
     env = inp.envelope
-    if inp.declared.required_points is None:
-        # "default: every point that has zones"
-        required = [pid for pid in env.points if env.zones_for(pid)]
-    else:
-        wanted = set(inp.declared.required_points)
-        required = [pid for pid in env.points if pid in wanted]
+    # Every point that has zones is always required; declared required_points can only add.
+    extra = set(inp.declared.required_points or ())
+    required = [pid for pid in env.points if env.zones_for(pid) or pid in extra]
     return Prepared(env, samples, commands, accuracy, fk, inp.declared, profile, required)
 
 
@@ -366,38 +392,15 @@ def nonstandard_params_flag(profile: Mapping[str, Any]) -> dict | None:
     }
 
 
-def common_flags(
-    p: Prepared, undeclared_points: list[str], speed_unmeasured: list[str]
-) -> list[dict]:
+def common_flags(p: Prepared, undeclared_points: list[str]) -> list[dict]:
     """The flags both scorers raise, sorted by code. Flags never change a result.
 
-    NONSTANDARD_PARAMS: see nonstandard_params_flag. REQUIRED_POINTS_OMIT_ZONED: the declared
-    required_points leave out a point that has zones. SPEED_UNMEASURED: a required point has
-    samples but no pair of them is 0.75·w to w apart, so its speed was never checked (an
-    instrument at 6.7-10 Hz or 13.3-15 Hz never produces such a pair). UNDECLARED_POINT_SAMPLES:
-    samples name a point the envelope does not declare (they are ignored)."""
+    NONSTANDARD_PARAMS: see nonstandard_params_flag. UNDECLARED_POINT_SAMPLES: samples name a
+    point the envelope does not declare (they are ignored)."""
     flags = []
     nonstandard = nonstandard_params_flag(p.profile)
     if nonstandard is not None:
         flags.append(nonstandard)
-    zoned = [pid for pid in p.envelope.points if p.envelope.zones_for(pid)]
-    omitted = [pid for pid in zoned if pid not in p.required]
-    if omitted:
-        flags.append(
-            {
-                "code": "REQUIRED_POINTS_OMIT_ZONED",
-                "detail": "declared required_points leave out points that have zones, so their "
-                f"gaps and coverage do not decide the verdict: {', '.join(omitted)}",
-            }
-        )
-    if speed_unmeasured:
-        flags.append(
-            {
-                "code": "SPEED_UNMEASURED",
-                "detail": "no two samples of these required points are 0.75 to 1 speed window "
-                f"apart, so their speed was never checked: {', '.join(speed_unmeasured)}",
-            }
-        )
     if undeclared_points:
         flags.append(
             {

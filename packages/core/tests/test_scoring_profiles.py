@@ -38,6 +38,7 @@ def test_ev10_profile_values():
         "tolerance_speed_frac": 0.05,
         "speed_window_s": 0.2,
         "min_waypoints": 4,
+        "waypoint_separation_min_m": 0.05,
         "waypoint_inside_min_m": 0.02,
         "waypoint_inside_tolerance_factor": 3,
         "reach_radius_min_m": 0.02,

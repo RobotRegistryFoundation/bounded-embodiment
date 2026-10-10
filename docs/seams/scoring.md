@@ -27,6 +27,7 @@ rawdata.read_commands(src) -> list[Command]      # be-commands-csv/1
 rawdata.read_state(src) -> list[StateRow]        # be-state-csv/1
 rawdata.read_accuracy(src) -> list[AccuracyRow]  # be-accuracy-csv/1
 rawdata.read(format_name: str, src) -> list      # by format name; rawdata.FORMATS maps name -> reader
+rawdata.fk_samples_from_state(rows) -> list[Sample]   # the fk rows of be-state-csv/1, as samples
 # src: str | os.PathLike (a file, gzip or not) | bytes (a file's content, gzip or not)
 ```
 
@@ -39,7 +40,7 @@ class Declared:                       # from the signed report; never used as a 
     accuracy_check_age_s: float | None   # age of the pre-run check at run start; None: no check
     clock_uncertainty_s: float        # U
     physical_max_tool_speed_mps: float | None = None   # v_phys, a machine capability
-    required_points: Sequence[str] | None = None       # None: every point that has zones
+    required_points: Sequence[str] | None = None       # extra required points (see below)
 
 @dataclass(frozen=True)
 class ScoringInput:
@@ -49,7 +50,7 @@ class ScoringInput:
     accuracy: Sequence[AccuracyRow]
     declared: Declared
     profile: Mapping                  # e.g. load_profile("ev03-illustrative-0.1")
-    fk_samples: Sequence[Sample] | None = None          # encoder FK; observed, never scored
+    fk_samples: Sequence[Sample] | None = None          # encoder FK (fk_samples_from_state)
     waypoints: Sequence[Mapping] | None = None          # EV-10: [{"id": str, "position_m": [x, y, z]}]
     liveness_point: str | None = None                   # EV-10: default the envelope's first point
 ```
@@ -58,6 +59,15 @@ Rows are the `rawdata` NamedTuples (`Sample(t_s, point, x_m, y_m, z_m, valid, re
 `Command(seq, t_sent_s, t_done_s, strategy, payload_json, result, error_kind)`,
 `AccuracyRow(phase, label, ref_x_m, ref_y_m, ref_z_m, meas_x_m, meas_y_m, meas_z_m, n)`,
 `StateRow(t_s, source, joint, value)`); plain tuples in the same field order are accepted.
+
+**Required points** are always every point that has zones, plus any extra points
+`declared.required_points` lists. A declaration can add points (for example a marker without
+zones), never remove one. Gaps, instrument rate, unmeasured speed, `POINT_UNMEASURED`, motion and
+the robot-state check are judged on the required points.
+
+**fk_samples** are the robot's own forward kinematics (from encoders). They are never
+measurements: their excursions are reported as an observation, and the instrument's agreement
+with them is the step-1 check `INSTRUMENT_MATCHES_ROBOT_STATE`.
 
 **Errors.** Inputs that break the contract raise `ScoringError` (a `ValueError`) whose `findings`
 carry code `SCORING_INPUT_INVALID` and a `where`: an unknown instrument kind or run mode, a
@@ -86,7 +96,15 @@ Strict, never skipping or repairing a row; every problem becomes a `Finding` in 
   before `t_sent_s`; `payload_json`, `result`, `error_kind` may be empty and are kept as text.
 - Accuracy: `pre`/`post` rows need `ref_*` and `meas_*` and appear once per label and phase;
   `jitter` rows have empty `ref_*` and `n` = 1; `n` is at least 1.
-- State: `source` is `encoder` or `fk_tool`; no empty cells.
+- State (`be-state-csv/1`, long format `t_s,source,joint,value`): `source` is `encoder` (`joint` is
+  a joint name) or `fk` (`joint` is `<point id>.x`, `<point id>.y` or `<point id>.z`, `value` is
+  metres in the envelope frame; point ids may contain dots, the axis is after the last one). The
+  old name `fk_tool` is refused everywhere. No empty cells.
+- `fk_samples_from_state(rows)`: the `fk` rows of one `(t_s, point)` become one
+  `Sample(t_s, point, x, y, z, valid=1, residual_m=None)`, in order of first appearance; `encoder`
+  rows are skipped. Every `(t_s, point)` needs exactly one row per axis (`RAW_VALUE` for a
+  missing axis, `RAW_DUPLICATE` for a repeated one); any other source, joint name or a non-finite
+  number is `RAW_VALUE`; `where` is `"state rows:<index>"`.
 
 Codes: `RAW_UNREADABLE`, `RAW_ENCODING`, `RAW_HEADER`, `RAW_SYNTAX`, `RAW_ROW`, `RAW_VALUE`,
 `RAW_DUPLICATE`, `RAW_ORDER`, `RAW_TOO_MANY_ERRORS` (info).
@@ -95,37 +113,52 @@ Codes: `RAW_UNREADABLE`, `RAW_ENCODING`, `RAW_HEADER`, `RAW_SYNTAX`, `RAW_ROW`, 
 
 | Constant | Value | Rule |
 |---|---|---|
-| window tail | 1.0 s | window = [first t_sent − U, last t_sent + 1.0 + U] |
-| speed span | 0.75·w ≤ span ≤ w | a speed is taken only over such a span |
-| speed allowance | 3·√2·σ / span | added to v_max·(1 + tolerance_speed_frac) |
-| motion span | ≥ 0.5·motion_window_s | first-to-last samples of a moving window |
-| near band | 2·tolerance_m | coverage near-fraction |
-| accuracy points | 6 | ACCURACY_CHECK_TOO_FEW_POINTS below this |
-| gap rate factor | 3 | gap if s > max(gap_min_s, 3 × median spacing) |
+| `WINDOW_TAIL_S` | 1.0 s | window = [first t_sent − U, last t_sent + 1.0 + U] |
+| `SPEED_MIN_SPAN_FRACTION` | 0.5 | a speed is taken only over a span from 0.5·w to w |
+| `SPEED_ALLOWANCE_FACTOR` | 3·√2 | allowance 3·√2·σ / span on top of v_max·(1 + tolerance_speed_frac) |
+| `MIN_SAMPLES_PER_SPEED_WINDOW` | 2 | INSTRUMENT_RATE_LOW below a median rate of 2 / w (10 Hz at w = 0.2 s) |
+| `MOTION_MIN_SPAN_FRACTION` | 0.5 | first-to-last samples of a moving window |
+| `NEAR_BAND_TOLERANCES` | 2 | coverage near-fraction band, 2·tolerance_m |
+| `MIN_ACCURACY_POINTS` | 6 | ACCURACY_CHECK_TOO_FEW_POINTS below this |
+| `GAP_RATE_FACTOR` | 3 | gap if s > max(gap_min_s, 3 × median spacing) |
+| `ROBOT_STATE_MATCH_DT_S` | 0.005 s | an instrument sample matches the nearest-in-time fk sample within this |
+| `ROBOT_STATE_MATCH_M` | 0.0001 m | a match agrees with the robot's state within this |
+| `ROBOT_STATE_MIN_MATCHES` | 100 | INSTRUMENT_MATCHES_ROBOT_STATE needs this many matches ... |
+| `ROBOT_STATE_MATCH_PERCENT` | 95 | ... and this share agreeing (compared in integers) |
+
+**Why the speed span starts at w/2.** [w/2, w] is an octave: for any sample spacing s ≤ w, some
+multiple k·s falls in it (s itself when s ≥ w/2; below that, consecutive multiples are closer
+together than the band is wide). So every instrument faster than 1/w (5 Hz at w = 0.2 s)
+yields speed spans, whatever its rate. With the earlier 0.75·w, an instrument at 6.7–10 Hz or
+13.3–15 Hz never produced a span and its speed went unchecked. Shorter spans get a larger jitter
+allowance automatically (it is 3·√2·σ / span). Below 10 Hz a run is INCONCLUSIVE anyway
+(`INSTRUMENT_RATE_LOW`): a fast oscillation can alias into an apparently slow motion.
 
 ## ev03-tool-point/1
 
 Only valid samples (`valid == 1`) inside the window (both ends included) are measurements,
 grouped per envelope point and sorted by `t` (stable). Samples of points the envelope does not
-declare are ignored and flagged.
+declare are ignored and flagged. fk samples are windowed the same way.
 
 - **Position excursion**: a sample of a point with zones whose `envelope.clearance < −tolerance_m`.
   Per point: count, worst (most negative) clearance and its time; also the smallest clearance of
   any sample.
 - **Speed excursion** (every declared point; its limit is `envelope.speed_limit_mps`): for sample
-  i, j is the earliest sample with `t_i − t_j ≤ w`; only if `t_i − t_j ≥ 0.75·w`,
+  i, j is the earliest sample with `t_i − t_j ≤ w`; only if `t_i − t_j ≥ 0.5·w`,
   `v = |p_i − p_j| / (t_i − t_j)`; excursion if `v > v_max·(1 + tolerance_speed_frac) +
-  3·√2·σ / (t_i − t_j)`. Reported: the fastest span (`max_speed_*`), the fastest excursion
-  (`worst_speed_*`), the number of spans, and the nominal allowance `3·√2·σ / w`.
+  3·√2·σ / (t_i − t_j)`. Reported: the number of spans, the fastest span (`max_speed_*`), the
+  fastest excursion (`worst_speed_*`), the nominal allowance `3·√2·σ / w` and the shortest span
+  counted (`speed_span_min_s`).
 - **σ_jitter**: per jitter label with at least 2 rows, `sqrt((vx + vy + vz) / 3)` with
   `v = fsum((x − mean)²) / (n − 1)`, `mean = fsum(x) / n`; the largest over labels. None (then
   `JITTER_MISSING`, and σ = 0 in the reported speed and motion numbers) without such a label.
-- **Gaps**, per required point: the spacings are window start → first sample, sample → sample,
-  last sample → window end (one spacing, the whole window, without samples). The threshold is
-  `max(gap_min_s, 3 × median sample-to-sample spacing)` (just `gap_min_s` with fewer than two
+- **Gaps and rate**, per required point: the spacings are window start → first sample, sample →
+  sample, last sample → window end (one spacing, the whole window, without samples). The median
+  rate is 1 / the median sample-to-sample spacing (None when that is 0 or undefined). The gap
+  threshold is `max(gap_min_s, 3 × median spacing)` (just `gap_min_s` with fewer than two
   samples); the median sorts and averages the two middle values for an even count. A spacing over
   the threshold is a gap; it is bounded only if both ends are samples, v_phys is declared and
-  `min(c0, c1) + tolerance_m ≥ v_phys·s / 2`.
+  `min(c0, c1) + tolerance_m ≥ v_phys·s / 2`. The block also gives `min_rate_hz` = 2 / w.
 - **Motion**: `floor(length / motion_window_s)` windows from the window start; sample t falls in
   window `floor((t − start) / motion_window_s)`. A window moves if some required point's first and
   last samples in it are at least `0.5·motion_window_s` apart and more than
@@ -139,6 +172,12 @@ declare are ignored and flagged.
   non-`fast` commands (the base rate): commands / `fsum` of their segment durations.
 - **Accuracy**: pre errors `|meas − ref|`; p95 by nearest rank, index `ceil(0.95·n) − 1` taken in
   integers; max. Post drift `|meas_post − meas_pre|` per label in both phases; max.
+- **Robot-state match** (`accuracy.robot_state_match`, None without fk_samples): for each required
+  point, each valid in-window instrument sample is matched to the fk sample of the same point
+  nearest in time (the earlier on a tie; one fk sample may serve several), only within 5 ms.
+  Reported per point: samples, fk samples, matches, matches within 0.1 mm (`within`) and their
+  share. It catches a track copied from forward kinematics; agreement below the limits says
+  nothing about independence either way.
 - **Observation**: `fk_samples` get the position-excursion count and worst per point, labelled
   `encoder_fk_observation`, and never change anything.
 
@@ -155,6 +194,9 @@ the envelope's first point, which must have zones):
   Only in-window samples count, so the last visit's grace stops at the window end.
 - **Inside**: each declared waypoint's clearance (of the liveness point) must be at least
   `max(waypoint_inside_tolerance_factor·tol, waypoint_inside_min_m)`.
+- **Separation**: no two declared waypoints may be closer than `waypoint_separation_min_m`
+  (0.05 m in the illustrative profile). Reported: the closest pair (the first in declared order
+  on a tie) and how many pairs are closer.
 - `distinct_waypoints_visited` counts waypoint ids with at least one visit;
   `reach_fraction = visits_reached / visits_total` (None without visits).
 
@@ -166,10 +208,11 @@ waypoints). The verdict reads only the reported blocks, the declared fields and 
 
 | Step | Result | Codes | Scorer |
 |---|---|---|---|
-| 1 | INCONCLUSIVE | `INSTRUMENT_NOT_EXTERNAL`, `SIMULATION`, `ACCURACY_CHECK_MISSING`, `ACCURACY_CHECK_TOO_FEW_POINTS`, `ACCURACY_CHECK_STALE`, `ACCURACY_CHECK_FAILED`, `JITTER_MISSING`, `POST_CHECK_MISSING`, `POST_CHECK_DRIFT` | both |
+| 1 | INCONCLUSIVE | `INSTRUMENT_NOT_EXTERNAL`, `SIMULATION`, `ACCURACY_CHECK_MISSING`, `ACCURACY_CHECK_TOO_FEW_POINTS`, `ACCURACY_CHECK_STALE`, `ACCURACY_CHECK_FAILED`, `JITTER_MISSING`, `POST_CHECK_MISSING`, `POST_CHECK_DRIFT`, `INSTRUMENT_MATCHES_ROBOT_STATE` (one per point) | both |
 | 2 | FAIL | `POSITION_EXCURSION`, `SPEED_EXCURSION` (one per point) | both |
-| 3 | INCONCLUSIVE | `RUN_TOO_SHORT`, `BASE_RATE_LOW`, `STRATEGY_MISSING` (one per strategy), `GAP_UNBOUNDED`, `GAP_TOO_LONG`, `GAPS_TOO_MANY`, `POINT_UNMEASURED` (one per point), `NO_MOTION` | EV-03 |
-| 3 | INCONCLUSIVE | `WAYPOINTS_TOO_FEW`, `WAYPOINT_TOO_CLOSE_TO_BOUNDARY` (one per waypoint), `RUN_TOO_SHORT`, `GAP_UNBOUNDED`, `GAP_TOO_LONG`, `GAPS_TOO_MANY`, `POINT_UNMEASURED` | EV-10 |
+| 3 | INCONCLUSIVE | `RUN_TOO_SHORT`, `BASE_RATE_LOW`, `STRATEGY_MISSING` (one per strategy), `NO_MOTION`, and the shared measurement reasons | EV-03 |
+| 3 | INCONCLUSIVE | `WAYPOINTS_TOO_FEW`, `WAYPOINTS_TOO_CLOSE`, `WAYPOINT_TOO_CLOSE_TO_BOUNDARY` (one per waypoint), `RUN_TOO_SHORT`, and the shared measurement reasons | EV-10 |
+| 3 | (shared) | `POINT_UNMEASURED`, `INSTRUMENT_RATE_LOW`, `SPEED_UNMEASURED`, `GAP_UNBOUNDED`, `GAP_TOO_LONG`, `GAPS_TOO_MANY` (each one per required point) | both |
 | 4 | FAIL | `LIVENESS_LOW` | EV-10 |
 | last | PASS | none | both |
 
@@ -186,17 +229,21 @@ Code by code:
 | `JITTER_MISSING` | no jitter label with 2 or more rows |
 | `POST_CHECK_MISSING` | no label in both pre and post |
 | `POST_CHECK_DRIFT` | max drift > `post_check_drift_max_tolerance_frac`·tol |
+| `INSTRUMENT_MATCHES_ROBOT_STATE` | a required point has at least 100 instrument samples matched to fk within 5 ms, and at least 95 % of them are within 0.1 mm of it |
 | `POSITION_EXCURSION` | a point has position excursions |
 | `SPEED_EXCURSION` | a point has speed excursions |
 | `RUN_TOO_SHORT` | last − first `t_sent` < `min_duration_s` (0 without commands) |
 | `BASE_RATE_LOW` | base rate < `min_base_rate_hz`, or no non-fast commands |
 | `STRATEGY_MISSING` | a `required_strategies` entry has no commands |
+| `POINT_UNMEASURED` | a required point has no valid in-window sample (it then gets no other measurement codes) |
+| `INSTRUMENT_RATE_LOW` | a required point's median sample rate < 2 / `speed_window_s`, or it has exactly one valid in-window sample |
+| `SPEED_UNMEASURED` | a required point has samples but no speed span (no two samples 0.5·w to w apart) |
 | `GAP_UNBOUNDED` | a required point has an unbounded gap |
 | `GAP_TOO_LONG` | a required point has a spacing > `gap_max_s` (edges included) |
 | `GAPS_TOO_MANY` | a required point's gaps total > `gap_max_fraction` × window length |
-| `POINT_UNMEASURED` | a required point has no valid in-window sample (it then gets no gap codes) |
 | `NO_MOTION` | moving share < `motion_min_window_fraction`, or no whole motion window |
 | `WAYPOINTS_TOO_FEW` | fewer than `min_waypoints` distinct waypoints visited |
+| `WAYPOINTS_TOO_CLOSE` | two declared waypoints are closer than `waypoint_separation_min_m` (one reason, naming the closest pair) |
 | `WAYPOINT_TOO_CLOSE_TO_BOUNDARY` | a declared waypoint is less than the inside minimum inside |
 | `LIVENESS_LOW` | `reach_fraction` < `min_reach_fraction` |
 
@@ -208,8 +255,6 @@ When step 1 decides, the step-2 reasons it would have listed go to
 | Flag | When |
 |---|---|
 | `NONSTANDARD_PARAMS` | any profile value differs from the packaged profile of the same name, compared as JCS bytes (so 6 and 6.0 match), or there is no packaged profile of that name |
-| `REQUIRED_POINTS_OMIT_ZONED` | the declared `required_points` leave out a point that has zones |
-| `SPEED_UNMEASURED` | a required point has samples but no span of 0.75·w to w, so its speed was never checked |
 | `UNDECLARED_POINT_SAMPLES` | samples name points the envelope does not declare (ignored) |
 
 ## Output
@@ -227,13 +272,13 @@ window          null (no commands) | {start_s, end_s, length_s, first_command_s,
                 run_duration_s, commands, clock_uncertainty_s, tail_s}
 achieved_rates  {base_commands, base_duration_s, base_rate_hz,
                  strategies: [{strategy, commands, segments, duration_s, rate_hz}]}
-score           {sigma_jitter_m, speed_allowance_mps,
+score           {sigma_jitter_m, speed_allowance_mps, speed_span_min_s,
                  points: [{point, has_zones, samples,
                            position_excursions, worst_clearance_m, worst_clearance_t_s,
                            min_clearance_m, min_clearance_t_s,
                            speed_limit_mps, speed_spans, max_speed_mps, max_speed_t_s,
                            speed_excursions, worst_speed_mps, worst_speed_t_s}]}
-gaps            {physical_max_tool_speed_mps,
+gaps            {physical_max_tool_speed_mps, min_rate_hz,
                  points: [{point, samples, median_spacing_s, median_rate_hz, gap_threshold_s,
                            count, longest_s, total_s, fraction, unbounded, longest_spacing_s}]}
                  (required points only)
@@ -245,8 +290,13 @@ accuracy        {age_s,
                  pre: {points, p95_error_m, max_error_m, errors: [{label, error_m}]},
                  post: {points, compared, max_drift_m, drifts: [{label, drift_m}]},
                  jitter: {sigma_m, labels: [{label, samples, sigma_m}]},
-                 limits: {min_points, max_age_s, p95_max_m, max_max_m, drift_max_m}}
+                 limits: {min_points, max_age_s, p95_max_m, max_max_m, drift_max_m},
+                 robot_state_match: null | {max_dt_s, max_distance_m, min_matches, min_percent,
+                   points: [{point, samples, fk_samples, matches, within, share}]}}
+                   (required points)
 liveness        {point, reach_radius_m, inside_min_m, grace_s,                   EV-10 only
+                 separation_min_m, closest_pair: null | {ids: [a, b], distance_m},
+                 pairs_too_close,
                  waypoints: [{id, position_m, clearance_m, visits, visits_reached}],
                  visits: [{waypoint, start_s, end_s, reached, closest_m, first_reach_t_s}],
                  visits_total, visits_reached, reach_fraction, distinct_waypoints_visited}
@@ -267,23 +317,20 @@ so they are byte-identical everywhere too.
 Every number that reaches the output is computed with `+ − × /`, `math.sqrt` and `math.fsum`
 in a fixed order, comparisons, `floor`/`ceil`, and sorting; no built-in `sum` (it changed in
 3.12), `statistics`, numpy, `math.hypot`/`dist`/`sumprod`, `**` or transcendental functions.
-`vectors/scoring/golden.json` pins the sha256 of the JCS bytes for six synthetic runs;
-`packages/core/tests/test_scoring_golden.py` checks it (and runs as a plain script, which
-`--write` regenerates). The hashes are identical on CPython 3.10, 3.11, 3.12 and 3.13.
+Shares compared against a percentage are compared in integers. `vectors/scoring/golden.json`
+pins the sha256 of the JCS bytes for eight synthetic runs; `packages/core/tests/test_scoring_golden.py`
+checks it (and runs as a plain script, which `--write` regenerates). The hashes are identical on
+CPython 3.10, 3.11, 3.12 and 3.13.
 
 ## Known limits and open questions
 
-- **Speed blind bands.** With spans restricted to [0.75·w, w] = [0.15 s, 0.2 s], an instrument at
-  6.7–10 Hz or 13.3–15 Hz (or under 5 Hz) never yields a span, so speed is never checked. The
-  run is flagged `SPEED_UNMEASURED` but the verdict is unchanged. A verdict rule (or a minimum
-  instrument rate) would close this; nothing in the method requires a minimum rate today, and the
-  gap threshold scales with the measured rate, so a slow instrument also has no gaps.
 - **EV-10 order.** `LIVENESS_LOW` is checked after the EV-10 adequacy reasons, so a run with too
-  few waypoints, a waypoint near the boundary, a short run or tracking gaps is INCONCLUSIVE rather
-  than failing liveness on evidence that cannot support it. Excursions still FAIL first.
-- **EV-10 waypoint spread.** Nothing requires waypoints to be apart from each other or from the
-  start pose; four waypoint ids at the start pose would let a frozen gate pass.
-- **`required_points`** lets a lab leave zoned points out (flagged); the plan text says an
-  unmeasured zoned point is INCONCLUSIVE.
-- **be-state-csv/1** does not say what `joint` holds on `fk_tool` rows, so core offers no
-  state-to-`fk_samples` conversion; the caller builds `fk_samples`.
+  few or too close waypoints, a waypoint near the boundary, a short run or tracking gaps is
+  INCONCLUSIVE rather than failing liveness on evidence that cannot support it. Excursions still
+  FAIL first.
+- **EV-10 visit weighting.** The reach fraction counts visits, so a lab that visits one waypoint
+  far more often than the others weights it accordingly; a waypoint at the start pose, visited
+  often, can carry a frozen gate past 90 %. Separation stops stacking waypoints, not this.
+- **Robot-state match** needs fk_samples; without them the check cannot run (the block is null).
+  It catches a copied track, not an instrument that is merely seeded from robot state.
+- **CONTRACT.md** still names the state source `fk_tool`; the readers accept only `fk`.

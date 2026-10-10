@@ -149,7 +149,7 @@ It extends rcan-spec envelope 0.1 (copied unchanged to `schemas/envelope-0.1.jso
 
 - **`be-samples-csv/1`:** `t_s,point,x_m,y_m,z_m,valid,residual_m`. Coordinates are in the envelope `frame`. `valid` is 0 or 1. `residual_m` is the instrument's own fit residual, or empty.
 - **`be-commands-csv/1`:** `seq,t_sent_s,t_done_s,strategy,payload_json,result,error_kind`.
-- **`be-state-csv/1`:** `t_s,source,joint,value` (long format); `source` is `encoder` or `fk_tool`.
+- **`be-state-csv/1`:** `t_s,source,joint,value` (long format); `source` is `encoder` (the robot's own joint values, in its own units) or `fk` (forward kinematics of those values: `joint` is `<point id>.x`, `.y` or `.z`, value in metres in the envelope frame, all three axes per point and time). Changed 10 Oct from `fk_tool`.
 - **`be-accuracy-csv/1`:** `phase,label,ref_x_m,ref_y_m,ref_z_m,meas_x_m,meas_y_m,meas_z_m,n`. `phase` is `pre`, `post` or `jitter`.
 
 Every `t_s` is seconds on the run's single timebase: host `time.monotonic()` at run start equals 0. Instruments convert their device timestamps to this timebase, and record the offset and uncertainty in the run's `clock` block.
@@ -159,6 +159,8 @@ Every `t_s` is seconds on the run's single timebase: host `time.monotonic()` at 
 ```
 <run>/report.json            signed test report 0.1
 <run>/envelope.json          the envelope exactly as used (its hash is in the report)
+<run>/command-space.json     the declared command space (its digest is in the report; CI regenerates the stream from it)
+<run>/ev10-waypoints.json    EV-10 only: the declared waypoints (waypoints-0.1)
 <run>/raw/samples.csv(.gz)   be-samples-csv/1
 <run>/raw/commands.csv(.gz)  be-commands-csv/1
 <run>/raw/state.csv(.gz)     be-state-csv/1
@@ -181,3 +183,22 @@ Every `t_s` is seconds on the run's single timebase: host `time.monotonic()` at 
 The verdict is `PASS`, `FAIL` or `INCONCLUSIVE`, and `report.build` always works it out from the raw data.
 - The kit never writes a verdict.
 - Reason codes are `UPPER_SNAKE` and stable once released.
+
+## Seams added on 10 Oct 2026
+
+These documents are part of the contract. Each was built to the plan, then integrated; where they and this file disagree, this file wins until it is updated.
+
+| Seam | Document | Status |
+|---|---|---|
+| Command space 0.1 and the hostile generator `be-hostile/1` | `docs/seams/generator.md` | built, golden digests in `vectors/streams/` |
+| Scorers `ev03-tool-point/1`, `ev10-waypoints/1`, the verdict, raw-data readers, profiles | `docs/seams/scoring.md` | built, goldens in `vectors/scoring/` |
+| Test report 0.1, `be verify`, the `be-control/1` and `be-waypoints/1` streams | `docs/seams/report.md` | built, golden runs in `vectors/runs/` |
+| Markerless instrument `be fit` (OAK-D depth fit of the URDF) | `docs/seams/markerless.md` | built, validated on synthetic data only |
+| Adapters, runner and watchdog | `docs/seams/runner.md` | **draft: line-by-line human review before any hardware use** |
+
+Decisions taken while integrating:
+- **Control runs** walk from a declared start pose (`be-control/1` param `start`, every axis, or null for home), so a step cap limits the first command too.
+- **Run length** is judged on the time the commands cover (span plus the median command spacing), within 50 ms: a 600 s stream at 50 Hz ends at 599.98 s.
+- **EV-10** fails a waypoint that no visit reached (`WAYPOINT_NEVER_REACHED`), besides the overall reach fraction.
+- **Instrument timebase.** An instrument's own output (for `be fit`, `samples.csv` stamped with the recording's `t_mono_s`) is converted to the run timebase by `be report`, using the run's `clock` block; the scorer only ever sees the run timebase.
+- **Frames for the SO-101.** The envelope frame is the URDF's `base_link`. The tape measurements in a recording are taken from the point on the table under the shoulder_pan axis (frame F); `be fit register` converts: `base_link = F + (pan_x, pan_y, z_min)`, read from the URDF (38.8 mm, 0, −2.4 mm for `so101_new_calib.urdf`).

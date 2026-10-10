@@ -40,18 +40,68 @@ from .kin import ArmFK, FKError
 from .limits import DEFAULT, Limits
 from .watchdog import StateBox, StateSnapshot, StopLatch, Watchdog
 
-__all__ = ["COMMANDS_HEADER", "STATE_HEADER", "CommandThread", "RawFiles", "SessionResult",
-           "make_clock", "run_session"]
+__all__ = ["COMMANDS_HEADER", "STATE_HEADER", "CommandThread", "RawFiles", "RunClock",
+           "SessionResult", "make_clock", "run_session"]
 
 COMMANDS_HEADER = ("seq", "t_sent_s", "t_done_s", "strategy", "payload_json", "result", "error_kind")
 STATE_HEADER = ("t_s", "source", "joint", "value")
 FLUSH_EVERY_S = 1.0
 
 
-def make_clock() -> Callable[[], float]:
-    """The run's timebase: seconds since this call, from time.monotonic()."""
-    t0 = time.monotonic()
-    return lambda: time.monotonic() - t0
+def _clock_pair() -> tuple[float, float, float]:
+    """(monotonic, wall, uncertainty): time.time() read between two time.monotonic() readings,
+    the tightest of five tries. The wall reading is placed at the middle of its bracket, so
+    ``uncertainty`` is half the bracket (record.py's clock_pair does the same)."""
+    best: tuple[float, float, float] | None = None
+    for _ in range(5):
+        m0 = time.monotonic()
+        w = time.time()
+        m1 = time.monotonic()
+        if best is None or m1 - m0 < 2 * best[2]:
+            best = ((m0 + m1) / 2, w, (m1 - m0) / 2)
+    assert best is not None
+    return best
+
+
+class RunClock:
+    """The run's timebase: ``clock()`` is seconds since the clock was made, from time.monotonic().
+
+    It also keeps where its zero sits on this host's clocks, so ``be report`` can bring an
+    instrument's own timestamps onto the run timebase (docs/seams/submission.md):
+    ``monotonic_start_s`` is time.monotonic() at t = 0 (an instrument stamping this host's
+    CLOCK_MONOTONIC converts by subtracting it), ``wall_start_s`` is time.time() at t = 0, to
+    within ``wall_start_uncertainty_s``. ``end_pair()`` reads both clocks again at the end."""
+
+    def __init__(self) -> None:
+        mono, wall, uncertainty = _clock_pair()
+        self.monotonic_start_s = mono
+        self.wall_start_s = wall
+        self.wall_start_uncertainty_s = uncertainty
+        info = time.get_clock_info("monotonic")
+        self.monotonic_clock = info.implementation
+        self.monotonic_resolution_s = info.resolution
+
+    def __call__(self) -> float:
+        return time.monotonic() - self.monotonic_start_s
+
+    def as_dict(self) -> dict:
+        """The start, for declared.json's ``timestamps``."""
+        return {"monotonic_start_s": self.monotonic_start_s, "wall_start_s": self.wall_start_s,
+                "wall_start_uncertainty_s": self.wall_start_uncertainty_s,
+                "monotonic_clock": self.monotonic_clock,
+                "monotonic_resolution_s": self.monotonic_resolution_s}
+
+    def end_pair(self) -> dict:
+        """Both clocks read now, for declared.json's ``timestamps`` at the end of a run: the wall
+        clock's drift against the monotonic one over the run is the change in their difference."""
+        mono, wall, uncertainty = _clock_pair()
+        return {"monotonic_end_s": mono, "wall_end_s": wall, "wall_end_uncertainty_s": uncertainty}
+
+
+def make_clock() -> RunClock:
+    """The run's timebase: seconds since this call, from time.monotonic() (a callable
+    :class:`RunClock`, which also records where t = 0 is on the host's clocks)."""
+    return RunClock()
 
 
 def _num(value: float) -> str | None:

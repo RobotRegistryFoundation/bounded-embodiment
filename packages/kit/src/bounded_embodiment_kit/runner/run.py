@@ -424,7 +424,7 @@ def execute_run(args, *, prompt: Callable[[str], str] = _ask, log: Callable[[str
     closed = "closed"
     try:
         clock = make_clock()
-        started = time.time()
+        started = clock.wall_start_s
         (out / "raw").mkdir(parents=True, exist_ok=True)
         shutil.copyfile(args.envelope, out / "envelope.json")
         shutil.copyfile(args.command_space, out / "command-space.json")
@@ -455,7 +455,7 @@ def execute_run(args, *, prompt: Callable[[str], str] = _ask, log: Callable[[str
                        "limits": limits.as_dict(), "setup_hash": setup,
                        "shakedown_used": shakedown},
             "timestamps": {"started_at": _iso(started), "ended_at": None,
-                           "timebase": "time.monotonic() at run start = 0 s"},
+                           "timebase": "time.monotonic() at run start = 0 s", **clock.as_dict()},
             "end": None, "software": _software(),
         }
         _write_json(out / "declared.json", declared)
@@ -471,7 +471,9 @@ def execute_run(args, *, prompt: Callable[[str], str] = _ask, log: Callable[[str
             closed = live.teardown(result)
         else:  # failed before the session existed: nothing moved, but the robot is connected
             adapter.close()
-    declared["timestamps"]["ended_at"] = _iso()
+    end_pair = clock.end_pair()
+    declared["timestamps"]["ended_at"] = _iso(end_pair["wall_end_s"])
+    declared["timestamps"].update(end_pair)
     declared["end"] = _end_block(result, live, closed)
     _write_json(out / "declared.json", declared)
     if mode == "shakedown" and result is not None and result.started:

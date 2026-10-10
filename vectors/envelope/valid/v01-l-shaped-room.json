@@ -1,0 +1,50 @@
+{
+  "envelope_version": "0.1",
+  "machine": {
+    "id": "floor-bot-3",
+    "class": "mobile_ground"
+  },
+  "level": "BE-1",
+  "workspace": {
+    "frame": "map",
+    "keep_in": [
+      [
+        0,
+        0
+      ],
+      [
+        0,
+        6
+      ],
+      [
+        3,
+        6
+      ],
+      [
+        3,
+        3
+      ],
+      [
+        8,
+        3
+      ],
+      [
+        8,
+        0
+      ]
+    ]
+  },
+  "motion": {
+    "max_speed_mps": 0.6
+  },
+  "stop": {
+    "category": 2,
+    "max_time_ms": 500,
+    "max_distance_m": 0.3
+  },
+  "heartbeat": {
+    "model_timeout_ms": 300,
+    "gate_timeout_ms": 100,
+    "on_loss": "stop"
+  }
+}

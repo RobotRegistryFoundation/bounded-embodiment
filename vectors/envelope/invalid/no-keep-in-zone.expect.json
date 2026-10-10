@@ -1,0 +1,5 @@
+{
+  "code": "SCHEMA_INVALID",
+  "where": "/workspace/zones",
+  "why": "at least one zone must be keep_in"
+}

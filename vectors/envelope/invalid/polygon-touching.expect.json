@@ -1,0 +1,5 @@
+{
+  "code": "ENVELOPE_POLYGON_NOT_SIMPLE",
+  "where": "/workspace/zones/0/prism/polygon_m",
+  "why": "a vertex touches a non-adjacent edge, pinching the polygon in two"
+}

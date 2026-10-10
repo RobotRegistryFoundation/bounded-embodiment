@@ -1,0 +1,5 @@
+{
+  "code": "SCHEMA_INVALID",
+  "where": "/motion",
+  "why": "unknown keys are rejected, not ignored"
+}

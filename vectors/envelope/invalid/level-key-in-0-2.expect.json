@@ -1,0 +1,5 @@
+{
+  "code": "SCHEMA_INVALID",
+  "where": "",
+  "why": "0.2 renames level to declared_level"
+}

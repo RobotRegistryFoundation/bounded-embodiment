@@ -1,0 +1,4 @@
+{
+  "code": "ENVELOPE_NOT_CANONICAL",
+  "why": "an integer an IEEE 754 double cannot hold, so the document has no RFC 8785 form"
+}

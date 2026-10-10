@@ -1,0 +1,70 @@
+{
+  "envelope_version": "0.1",
+  "machine": {
+    "id": "cart-07",
+    "class": "mobile_ground",
+    "mass_kg": 12.5
+  },
+  "level": "BE-1",
+  "workspace": {
+    "frame": "map",
+    "keep_in": [
+      [
+        0,
+        0
+      ],
+      [
+        8,
+        0
+      ],
+      [
+        8,
+        5
+      ],
+      [
+        0,
+        5
+      ]
+    ],
+    "keep_out": [
+      [
+        [
+          3,
+          2
+        ],
+        [
+          4,
+          2
+        ],
+        [
+          3.5,
+          3
+        ]
+      ]
+    ]
+  },
+  "motion": {
+    "max_speed_mps": 0.8,
+    "max_turn_radps": 1.2
+  },
+  "sensing": {
+    "max_state_age_ms": 80
+  },
+  "stop": {
+    "category": 1,
+    "max_time_ms": 350,
+    "max_distance_m": 0.2
+  },
+  "heartbeat": {
+    "model_timeout_ms": 250,
+    "gate_timeout_ms": 60,
+    "on_loss": "continue"
+  },
+  "authority": {
+    "required_for": [
+      "motion"
+    ],
+    "resolver": "local"
+  },
+  "signature": "ed25519:NOT-A-REAL-SIGNATURE-test-vector"
+}

@@ -1,0 +1,4 @@
+{
+  "code": "ENVELOPE_PARSE_ERROR",
+  "why": "two readers could disagree on which max_speed_mps applies"
+}

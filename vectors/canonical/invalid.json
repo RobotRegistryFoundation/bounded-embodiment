@@ -1,0 +1,106 @@
+{
+  "format": "bounded-embodiment-vectors/canonical-invalid/1",
+  "description": "Inputs a conforming implementation must reject. 'input_json' is JSON text; 'input_base64' is raw bytes. stage 'parse': the strict loader must refuse the text (duplicate member names compared after unescaping, NaN/Infinity, numbers that overflow a double, lone surrogates, a byte order mark, invalid UTF-8, malformed JSON). stage 'canonicalize': the text parses but must not be canonicalized, because an integer beyond 2**53 in magnitude cannot be carried exactly by an IEEE 754 double. CC BY 4.0 (see REUSE.toml).",
+  "cases": [
+    {
+      "name": "duplicate_member",
+      "input_json": "{\"a\":1,\"a\":2}",
+      "stage": "parse"
+    },
+    {
+      "name": "duplicate_member_same_value",
+      "input_json": "{\"a\":1,\"a\":1}",
+      "stage": "parse"
+    },
+    {
+      "name": "duplicate_member_nested",
+      "input_json": "{\"x\":[{\"b\":true,\"b\":true}]}",
+      "stage": "parse"
+    },
+    {
+      "name": "duplicate_member_after_unescaping",
+      "input_json": "{\"a\":1,\"\\u0061\":2}",
+      "stage": "parse"
+    },
+    {
+      "name": "nan_literal",
+      "input_json": "NaN",
+      "stage": "parse"
+    },
+    {
+      "name": "infinity_literal",
+      "input_json": "[Infinity]",
+      "stage": "parse"
+    },
+    {
+      "name": "negative_infinity_literal",
+      "input_json": "{\"x\":-Infinity}",
+      "stage": "parse"
+    },
+    {
+      "name": "number_overflows_double",
+      "input_json": "1e400",
+      "stage": "parse"
+    },
+    {
+      "name": "negative_number_overflows_double",
+      "input_json": "[-1.5e309]",
+      "stage": "parse"
+    },
+    {
+      "name": "lone_high_surrogate",
+      "input_json": "\"\\ud800\"",
+      "stage": "parse"
+    },
+    {
+      "name": "lone_low_surrogate",
+      "input_json": "\"x\\udc00\"",
+      "stage": "parse"
+    },
+    {
+      "name": "reversed_surrogate_pair",
+      "input_json": "\"\\ude00\\ud83d\"",
+      "stage": "parse"
+    },
+    {
+      "name": "lone_surrogate_in_member_name",
+      "input_json": "{\"\\ud83d\":1}",
+      "stage": "parse"
+    },
+    {
+      "name": "byte_order_mark",
+      "input_base64": "77u/e30=",
+      "stage": "parse"
+    },
+    {
+      "name": "invalid_utf8",
+      "input_base64": "Iv8i",
+      "stage": "parse"
+    },
+    {
+      "name": "trailing_comma",
+      "input_json": "[1,]",
+      "stage": "parse"
+    },
+    {
+      "name": "trailing_garbage",
+      "input_json": "{} x",
+      "stage": "parse"
+    },
+    {
+      "name": "integer_above_2_pow_53",
+      "input_json": "9007199254740993",
+      "stage": "canonicalize"
+    },
+    {
+      "name": "integer_below_minus_2_pow_53",
+      "input_json": "-9007199254740993",
+      "stage": "canonicalize"
+    },
+    {
+      "name": "integer_2_pow_64_nested",
+      "input_json": "{\"n\":[18446744073709551616]}",
+      "stage": "canonicalize"
+    }
+  ]
+}

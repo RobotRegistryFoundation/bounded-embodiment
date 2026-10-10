@@ -1,0 +1,127 @@
+{
+  "format": "bounded-embodiment-vectors/signing-sample/1",
+  "description": "A document signed with the rfc8037 key from keys.json (and then also with rfc8032_test2). 'canonical_payload' is RFC 8785 JCS of the document without its signature member; every signature entry is Ed25519 over those UTF-8 bytes. Ed25519 is deterministic, so a conforming signer reproduces these signatures exactly. CC BY 4.0 (see REUSE.toml).",
+  "keyring": {
+    "kPrK_qmxVWaYVA9wwBF6Iuo3vVzz7TxHCTwXBygrS4k": {
+      "kty": "OKP",
+      "crv": "Ed25519",
+      "x": "11qYAYKxCrfVS_7TyWQHOg7hcvPapiMlrwIaaPcHURo"
+    },
+    "FtIu-VbGrfe_KB6CH7GNwODB72MNxj_ml11dEvO-7kk": {
+      "kty": "OKP",
+      "crv": "Ed25519",
+      "x": "PUAXw-hDiVqStwqnTRt-vJyYLM8uxJaMwM1V8Sr0Zgw"
+    }
+  },
+  "unsigned": {
+    "kind": "bounded-embodiment-signing-sample",
+    "note": "Numbers here are chosen so that a non-RFC-8785 serializer produces different bytes.",
+    "envelope": {
+      "hash": "sha256:abababababababababababababababababababababababababababababababab"
+    },
+    "numbers": [
+      5e-05,
+      1e-07,
+      1e+21,
+      0.1,
+      -0.0,
+      0.25,
+      300,
+      1.5e-07,
+      1.2345678901234568e+20
+    ],
+    "text": "Caf\u00e9 \ud83d\ude00 \u20ac",
+    "nested": {
+      "z": 1,
+      "a": [
+        true,
+        null,
+        {
+          "\ufb33": "dalet",
+          "\ud83d\ude00": "grin"
+        }
+      ]
+    }
+  },
+  "canonical_payload": "{\"envelope\":{\"hash\":\"sha256:abababababababababababababababababababababababababababababababab\"},\"kind\":\"bounded-embodiment-signing-sample\",\"nested\":{\"a\":[true,null,{\"\ud83d\ude00\":\"grin\",\"\ufb33\":\"dalet\"}],\"z\":1},\"note\":\"Numbers here are chosen so that a non-RFC-8785 serializer produces different bytes.\",\"numbers\":[0.00005,1e-7,1e+21,0.1,0,0.25,300,1.5e-7,123456789012345680000],\"text\":\"Caf\u00e9 \ud83d\ude00 \u20ac\"}",
+  "payload_sha256": "sha256:fb8ba4857a60f8d48161e7aa1bbc926f7c9bcf65103bd94e541dddceee3c2ff2",
+  "signed": {
+    "kind": "bounded-embodiment-signing-sample",
+    "note": "Numbers here are chosen so that a non-RFC-8785 serializer produces different bytes.",
+    "envelope": {
+      "hash": "sha256:abababababababababababababababababababababababababababababababab"
+    },
+    "numbers": [
+      5e-05,
+      1e-07,
+      1e+21,
+      0.1,
+      -0.0,
+      0.25,
+      300,
+      1.5e-07,
+      1.2345678901234568e+20
+    ],
+    "text": "Caf\u00e9 \ud83d\ude00 \u20ac",
+    "nested": {
+      "z": 1,
+      "a": [
+        true,
+        null,
+        {
+          "\ufb33": "dalet",
+          "\ud83d\ude00": "grin"
+        }
+      ]
+    },
+    "signature": [
+      {
+        "alg": "Ed25519",
+        "kid": "kPrK_qmxVWaYVA9wwBF6Iuo3vVzz7TxHCTwXBygrS4k",
+        "sig": "Cgp24cDF6y1-9uS4jcBKw39-k-tb70j6FfEqIe_q-ZMqSpN8qroYY-OgVkwUSpzQQW-r4_2yWQuShogfkAMuCg"
+      }
+    ]
+  },
+  "signed_twice": {
+    "kind": "bounded-embodiment-signing-sample",
+    "note": "Numbers here are chosen so that a non-RFC-8785 serializer produces different bytes.",
+    "envelope": {
+      "hash": "sha256:abababababababababababababababababababababababababababababababab"
+    },
+    "numbers": [
+      5e-05,
+      1e-07,
+      1e+21,
+      0.1,
+      -0.0,
+      0.25,
+      300,
+      1.5e-07,
+      1.2345678901234568e+20
+    ],
+    "text": "Caf\u00e9 \ud83d\ude00 \u20ac",
+    "nested": {
+      "z": 1,
+      "a": [
+        true,
+        null,
+        {
+          "\ufb33": "dalet",
+          "\ud83d\ude00": "grin"
+        }
+      ]
+    },
+    "signature": [
+      {
+        "alg": "Ed25519",
+        "kid": "kPrK_qmxVWaYVA9wwBF6Iuo3vVzz7TxHCTwXBygrS4k",
+        "sig": "Cgp24cDF6y1-9uS4jcBKw39-k-tb70j6FfEqIe_q-ZMqSpN8qroYY-OgVkwUSpzQQW-r4_2yWQuShogfkAMuCg"
+      },
+      {
+        "alg": "Ed25519",
+        "kid": "FtIu-VbGrfe_KB6CH7GNwODB72MNxj_ml11dEvO-7kk",
+        "sig": "CYFVZdCs_lvXhFxkrNNoKdRGs8WOHooHW1NMCqMG0S7FXyVq959AVVAAkgLHy0okQMGe8NOjfjrUJs-q13EZCw"
+      }
+    ]
+  }
+}

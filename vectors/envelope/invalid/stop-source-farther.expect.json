@@ -1,0 +1,5 @@
+{
+  "code": "ENVELOPE_STOP_SOURCE_EXCEEDS",
+  "where": "/stop/sources/0/max_distance_m",
+  "why": "a source that travels farther than the declared worst case"
+}

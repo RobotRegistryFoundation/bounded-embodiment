@@ -1,0 +1,84 @@
+{
+  "hash": "sha256:cccd5295ba150c6ae12f86a2ad2c18ba01ceea6da4bcbdfdbd7cbdc5e6512311",
+  "upgraded_from": "0.1",
+  "frame": "map",
+  "declared_level": "BE-1",
+  "zones": [
+    {
+      "id": "keep_in",
+      "kind": "keep_in",
+      "shape": "prism",
+      "applies_to": [
+        "*"
+      ]
+    }
+  ],
+  "points": {
+    "machine": {
+      "speed_limit_mps": 0.6,
+      "zones": [
+        "keep_in"
+      ],
+      "faces": [
+        [
+          "edge_0",
+          "keep_in"
+        ],
+        [
+          "edge_1",
+          "keep_in"
+        ],
+        [
+          "edge_2",
+          "keep_in"
+        ],
+        [
+          "edge_3",
+          "keep_in"
+        ],
+        [
+          "edge_4",
+          "keep_in"
+        ],
+        [
+          "edge_5",
+          "keep_in"
+        ]
+      ]
+    }
+  },
+  "clearance": [
+    {
+      "point": "machine",
+      "xyz": [
+        1.5,
+        4.5,
+        0
+      ],
+      "expect_m": 1.5,
+      "why": "centre of the upper arm of the L"
+    },
+    {
+      "point": "machine",
+      "xyz": [
+        5,
+        5,
+        0
+      ],
+      "expect_m": -2.0,
+      "why": "in the notch, 2 m from both inner walls"
+    },
+    {
+      "point": "machine",
+      "xyz": [
+        2.5,
+        2.5,
+        0
+      ],
+      "expect_m": 0.7071067811865476,
+      "why": "nearest the reflex corner (3, 3)"
+    }
+  ],
+  "warnings": [],
+  "abs_tol_m": 1e-09
+}

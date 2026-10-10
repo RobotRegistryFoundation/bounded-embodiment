@@ -1,0 +1,5 @@
+{
+  "code": "SCHEMA_INVALID",
+  "where": "/workspace/zones/0/box/max_m",
+  "why": "a box corner has three coordinates"
+}

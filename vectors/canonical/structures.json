@@ -1,0 +1,375 @@
+{
+  "format": "bounded-embodiment-vectors/canonical/1",
+  "description": "RFC 8785 canonicalization of whole JSON values. Each case has 'input' (a JSON value) or 'input_json' (JSON text to parse strictly first), 'expected' (the canonical text) and 'sha256' (sha256 of the UTF-8 bytes of 'expected', in the sha256_jcs form). Object members sort by UTF-16 code units. Cross-checked against a Node.js reference. CC BY 4.0 (see REUSE.toml).",
+  "cases": [
+    {
+      "name": "empty_object",
+      "input": {},
+      "expected": "{}",
+      "sha256": "sha256:44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"
+    },
+    {
+      "name": "empty_array",
+      "input": [],
+      "expected": "[]",
+      "sha256": "sha256:4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    {
+      "name": "empty_string",
+      "input": "",
+      "expected": "\"\"",
+      "sha256": "sha256:12ae32cb1ec02d01eda3581b127c1fee3b0dc53572ed6baf239721a03d82e126"
+    },
+    {
+      "name": "literals",
+      "input": [
+        null,
+        true,
+        false
+      ],
+      "expected": "[null,true,false]",
+      "sha256": "sha256:37257214f22b92121c5ff4d7e29ed2d31b3f1129ee698e96e581ec05cb2e3cf7"
+    },
+    {
+      "name": "empty_containers_nested",
+      "input": {
+        "b": [],
+        "a": {},
+        "c": [
+          {},
+          []
+        ]
+      },
+      "expected": "{\"a\":{},\"b\":[],\"c\":[{},[]]}",
+      "sha256": "sha256:010b96c1533bb5ba7bcc83f5e2688860025e4c0e555490a9a1a1a7a18a32fb42"
+    },
+    {
+      "name": "key_order_ascii",
+      "input": {
+        "b": 1,
+        "a": 2,
+        "c": 3
+      },
+      "expected": "{\"a\":2,\"b\":1,\"c\":3}",
+      "sha256": "sha256:e145110e712e3ed0a6b233551b27a90aa39b4c93ed67e111ba2002d16e5ed1fa"
+    },
+    {
+      "name": "key_order_case_and_punctuation",
+      "input": {
+        "a": 1,
+        "B": 2,
+        "_": 3,
+        "0": 4,
+        "": 5,
+        "~": 6
+      },
+      "expected": "{\"\":5,\"0\":4,\"B\":2,\"_\":3,\"a\":1,\"~\":6}",
+      "sha256": "sha256:33e4aa19c9cc6cacb289d4b26aa268ffe0909ecab4e4fb98f9f3a8698465b38e"
+    },
+    {
+      "name": "key_order_prefixes",
+      "input": {
+        "aa": 1,
+        "a": 2,
+        "ab": 3,
+        "b": 4,
+        "a ": 5,
+        "A": 6
+      },
+      "expected": "{\"A\":6,\"a\":2,\"a \":5,\"aa\":1,\"ab\":3,\"b\":4}",
+      "sha256": "sha256:d48c7c321bae58b832330c5df4a5627afa80d3a2346d5eaec841b54bf3aa83a9"
+    },
+    {
+      "name": "rfc8785_3_2_3_sorting",
+      "input": {
+        "\u20ac": "Euro Sign",
+        "\r": "Carriage Return",
+        "\ufb33": "Hebrew Letter Dalet With Dagesh",
+        "1": "One",
+        "\ud83d\ude00": "Emoji: Grinning Face",
+        "\u0080": "Control",
+        "\u00f6": "Latin Small Letter O With Diaeresis"
+      },
+      "expected": "{\"\\r\":\"Carriage Return\",\"1\":\"One\",\"\u0080\":\"Control\",\"\u00f6\":\"Latin Small Letter O With Diaeresis\",\"\u20ac\":\"Euro Sign\",\"\ud83d\ude00\":\"Emoji: Grinning Face\",\"\ufb33\":\"Hebrew Letter Dalet With Dagesh\"}",
+      "sha256": "sha256:5e321556d22018a9656991a9e94f77ec175fa193e52a2429d312f8419ec8b08c"
+    },
+    {
+      "name": "key_order_utf16_not_code_points",
+      "description": "U+1F600 is above U+E000, U+FB33 and U+FFFF as a code point, but its UTF-16 lead unit 0xD83D sorts before all three.",
+      "input": {
+        "\u20ac": 1,
+        "\ud83d\ude00": 2,
+        "\ufb33": 3,
+        "\ue000": 4,
+        "\uffff": 5
+      },
+      "expected": "{\"\u20ac\":1,\"\ud83d\ude00\":2,\"\ue000\":4,\"\ufb33\":3,\"\uffff\":5}",
+      "sha256": "sha256:a84b59bf71f42861a57838d32aa6f8d2fac0a8c5d52339b5f70ddda56287ba39"
+    },
+    {
+      "name": "key_order_non_bmp_pairs",
+      "input": {
+        "\ud83d\ude00": 1,
+        "\ud83d\udca9": 2,
+        "\ud800\udc00": 3,
+        "\udbff\udfff": 4,
+        "\ud7ff": 5
+      },
+      "expected": "{\"\ud7ff\":5,\"\ud800\udc00\":3,\"\ud83d\udca9\":2,\"\ud83d\ude00\":1,\"\udbff\udfff\":4}",
+      "sha256": "sha256:e900d9bd1ffeda78427c2795d5eb6c4306e52a39190052e9c0580474fb61e0f2"
+    },
+    {
+      "name": "key_order_prefix_then_non_bmp",
+      "input": {
+        "a\uffff": 1,
+        "a\ud83d\ude00": 2,
+        "a": 3,
+        "a\u20ac": 4
+      },
+      "expected": "{\"a\":3,\"a\u20ac\":4,\"a\ud83d\ude00\":2,\"a\uffff\":1}",
+      "sha256": "sha256:761a38135248b0350e9d63993a0bc983ef63b119d348dd42481318fabe1740ab"
+    },
+    {
+      "name": "no_unicode_normalization",
+      "description": "Precomposed and decomposed forms are different member names; JCS does not normalize.",
+      "input": {
+        "\u00e9": "precomposed",
+        "e\u0301": "decomposed"
+      },
+      "expected": "{\"e\u0301\":\"decomposed\",\"\u00e9\":\"precomposed\"}",
+      "sha256": "sha256:c57984b0473441c370eb2a4c714ab07e698c13c59a816c319f421fc3fe3de928"
+    },
+    {
+      "name": "nested_key_order",
+      "input": {
+        "z": {
+          "y": {
+            "x": 1,
+            "w": 2
+          },
+          "a": [
+            {
+              "d": 1,
+              "c": 2
+            }
+          ]
+        },
+        "a": 0
+      },
+      "expected": "{\"a\":0,\"z\":{\"a\":[{\"c\":2,\"d\":1}],\"y\":{\"w\":2,\"x\":1}}}",
+      "sha256": "sha256:996f1cc75ec699bf1027f02c34833e6634f8e2df85b4946657f9ff82b16f6551"
+    },
+    {
+      "name": "nested_arrays",
+      "input": [
+        [
+          []
+        ],
+        [
+          1,
+          [
+            2,
+            [
+              3,
+              {
+                "b": 1,
+                "a": [
+                  0.5,
+                  -0.0
+                ]
+              }
+            ]
+          ]
+        ],
+        [],
+        [
+          [
+            null,
+            [
+              true,
+              [
+                false
+              ]
+            ]
+          ]
+        ]
+      ],
+      "expected": "[[[]],[1,[2,[3,{\"a\":[0.5,0],\"b\":1}]]],[],[[null,[true,[false]]]]]",
+      "sha256": "sha256:51539e4da44a08b1b347ffa12ee5a9a0c616fab0efed7078c4443c1a8eb8b470"
+    },
+    {
+      "name": "string_escapes",
+      "input": "\u0000\u0001\u0002\u0003\u0004\u0005\u0006\u0007\b\t\n\u000b\f\r\u000e\u000f\u0010\u0011\u0012\u0013\u0014\u0015\u0016\u0017\u0018\u0019\u001a\u001b\u001c\u001d\u001e\u001f\"\\/\u007f\u0080\u2028\u2029\ufeff\ud83d\ude00 end",
+      "expected": "\"\\u0000\\u0001\\u0002\\u0003\\u0004\\u0005\\u0006\\u0007\\b\\t\\n\\u000b\\f\\r\\u000e\\u000f\\u0010\\u0011\\u0012\\u0013\\u0014\\u0015\\u0016\\u0017\\u0018\\u0019\\u001a\\u001b\\u001c\\u001d\\u001e\\u001f\\\"\\\\/\u007f\u0080\u2028\u2029\ufeff\ud83d\ude00 end\"",
+      "sha256": "sha256:3c7f80c7b42b92ed9bcb0834e2f34bd8abd6ff90e7a506272d4d9a447b34d3ed"
+    },
+    {
+      "name": "control_characters_in_keys",
+      "input": {
+        "\u0000": 1,
+        "\u001f": 2,
+        "\n": 3,
+        "\"": 4,
+        "\\": 5,
+        "/": 6,
+        "\u007f": 7
+      },
+      "expected": "{\"\\u0000\":1,\"\\n\":3,\"\\u001f\":2,\"\\\"\":4,\"/\":6,\"\\\\\":5,\"\u007f\":7}",
+      "sha256": "sha256:c00c4e5047a81f1aa16e04b0aef9867e90433d09787207dd89b31c1104de1926"
+    },
+    {
+      "name": "unicode_as_literal_utf8",
+      "input": {
+        "name": "Caf\u00e9 \u2615",
+        "emoji": "\ud83d\ude00",
+        "hebrew": "\ufb33",
+        "cjk": "\u4e2d\u6587"
+      },
+      "expected": "{\"cjk\":\"\u4e2d\u6587\",\"emoji\":\"\ud83d\ude00\",\"hebrew\":\"\ufb33\",\"name\":\"Caf\u00e9 \u2615\"}",
+      "sha256": "sha256:71d16500894c618eb40014fe5e2d8c969afb1f8c7e53717e20b15fbefd35bf87"
+    },
+    {
+      "name": "rfc8785_3_2_2_example",
+      "input_json": "{\n  \"numbers\": [333333333.33333329, 1E30, 4.50, 2e-3, 0.000000000000000000000000001],\n  \"string\": \"\\u20ac$\\u000F\\u000aA'\\u0042\\u0022\\u005c\\\\\\\"\\/\",\n  \"literals\": [null, true, false]\n}",
+      "expected": "{\"literals\":[null,true,false],\"numbers\":[333333333.3333333,1e+30,4.5,0.002,1e-27],\"string\":\"\u20ac$\\u000f\\nA'B\\\"\\\\\\\\\\\"/\"}",
+      "sha256": "sha256:2d5e01a318d0f0879ab568c4be289c8b1f64ef8921a53c6277d5e069978baacb"
+    },
+    {
+      "name": "input_json_escapes_decode_before_sorting",
+      "input_json": "{\"\\u0062\":1,\"a\":\"\\u00e9\\ud83d\\ude00\",\"\\/\":2}",
+      "expected": "{\"/\":2,\"a\":\"\u00e9\ud83d\ude00\",\"b\":1}",
+      "sha256": "sha256:d5849e08af14fcbc13e14d1701d9c29abca6009676129fac9de6ec88423536ed"
+    },
+    {
+      "name": "whole_floats_as_integers",
+      "input": {
+        "a": 1.0,
+        "b": -50.0,
+        "c": 0.0,
+        "d": -0.0,
+        "e": 1000000000000000.0,
+        "f": 1.5
+      },
+      "expected": "{\"a\":1,\"b\":-50,\"c\":0,\"d\":0,\"e\":1000000000000000,\"f\":1.5}",
+      "sha256": "sha256:90000125cc904b9fd1972eb20e07c1ad74619fbeeb51522c0e0bb89e137c71d9"
+    },
+    {
+      "name": "integers_at_the_limit",
+      "input": [
+        9007199254740992,
+        -9007199254740992,
+        0,
+        -1,
+        1
+      ],
+      "expected": "[9007199254740992,-9007199254740992,0,-1,1]",
+      "sha256": "sha256:ece54e2f01c966556219ecd4ad2af5853801d2ff261e3e4c69a8ed35495a7d2a"
+    },
+    {
+      "name": "mixed_number_forms",
+      "input": {
+        "tiny": [
+          5e-05,
+          1e-07,
+          1.5e-07,
+          5e-324
+        ],
+        "huge": [
+          1e+21,
+          1.2345678901234568e+20,
+          1.7976931348623157e+308
+        ],
+        "neg": [
+          -1e-07,
+          -1e+21,
+          -5e-324,
+          -0.0,
+          -1.7976931348623157e+308
+        ]
+      },
+      "expected": "{\"huge\":[1e+21,123456789012345680000,1.7976931348623157e+308],\"neg\":[-1e-7,-1e+21,-5e-324,0,-1.7976931348623157e+308],\"tiny\":[0.00005,1e-7,1.5e-7,5e-324]}",
+      "sha256": "sha256:262d06435397ae6deb50a487a61ea3a14fa0d4c000f6414a474ecf7899318154"
+    },
+    {
+      "name": "proto_like_member_names",
+      "input": {
+        "__proto__": {
+          "x": 1
+        },
+        "constructor": 2,
+        "toString": 3
+      },
+      "expected": "{\"__proto__\":{\"x\":1},\"constructor\":2,\"toString\":3}",
+      "sha256": "sha256:d5190197c77a73a5fef78e7960233d47fd733e0e7de7cd3489bced4cd01c37b0"
+    },
+    {
+      "name": "deep_nesting_64",
+      "input_json": "[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[{\"k\":\"v\"}]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]",
+      "expected": "[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[{\"k\":\"v\"}]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]",
+      "sha256": "sha256:ef3720a40e1517091fb4337bc0022c98c2c7126ff93ea2dd9217735d4b9e129e"
+    },
+    {
+      "name": "envelope_like_document",
+      "input": {
+        "envelope_version": "0.2",
+        "machine": {
+          "id": "demo-arm",
+          "class": "arm"
+        },
+        "frame": "base_link",
+        "points": [
+          {
+            "id": "tool",
+            "description": "gripper tip",
+            "offset_m": [
+              0,
+              0,
+              -0.03
+            ],
+            "max_speed_mps": 0.25
+          }
+        ],
+        "workspace": {
+          "zones": [
+            {
+              "id": "box",
+              "kind": "keep_in",
+              "applies_to": [
+                "tool"
+              ],
+              "box": {
+                "min_m": [
+                  0.21,
+                  -0.1,
+                  0.26
+                ],
+                "max_m": [
+                  0.36,
+                  0.1,
+                  0.42
+                ]
+              }
+            }
+          ]
+        },
+        "motion": {
+          "max_speed_mps": 0.25,
+          "max_turn_radps": 1.0,
+          "max_accel_mps2": 2.0
+        },
+        "stop": {
+          "category": 1,
+          "max_time_ms": 300,
+          "max_distance_m": 0.05
+        },
+        "heartbeat": {
+          "model_timeout_ms": 500,
+          "gate_timeout_ms": 200,
+          "on_loss": "stop"
+        }
+      },
+      "expected": "{\"envelope_version\":\"0.2\",\"frame\":\"base_link\",\"heartbeat\":{\"gate_timeout_ms\":200,\"model_timeout_ms\":500,\"on_loss\":\"stop\"},\"machine\":{\"class\":\"arm\",\"id\":\"demo-arm\"},\"motion\":{\"max_accel_mps2\":2,\"max_speed_mps\":0.25,\"max_turn_radps\":1},\"points\":[{\"description\":\"gripper tip\",\"id\":\"tool\",\"max_speed_mps\":0.25,\"offset_m\":[0,0,-0.03]}],\"stop\":{\"category\":1,\"max_distance_m\":0.05,\"max_time_ms\":300},\"workspace\":{\"zones\":[{\"applies_to\":[\"tool\"],\"box\":{\"max_m\":[0.36,0.1,0.42],\"min_m\":[0.21,-0.1,0.26]},\"id\":\"box\",\"kind\":\"keep_in\"}]}}",
+      "sha256": "sha256:6283bd8828e0b48f8be67b77699df1ea1babfa5a848934329d1500499addd989"
+    }
+  ]
+}

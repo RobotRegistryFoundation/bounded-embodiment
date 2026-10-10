@@ -1,0 +1,4 @@
+{
+  "code": "ENVELOPE_NOT_OBJECT",
+  "why": "a JSON array, not an object"
+}

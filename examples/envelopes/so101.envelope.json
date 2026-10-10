@@ -1,0 +1,103 @@
+{
+  "envelope_version": "0.2",
+  "machine": {
+    "id": "so101-example",
+    "class": "arm"
+  },
+  "frame": "base_link",
+  "points": [
+    {
+      "id": "tool",
+      "description": "Tool point: the origin of gripper_frame_link in the SO-101 URDF (so101_new_calib.urdf), fixed to the gripper 98 mm along the wrist_roll axis from that joint's frame origin (and 8 mm off the axis), toward the jaw tips.",
+      "link": "gripper_frame_link",
+      "max_speed_mps": 0.25
+    },
+    {
+      "id": "elbow",
+      "description": "Elbow joint centre: the origin of the elbow_flex joint frame in the SO-101 URDF (link lower_arm_link), on the elbow_flex axis at the end of the upper arm.",
+      "link": "lower_arm_link"
+    },
+    {
+      "id": "wrist",
+      "description": "Wrist joint centre: the origin of the wrist_flex joint frame in the SO-101 URDF (link wrist_link), on the wrist_flex axis at the end of the forearm.",
+      "link": "wrist_link"
+    }
+  ],
+  "workspace": {
+    "zones": [
+      {
+        "id": "keep_in",
+        "kind": "keep_in",
+        "applies_to": [
+          "tool"
+        ],
+        "box": {
+          "min_m": [
+            0.1,
+            -0.2,
+            0.03
+          ],
+          "max_m": [
+            0.36,
+            0.2,
+            0.3
+          ]
+        }
+      },
+      {
+        "id": "link_keep_in",
+        "kind": "keep_in",
+        "applies_to": [
+          "elbow",
+          "wrist"
+        ],
+        "box": {
+          "min_m": [
+            -0.25,
+            -0.35,
+            0.03
+          ],
+          "max_m": [
+            0.45,
+            0.35,
+            0.55
+          ]
+        }
+      },
+      {
+        "id": "keep_out_0",
+        "kind": "keep_out",
+        "applies_to": [
+          "*"
+        ],
+        "box": {
+          "min_m": [
+            0.28,
+            0.12,
+            0.03
+          ],
+          "max_m": [
+            0.36,
+            0.2,
+            0.2
+          ]
+        }
+      }
+    ]
+  },
+  "motion": {
+    "max_speed_mps": 0.25,
+    "max_joint_speed_radps": 1.5707963267948966
+  },
+  "stop": {
+    "category": 1,
+    "max_time_ms": 500,
+    "max_distance_m": 0.05
+  },
+  "heartbeat": {
+    "model_timeout_ms": 500,
+    "gate_timeout_ms": 200,
+    "on_loss": "stop"
+  },
+  "notes": "Converted from an ev03-harness arm envelope. As in the harness, keep_in bounds the tool point only, link_keep_in bounds the link points (elbow, wrist), and every keep_out applies to every point. The harness applied max_joint_speed_dps to the five arm joints, not the gripper. The stop and heartbeat blocks were supplied at conversion; the harness format declares neither. Illustrative SO-101 tabletop envelope. Base frame: x forward, y left, z up, origin at the base on the table. Metres. Replace with your own measured layout before a hardware run. keep_out_0: e.g. a camera mount or fixture on the table. link_keep_in: Box for the elbow and wrist joint centres (kinematics.LINK_JOINTS): the work cell, 3 cm above the table so the servo bodies stay clear of it. The keep-outs apply to them too. The stop and heartbeat values are illustrative placeholders, not measured: EV-02 (stop time and distance) has not been run on this arm."
+}

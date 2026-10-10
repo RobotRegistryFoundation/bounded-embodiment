@@ -1,0 +1,5 @@
+{
+  "code": "SCHEMA_INVALID",
+  "where": "/machine/class",
+  "why": "0.2 machine classes are an enumeration"
+}

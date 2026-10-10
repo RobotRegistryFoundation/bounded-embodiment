@@ -1,0 +1,273 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://robotregistryfoundation.github.io/bounded-embodiment/schemas/envelope-0.2.json",
+  "$comment": "SPDX-FileCopyrightText: 2026 Craig Merry and contributors. SPDX-License-Identifier: CC-BY-4.0. Extends the RCAN physical envelope 0.1 (rcan-spec schemas/envelope.json, CC BY 4.0), copied unchanged to schemas/envelope-0.1.json.",
+  "title": "Bounded Embodiment envelope 0.2",
+  "description": "Machine-readable declaration of the physical limits a machine's safety gate enforces, independent of any AI model. It extends RCAN envelope 0.1 with named measured points, 3-D keep-in and keep-out zones that apply to chosen points, per-joint limits and per-source stop limits. The envelope is written and signed by the integrator, never by the model. Every numeric value is the integrator's declaration: nothing in this schema checks that the limits are adequate for the task or the site. Every object rejects unknown keys, so a misspelled limit fails validation instead of being silently ignored. Measurement tolerance, start pose and joint maps are deliberately absent: tolerance is a parameter of the test method, and the rest is test-kit configuration.",
+  "type": "object",
+  "required": ["envelope_version", "machine", "frame", "points", "workspace", "motion", "stop", "heartbeat"],
+  "additionalProperties": false,
+  "properties": {
+    "envelope_version": {
+      "const": "0.2",
+      "description": "Envelope schema version. Quote it in YAML (\"0.2\") so it is not parsed as a number."
+    },
+    "machine": {
+      "type": "object",
+      "required": ["id", "class"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "description": "Integrator's identifier for this machine. MAY be an RRN." },
+        "class": { "enum": ["arm", "mobile_base", "mobile_manipulator", "legged", "other"] },
+        "description": { "type": "string", "minLength": 1 },
+        "mass_kg": { "type": "number", "exclusiveMinimum": 0 }
+      }
+    },
+    "declared_level": {
+      "enum": ["BE-1", "BE-2", "BE-3"],
+      "description": "Optional physical assurance level the integrator claims (BE-1 Declared, BE-2 Enforced, BE-3 Assured). Self-declared and established by no test; results tooling never displays it. Not an RCAN protocol conformance level (L1-L4)."
+    },
+    "frame": {
+      "type": "string",
+      "minLength": 1,
+      "description": "The coordinate frame of every coordinate in this document (for example base_link or map). All coordinates are in metres."
+    },
+    "points": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/point" },
+      "description": "The points of the machine whose positions the zones bound and an instrument measures."
+    },
+    "workspace": {
+      "type": "object",
+      "required": ["zones"],
+      "additionalProperties": false,
+      "properties": {
+        "zones": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/zone" },
+          "contains": { "properties": { "kind": { "const": "keep_in" } }, "required": ["kind"] },
+          "description": "At least one keep_in zone. A point to which several zones apply must be inside every keep_in zone and outside every keep_out zone."
+        }
+      }
+    },
+    "motion": {
+      "type": "object",
+      "required": ["max_speed_mps"],
+      "additionalProperties": false,
+      "properties": {
+        "max_speed_mps": { "type": "number", "exclusiveMinimum": 0, "description": "Maximum linear speed of every point that does not declare its own max_speed_mps (for an arm, of the tool point)." },
+        "max_turn_radps": { "type": "number", "exclusiveMinimum": 0 },
+        "max_accel_mps2": { "type": "number", "exclusiveMinimum": 0 },
+        "max_joint_speed_radps": { "type": "number", "exclusiveMinimum": 0, "description": "Cap on the speed of every joint (from envelope 0.1)." },
+        "joints": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/joint" },
+          "description": "Per-joint limits."
+        }
+      }
+    },
+    "force": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "max_contact_force_n": { "type": "number", "exclusiveMinimum": 0 },
+        "max_payload_kg": { "type": "number", "minimum": 0 }
+      }
+    },
+    "proximity": {
+      "type": "array",
+      "description": "Rules applied when a human is detected within a distance. Rules with a smaller distance take precedence.",
+      "items": {
+        "type": "object",
+        "required": ["when"],
+        "additionalProperties": false,
+        "properties": {
+          "when": {
+            "type": "object",
+            "required": ["human_within_m"],
+            "additionalProperties": false,
+            "properties": { "human_within_m": { "type": "number", "exclusiveMinimum": 0 } }
+          },
+          "max_speed_mps": { "type": "number", "minimum": 0 },
+          "action": { "const": "stop" }
+        },
+        "oneOf": [
+          { "properties": { "max_speed_mps": true }, "required": ["max_speed_mps"] },
+          { "properties": { "action": true }, "required": ["action"] }
+        ]
+      }
+    },
+    "sensing": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "max_state_age_ms": { "type": "integer", "exclusiveMinimum": 0, "description": "State older than this is stale; the gate decides stop." }
+      }
+    },
+    "stop": {
+      "type": "object",
+      "required": ["category", "max_time_ms", "max_distance_m"],
+      "additionalProperties": false,
+      "properties": {
+        "category": { "type": "integer", "enum": [0, 1, 2], "description": "Stop category as defined in IEC 60204-1." },
+        "max_time_ms": { "type": "integer", "exclusiveMinimum": 0, "description": "Declared worst-case time from stop request to standstill, at max_speed_mps, over every stop source." },
+        "max_distance_m": { "type": "number", "minimum": 0, "description": "Declared worst-case travel from stop request to standstill, at max_speed_mps, over every stop source." },
+        "sources": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/stop_source" },
+          "description": "Optional limits per stop source. No entry may exceed the top-level values, which remain the worst case; loaders enforce this."
+        }
+      }
+    },
+    "heartbeat": {
+      "type": "object",
+      "required": ["model_timeout_ms", "gate_timeout_ms", "on_loss"],
+      "additionalProperties": false,
+      "properties": {
+        "model_timeout_ms": { "type": "integer", "exclusiveMinimum": 0 },
+        "gate_timeout_ms": { "type": "integer", "exclusiveMinimum": 0 },
+        "on_loss": { "const": "stop", "description": "Fail closed. Loss of heartbeat always leads to stop; no other value is valid." }
+      }
+    },
+    "authority": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "required_for": { "type": "array", "items": { "type": "string" }, "uniqueItems": true },
+        "resolver": { "type": "string", "enum": ["external", "local"], "description": "Where authority is resolved. Identity and delegation mechanics are out of scope for this profile." }
+      }
+    },
+    "notes": {
+      "type": "string",
+      "description": "Free text for human readers. Nothing reads limits from it."
+    },
+    "signature": {
+      "description": "Integrator's signature(s) over the RFC 8785 canonical JSON of this document with the signature member removed. Produced by the integrator, never by the model.",
+      "oneOf": [
+        { "type": "string", "pattern": "^[a-z0-9-]+:.+$", "description": "Legacy form from envelope 0.1: <alg>:<value>." },
+        { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/signature_entry" } }
+      ]
+    }
+  },
+  "$defs": {
+    "id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_][A-Za-z0-9_.-]*$",
+      "maxLength": 64,
+      "description": "Identifier of a point or zone. Letters, digits, underscore, dot and hyphen, so it is safe in CSV columns and file names; \"*\" is reserved for 'every point'."
+    },
+    "point2": {
+      "type": "array",
+      "prefixItems": [{ "type": "number" }, { "type": "number" }],
+      "minItems": 2,
+      "maxItems": 2
+    },
+    "point3": {
+      "type": "array",
+      "prefixItems": [{ "type": "number" }, { "type": "number" }, { "type": "number" }],
+      "minItems": 3,
+      "maxItems": 3
+    },
+    "range": {
+      "type": "array",
+      "prefixItems": [{ "type": "number" }, { "type": "number" }],
+      "minItems": 2,
+      "maxItems": 2,
+      "description": "[min, max], with min below max (loaders enforce the order)."
+    },
+    "polygon": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/point2" },
+      "minItems": 3,
+      "description": "Simple polygon in the frame's x-y plane, closed implicitly (do not repeat the first vertex). Either winding. Loaders reject self-intersecting and zero-area polygons."
+    },
+    "point": {
+      "type": "object",
+      "required": ["id", "description"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "description": { "type": "string", "minLength": 1, "description": "Physical definition of the point, precise enough for a lab to put a marker on it (for example: centre of the gripper fingertips, closed)." },
+        "link": { "type": "string", "minLength": 1, "description": "Rigid body the point is fixed to, for example a URDF link name." },
+        "offset_m": { "$ref": "#/$defs/point3", "description": "Position of the point relative to the origin of link, in link's frame." },
+        "max_speed_mps": { "type": "number", "exclusiveMinimum": 0, "description": "Speed limit for this point; replaces motion.max_speed_mps for it." }
+      },
+      "dependentRequired": { "offset_m": ["link"] }
+    },
+    "box": {
+      "type": "object",
+      "required": ["min_m", "max_m"],
+      "additionalProperties": false,
+      "properties": {
+        "min_m": { "$ref": "#/$defs/point3" },
+        "max_m": { "$ref": "#/$defs/point3" }
+      },
+      "description": "Axis-aligned box in the frame. min_m is below max_m on every axis (loaders enforce this)."
+    },
+    "prism": {
+      "type": "object",
+      "required": ["polygon_m"],
+      "additionalProperties": false,
+      "properties": {
+        "polygon_m": { "$ref": "#/$defs/polygon" },
+        "z_m": { "$ref": "#/$defs/range", "description": "Height band [zmin, zmax]. Without it the prism is unbounded in z." }
+      },
+      "description": "Vertical prism: a simple polygon in x-y extruded over z_m."
+    },
+    "zone": {
+      "type": "object",
+      "required": ["id", "kind", "applies_to"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "kind": { "enum": ["keep_in", "keep_out"], "description": "keep_in: the points must stay inside. keep_out: the points must never be inside." },
+        "applies_to": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "anyOf": [{ "const": "*" }, { "$ref": "#/$defs/id" }] },
+          "description": "Ids of the points the zone bounds, or \"*\" for every point."
+        },
+        "box": { "$ref": "#/$defs/box" },
+        "prism": { "$ref": "#/$defs/prism" }
+      },
+      "oneOf": [{ "required": ["box"] }, { "required": ["prism"] }]
+    },
+    "joint": {
+      "type": "object",
+      "required": ["name"],
+      "additionalProperties": false,
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "position_rad": { "$ref": "#/$defs/range", "description": "Allowed joint position range [min, max], radians." },
+        "max_speed_radps": { "type": "number", "exclusiveMinimum": 0 }
+      },
+      "anyOf": [{ "required": ["position_rad"] }, { "required": ["max_speed_radps"] }]
+    },
+    "stop_source": {
+      "type": "object",
+      "required": ["source", "category", "max_time_ms", "max_distance_m"],
+      "additionalProperties": false,
+      "properties": {
+        "source": { "enum": ["stop_message", "hardwired_stop", "heartbeat_loss", "comms_loss", "power_loss", "gate_loss"] },
+        "category": { "type": "integer", "enum": [0, 1, 2] },
+        "max_time_ms": { "type": "integer", "exclusiveMinimum": 0 },
+        "max_distance_m": { "type": "number", "minimum": 0 }
+      }
+    },
+    "signature_entry": {
+      "type": "object",
+      "required": ["alg", "kid", "sig"],
+      "additionalProperties": false,
+      "properties": {
+        "alg": { "type": "string", "minLength": 1, "description": "Ed25519 is required of signers; verifiers warn on unknown values." },
+        "kid": { "type": "string", "pattern": "^[A-Za-z0-9_-]+$", "description": "RFC 7638 thumbprint of the signer's public key, base64url without padding." },
+        "sig": { "type": "string", "pattern": "^[A-Za-z0-9_-]+$", "description": "Signature, base64url without padding." }
+      }
+    }
+  }
+}

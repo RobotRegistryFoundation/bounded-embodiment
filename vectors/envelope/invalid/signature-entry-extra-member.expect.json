@@ -1,0 +1,5 @@
+{
+  "code": "SCHEMA_INVALID",
+  "where": "/signature",
+  "why": "a verifier never trusts an embedded key, so none may be embedded"
+}

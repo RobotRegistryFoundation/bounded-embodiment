@@ -1,0 +1,5 @@
+{
+  "code": "SCHEMA_INVALID",
+  "where": "/level",
+  "why": "0.1: an RCAN protocol level is not an assurance level"
+}

@@ -1,0 +1,5 @@
+{
+  "code": "ENVELOPE_DUPLICATE_JOINT",
+  "where": "/motion/joints/2/name",
+  "why": "the same joint listed twice"
+}

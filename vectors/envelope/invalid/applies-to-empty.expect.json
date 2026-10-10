@@ -1,0 +1,5 @@
+{
+  "code": "SCHEMA_INVALID",
+  "where": "/workspace/zones/0/applies_to",
+  "why": "a zone must apply to something"
+}

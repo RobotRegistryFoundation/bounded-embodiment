@@ -1,0 +1,5 @@
+{
+  "code": "SCHEMA_INVALID",
+  "where": "/signature",
+  "why": "a legacy signature is <alg>:<value>"
+}

@@ -1,0 +1,5 @@
+{
+  "code": "SCHEMA_INVALID",
+  "where": "/heartbeat/on_loss",
+  "why": "loss of heartbeat must lead to stop"
+}

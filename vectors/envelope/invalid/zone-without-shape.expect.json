@@ -1,0 +1,5 @@
+{
+  "code": "SCHEMA_INVALID",
+  "where": "/workspace/zones/0",
+  "why": "a zone has exactly one of box and prism"
+}

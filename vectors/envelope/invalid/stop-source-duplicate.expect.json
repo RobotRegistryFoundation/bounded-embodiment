@@ -1,0 +1,5 @@
+{
+  "code": "ENVELOPE_STOP_SOURCE_DUPLICATE",
+  "where": "/stop/sources/2/source",
+  "why": "the same source listed twice"
+}

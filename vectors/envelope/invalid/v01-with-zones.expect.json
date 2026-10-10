@@ -1,0 +1,5 @@
+{
+  "code": "SCHEMA_INVALID",
+  "where": "/workspace",
+  "why": "0.1 has no zones; that is 0.2"
+}

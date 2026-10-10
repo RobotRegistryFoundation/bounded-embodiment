@@ -1,0 +1,93 @@
+{
+  "hash": "sha256:b5a3d1e4e05b0f0b8d79c023a788b1620b425ddf7c668a9750050276a5a0d09e",
+  "upgraded_from": "0.1",
+  "frame": "base_link",
+  "declared_level": "BE-2",
+  "zones": [
+    {
+      "id": "keep_in",
+      "kind": "keep_in",
+      "shape": "prism",
+      "applies_to": [
+        "*"
+      ]
+    },
+    {
+      "id": "keep_out_0",
+      "kind": "keep_out",
+      "shape": "prism",
+      "applies_to": [
+        "*"
+      ]
+    }
+  ],
+  "points": {
+    "machine": {
+      "speed_limit_mps": 0.2,
+      "zones": [
+        "keep_in",
+        "keep_out_0"
+      ],
+      "faces": [
+        [
+          "edge_0",
+          "keep_in"
+        ],
+        [
+          "edge_1",
+          "keep_in"
+        ],
+        [
+          "edge_2",
+          "keep_in"
+        ],
+        [
+          "edge_3",
+          "keep_in"
+        ],
+        [
+          "z_min",
+          "keep_in"
+        ],
+        [
+          "z_max",
+          "keep_in"
+        ]
+      ]
+    }
+  },
+  "clearance": [
+    {
+      "point": "machine",
+      "xyz": [
+        0.25,
+        0.0,
+        0.1
+      ],
+      "expect_m": 0.08,
+      "why": "0.08 m above the floor of the band"
+    },
+    {
+      "point": "machine",
+      "xyz": [
+        0.35,
+        0.15,
+        0.4
+      ],
+      "expect_m": -0.05,
+      "why": "0.05 m above the band; the keep-out shares the band, so it is 0.05 m clear of that"
+    },
+    {
+      "point": "machine",
+      "xyz": [
+        0.35,
+        0.15,
+        0.2
+      ],
+      "expect_m": -0.05,
+      "why": "0.05 m deep inside the keep-out, which takes the 0.1 z_range_m"
+    }
+  ],
+  "warnings": [],
+  "abs_tol_m": 1e-09
+}

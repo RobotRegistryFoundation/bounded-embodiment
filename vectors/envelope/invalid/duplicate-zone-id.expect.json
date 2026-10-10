@@ -1,0 +1,5 @@
+{
+  "code": "ENVELOPE_DUPLICATE_ZONE_ID",
+  "where": "/workspace/zones/2/id",
+  "why": "two zones named cell"
+}

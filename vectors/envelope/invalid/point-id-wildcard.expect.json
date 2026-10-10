@@ -1,0 +1,5 @@
+{
+  "code": "SCHEMA_INVALID",
+  "where": "/points/0/id",
+  "why": "* is reserved for 'every point'"
+}

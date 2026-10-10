@@ -1,0 +1,5 @@
+{
+  "code": "ENVELOPE_POLYGON_DEGENERATE",
+  "where": "/workspace/zones/1/prism/polygon_m",
+  "why": "three collinear vertices enclose no area"
+}

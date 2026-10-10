@@ -1,0 +1,163 @@
+{
+  "envelope_version": "0.2",
+  "machine": {
+    "id": "bench-arm-5",
+    "class": "arm",
+    "description": "Six-axis tabletop arm with a parallel gripper."
+  },
+  "declared_level": "BE-1",
+  "frame": "base_link",
+  "points": [
+    {
+      "id": "tool",
+      "description": "Centre of the gripper fingertips, closed.",
+      "link": "gripper",
+      "offset_m": [
+        0,
+        0,
+        -0.03
+      ],
+      "max_speed_mps": 0.25
+    },
+    {
+      "id": "elbow",
+      "description": "Centre of the elbow joint, on its axis.",
+      "link": "forearm"
+    },
+    {
+      "id": "wrist",
+      "description": "Centre of the wrist pitch joint, on its axis.",
+      "link": "wrist"
+    }
+  ],
+  "workspace": {
+    "zones": [
+      {
+        "id": "tool_box",
+        "kind": "keep_in",
+        "applies_to": [
+          "tool"
+        ],
+        "box": {
+          "min_m": [
+            0.2,
+            -0.15,
+            0.05
+          ],
+          "max_m": [
+            0.4,
+            0.15,
+            0.3
+          ]
+        }
+      },
+      {
+        "id": "cell",
+        "kind": "keep_in",
+        "applies_to": [
+          "elbow",
+          "wirst"
+        ],
+        "box": {
+          "min_m": [
+            -0.3,
+            -0.4,
+            0.02
+          ],
+          "max_m": [
+            0.5,
+            0.4,
+            0.6
+          ]
+        }
+      },
+      {
+        "id": "fixture",
+        "kind": "keep_out",
+        "applies_to": [
+          "*"
+        ],
+        "box": {
+          "min_m": [
+            0.3,
+            0.05,
+            0.05
+          ],
+          "max_m": [
+            0.4,
+            0.15,
+            0.15
+          ]
+        }
+      }
+    ]
+  },
+  "motion": {
+    "max_speed_mps": 0.3,
+    "max_accel_mps2": 2.0,
+    "joints": [
+      {
+        "name": "shoulder_pan",
+        "position_rad": [
+          -1.9,
+          1.9
+        ],
+        "max_speed_radps": 1.0
+      },
+      {
+        "name": "elbow_flex",
+        "position_rad": [
+          -1.6,
+          1.6
+        ]
+      },
+      {
+        "name": "wrist_roll",
+        "max_speed_radps": 2.0
+      }
+    ]
+  },
+  "force": {
+    "max_contact_force_n": 20
+  },
+  "sensing": {
+    "max_state_age_ms": 50
+  },
+  "stop": {
+    "category": 1,
+    "max_time_ms": 400,
+    "max_distance_m": 0.06,
+    "sources": [
+      {
+        "source": "stop_message",
+        "category": 1,
+        "max_time_ms": 300,
+        "max_distance_m": 0.05
+      },
+      {
+        "source": "heartbeat_loss",
+        "category": 1,
+        "max_time_ms": 400,
+        "max_distance_m": 0.06
+      },
+      {
+        "source": "hardwired_stop",
+        "category": 0,
+        "max_time_ms": 150,
+        "max_distance_m": 0.02
+      }
+    ]
+  },
+  "heartbeat": {
+    "model_timeout_ms": 500,
+    "gate_timeout_ms": 200,
+    "on_loss": "stop"
+  },
+  "authority": {
+    "required_for": [
+      "motion"
+    ],
+    "resolver": "external"
+  },
+  "notes": "Test vector: every value is illustrative."
+}

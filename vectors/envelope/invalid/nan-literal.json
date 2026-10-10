@@ -1,0 +1,11 @@
+{
+  "envelope_version": "0.2",
+  "machine": {"id": "m", "class": "other"},
+  "frame": "world",
+  "points": [{"id": "p", "description": "The marker on top of the machine."}],
+  "workspace": {"zones": [{"id": "z", "kind": "keep_in", "applies_to": ["*"],
+    "box": {"min_m": [0, 0, 0], "max_m": [1, NaN, 1]}}]},
+  "motion": {"max_speed_mps": 1},
+  "stop": {"category": 0, "max_time_ms": 100, "max_distance_m": 0},
+  "heartbeat": {"model_timeout_ms": 100, "gate_timeout_ms": 100, "on_loss": "stop"}
+}

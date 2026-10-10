@@ -1,0 +1,165 @@
+{
+  "hash": "sha256:9de9f2bda9d4fdbdc45812b8dd8f454f93b64e4bd2a0e881c5a075478fe45b12",
+  "upgraded_from": null,
+  "frame": "map",
+  "declared_level": null,
+  "zones": [
+    {
+      "id": "room",
+      "kind": "keep_in",
+      "shape": "prism",
+      "applies_to": [
+        "*"
+      ]
+    },
+    {
+      "id": "pillar",
+      "kind": "keep_out",
+      "shape": "prism",
+      "applies_to": [
+        "*"
+      ]
+    },
+    {
+      "id": "shelf",
+      "kind": "keep_out",
+      "shape": "box",
+      "applies_to": [
+        "tool"
+      ]
+    }
+  ],
+  "points": {
+    "base": {
+      "speed_limit_mps": 0.5,
+      "zones": [
+        "room",
+        "pillar"
+      ],
+      "faces": [
+        [
+          "edge_0",
+          "room"
+        ],
+        [
+          "edge_1",
+          "room"
+        ],
+        [
+          "edge_2",
+          "room"
+        ],
+        [
+          "edge_3",
+          "room"
+        ],
+        [
+          "z_min",
+          "room"
+        ],
+        [
+          "z_max",
+          "room"
+        ]
+      ]
+    },
+    "tool": {
+      "speed_limit_mps": 0.25,
+      "zones": [
+        "room",
+        "pillar",
+        "shelf"
+      ],
+      "faces": [
+        [
+          "edge_0",
+          "room"
+        ],
+        [
+          "edge_1",
+          "room"
+        ],
+        [
+          "edge_2",
+          "room"
+        ],
+        [
+          "edge_3",
+          "room"
+        ],
+        [
+          "z_min",
+          "room"
+        ],
+        [
+          "z_max",
+          "room"
+        ]
+      ]
+    }
+  },
+  "clearance": [
+    {
+      "point": "base",
+      "xyz": [
+        1.0,
+        1.0,
+        0.0
+      ],
+      "expect_m": 0.05,
+      "why": "0.05 m above the band's floor"
+    },
+    {
+      "point": "base",
+      "xyz": [
+        2.5,
+        1.5,
+        0.0
+      ],
+      "expect_m": -0.5,
+      "why": "centre of the pillar, which has no height band"
+    },
+    {
+      "point": "tool",
+      "xyz": [
+        3.0,
+        3.0,
+        2.6
+      ],
+      "expect_m": -0.1,
+      "why": "0.1 m above the ceiling"
+    },
+    {
+      "point": "tool",
+      "xyz": [
+        7.0,
+        2.0,
+        3.5
+      ],
+      "expect_m": -1.4142135623730951,
+      "why": "1 m past a wall and 1 m above the ceiling"
+    },
+    {
+      "point": "tool",
+      "xyz": [
+        5.5,
+        3.5,
+        1.0
+      ],
+      "expect_m": -0.2,
+      "why": "0.2 m deep in the shelf"
+    },
+    {
+      "point": "base",
+      "xyz": [
+        5.5,
+        3.5,
+        1.0
+      ],
+      "expect_m": 0.5,
+      "why": "the shelf applies to the tool only"
+    }
+  ],
+  "warnings": [],
+  "abs_tol_m": 1e-09
+}

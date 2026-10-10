@@ -1,0 +1,63 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://robotregistryfoundation.github.io/bounded-embodiment/schemas/key-0.1.json",
+  "title": "Bounded Embodiment lab signing key (v0.1)",
+  "description": "One public signing key of a lab that submits Bounded Embodiment test reports. Reports are signed with Ed25519 over the RFC 8785 canonical JSON of the report without its signature member; a verifier looks the signature's kid up among these entries and never trusts a key carried inside a report. kid MUST equal the RFC 7638 thumbprint of public_jwk; this schema checks only its shape, and tools recompute it (bounded_embodiment.signing.check_key_entry). The entry holds no private key material: public_jwk rejects every member but kty, crv and x.",
+  "type": "object",
+  "required": ["key_version", "kid", "alg", "public_jwk", "lab", "contact", "added"],
+  "additionalProperties": false,
+  "properties": {
+    "key_version": {
+      "const": "0.1",
+      "description": "Version of this entry format."
+    },
+    "kid": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_-]{42}[AEIMQUYcgkosw048]$",
+      "description": "RFC 7638 JWK thumbprint of public_jwk: SHA-256 over {\"crv\",\"kty\",\"x\"} in canonical JSON, base64url without padding (43 characters)."
+    },
+    "alg": {
+      "const": "Ed25519",
+      "description": "Signature algorithm of the entries this key makes. v0.1 registers Ed25519 keys only."
+    },
+    "public_jwk": {
+      "type": "object",
+      "required": ["kty", "crv", "x"],
+      "additionalProperties": false,
+      "properties": {
+        "kty": { "const": "OKP" },
+        "crv": { "const": "Ed25519" },
+        "x": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_-]{42}[AEIMQUYcgkosw048]$",
+          "description": "The 32-byte Ed25519 public key, base64url without padding (RFC 8037)."
+        }
+      },
+      "description": "The public key as an RFC 8037 OKP JWK."
+    },
+    "lab": {
+      "type": "string",
+      "pattern": "^[a-z0-9](?:[a-z0-9-]{0,62}[a-z0-9])?$",
+      "description": "Identifier of the lab that holds the key: lower-case letters, digits and inner hyphens, 1 to 64 characters, as used in the results repository path labs/<lab>/."
+    },
+    "contact": {
+      "type": "string",
+      "format": "email",
+      "maxLength": 254,
+      "pattern": "^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$",
+      "description": "Email address of the person responsible for the key."
+    },
+    "added": {
+      "type": "string",
+      "format": "date",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$",
+      "description": "UTC date the key was added, YYYY-MM-DD."
+    },
+    "revoked": {
+      "type": "string",
+      "format": "date",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$",
+      "description": "UTC date the key was revoked, YYYY-MM-DD, not earlier than added. Revoked keys are left out of verification keyrings by default."
+    }
+  }
+}

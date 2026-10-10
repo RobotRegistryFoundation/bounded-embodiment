@@ -1,0 +1,74 @@
+{
+  "hash": "sha256:1e3d57eeeab57c6a044aa3133309213ec436dddeca21a48b2bc794970d6e1cbe",
+  "upgraded_from": null,
+  "frame": "world",
+  "declared_level": null,
+  "zones": [
+    {
+      "id": "z",
+      "kind": "keep_in",
+      "shape": "box",
+      "applies_to": [
+        "*"
+      ]
+    }
+  ],
+  "points": {
+    "p": {
+      "speed_limit_mps": 1,
+      "zones": [
+        "z"
+      ],
+      "faces": [
+        [
+          "x_min",
+          "z"
+        ],
+        [
+          "x_max",
+          "z"
+        ],
+        [
+          "y_min",
+          "z"
+        ],
+        [
+          "y_max",
+          "z"
+        ],
+        [
+          "z_min",
+          "z"
+        ],
+        [
+          "z_max",
+          "z"
+        ]
+      ]
+    }
+  },
+  "clearance": [
+    {
+      "point": "p",
+      "xyz": [
+        0.5,
+        0.5,
+        0.5
+      ],
+      "expect_m": 0.5,
+      "why": "centre of a unit cube"
+    },
+    {
+      "point": "p",
+      "xyz": [
+        0.5,
+        0.5,
+        1.25
+      ],
+      "expect_m": -0.25,
+      "why": "0.25 m above it"
+    }
+  ],
+  "warnings": [],
+  "abs_tol_m": 1e-09
+}

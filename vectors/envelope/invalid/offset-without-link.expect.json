@@ -1,0 +1,5 @@
+{
+  "code": "SCHEMA_INVALID",
+  "where": "/points/0",
+  "why": "an offset is relative to a link, so it needs one"
+}

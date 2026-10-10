@@ -1,0 +1,5 @@
+{
+  "code": "SCHEMA_INVALID",
+  "where": "/motion/joints/2",
+  "why": "a joint entry must declare a limit"
+}

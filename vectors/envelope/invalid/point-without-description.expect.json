@@ -1,0 +1,5 @@
+{
+  "code": "SCHEMA_INVALID",
+  "where": "/points/0",
+  "why": "every point needs a physical description"
+}

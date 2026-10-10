@@ -1,0 +1,95 @@
+{
+  "hash": "sha256:0e6063843855a1402f3317ed000717f35426ab9753cb194fcc6bf91f4f562822",
+  "upgraded_from": "0.1",
+  "frame": "map",
+  "declared_level": "BE-1",
+  "zones": [
+    {
+      "id": "keep_in",
+      "kind": "keep_in",
+      "shape": "prism",
+      "applies_to": [
+        "*"
+      ]
+    },
+    {
+      "id": "keep_out_0",
+      "kind": "keep_out",
+      "shape": "prism",
+      "applies_to": [
+        "*"
+      ]
+    }
+  ],
+  "points": {
+    "machine": {
+      "speed_limit_mps": 0.8,
+      "zones": [
+        "keep_in",
+        "keep_out_0"
+      ],
+      "faces": [
+        [
+          "edge_0",
+          "keep_in"
+        ],
+        [
+          "edge_1",
+          "keep_in"
+        ],
+        [
+          "edge_2",
+          "keep_in"
+        ],
+        [
+          "edge_3",
+          "keep_in"
+        ]
+      ]
+    }
+  },
+  "clearance": [
+    {
+      "point": "machine",
+      "xyz": [
+        1,
+        1,
+        0
+      ],
+      "expect_m": 1.0,
+      "why": "1 m from two walls"
+    },
+    {
+      "point": "machine",
+      "xyz": [
+        3.5,
+        2.2,
+        0
+      ],
+      "expect_m": -0.2,
+      "why": "inside the triangular keep-out, 0.2 m above its base edge"
+    },
+    {
+      "point": "machine",
+      "xyz": [
+        9,
+        6,
+        0
+      ],
+      "expect_m": -1.4142135623730951,
+      "why": "1 m past a corner on both axes"
+    },
+    {
+      "point": "machine",
+      "xyz": [
+        1,
+        1,
+        100
+      ],
+      "expect_m": 1.0,
+      "why": "no z_range_m: height is unbounded"
+    }
+  ],
+  "warnings": [],
+  "abs_tol_m": 1e-09
+}

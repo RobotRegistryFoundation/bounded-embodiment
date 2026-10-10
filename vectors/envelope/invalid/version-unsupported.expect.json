@@ -1,0 +1,5 @@
+{
+  "code": "ENVELOPE_VERSION_UNSUPPORTED",
+  "where": "/envelope_version",
+  "why": "no schema for this version"
+}

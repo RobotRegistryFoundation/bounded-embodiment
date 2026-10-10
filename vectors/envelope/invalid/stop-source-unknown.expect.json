@@ -1,0 +1,5 @@
+{
+  "code": "SCHEMA_INVALID",
+  "where": "/stop/sources/0/source",
+  "why": "stop sources are an enumeration"
+}

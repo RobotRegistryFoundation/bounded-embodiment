@@ -1,0 +1,5 @@
+{
+  "code": "ENVELOPE_BOX_INVERTED",
+  "where": "/workspace/zones/0/box",
+  "why": "a box with zero height bounds nothing"
+}

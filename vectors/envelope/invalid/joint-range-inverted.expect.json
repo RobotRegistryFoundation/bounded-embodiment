@@ -1,0 +1,5 @@
+{
+  "code": "ENVELOPE_JOINT_RANGE_INVERTED",
+  "where": "/motion/joints/1/position_rad",
+  "why": "joint range given as [max, min]"
+}

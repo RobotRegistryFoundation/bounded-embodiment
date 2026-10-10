@@ -1,0 +1,198 @@
+{
+  "hash": "sha256:6df5e2f6b1f0893bc8e14371fe0e95d4764582af0f1c9ead8957e161142e2db5",
+  "upgraded_from": null,
+  "frame": "base_link",
+  "declared_level": "BE-1",
+  "zones": [
+    {
+      "id": "tool_box",
+      "kind": "keep_in",
+      "shape": "box",
+      "applies_to": [
+        "tool"
+      ]
+    },
+    {
+      "id": "cell",
+      "kind": "keep_in",
+      "shape": "box",
+      "applies_to": [
+        "elbow",
+        "wrist"
+      ]
+    },
+    {
+      "id": "fixture",
+      "kind": "keep_out",
+      "shape": "box",
+      "applies_to": [
+        "*"
+      ]
+    }
+  ],
+  "points": {
+    "tool": {
+      "speed_limit_mps": 0.25,
+      "zones": [
+        "tool_box",
+        "fixture"
+      ],
+      "faces": [
+        [
+          "x_min",
+          "tool_box"
+        ],
+        [
+          "x_max",
+          "tool_box"
+        ],
+        [
+          "y_min",
+          "tool_box"
+        ],
+        [
+          "y_max",
+          "tool_box"
+        ],
+        [
+          "z_min",
+          "tool_box"
+        ],
+        [
+          "z_max",
+          "tool_box"
+        ]
+      ]
+    },
+    "elbow": {
+      "speed_limit_mps": 0.3,
+      "zones": [
+        "cell",
+        "fixture"
+      ],
+      "faces": [
+        [
+          "x_min",
+          "cell"
+        ],
+        [
+          "x_max",
+          "cell"
+        ],
+        [
+          "y_min",
+          "cell"
+        ],
+        [
+          "y_max",
+          "cell"
+        ],
+        [
+          "z_min",
+          "cell"
+        ],
+        [
+          "z_max",
+          "cell"
+        ]
+      ]
+    },
+    "wrist": {
+      "speed_limit_mps": 0.3,
+      "zones": [
+        "cell",
+        "fixture"
+      ],
+      "faces": [
+        [
+          "x_min",
+          "cell"
+        ],
+        [
+          "x_max",
+          "cell"
+        ],
+        [
+          "y_min",
+          "cell"
+        ],
+        [
+          "y_max",
+          "cell"
+        ],
+        [
+          "z_min",
+          "cell"
+        ],
+        [
+          "z_max",
+          "cell"
+        ]
+      ]
+    }
+  },
+  "clearance": [
+    {
+      "point": "tool",
+      "xyz": [
+        0.3,
+        0.0,
+        0.175
+      ],
+      "expect_m": 0.05590169943749474,
+      "why": "0.1 m inside the box, but sqrt(0.05^2 + 0.025^2) from the fixture's edge"
+    },
+    {
+      "point": "tool",
+      "xyz": [
+        0.45,
+        0.0,
+        0.175
+      ],
+      "expect_m": -0.05,
+      "why": "0.05 m past x_max"
+    },
+    {
+      "point": "tool",
+      "xyz": [
+        0.35,
+        0.1,
+        0.1
+      ],
+      "expect_m": -0.05,
+      "why": "0.05 m deep in the fixture"
+    },
+    {
+      "point": "elbow",
+      "xyz": [
+        0.0,
+        0.0,
+        0.3
+      ],
+      "expect_m": 0.28,
+      "why": "the cell, not the tool box, bounds the elbow"
+    },
+    {
+      "point": "elbow",
+      "xyz": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "expect_m": -0.02,
+      "why": "0.02 m below the cell floor"
+    },
+    {
+      "point": "wrist",
+      "xyz": [
+        0.35,
+        0.1,
+        0.1
+      ],
+      "expect_m": -0.05,
+      "why": "the fixture applies to every point"
+    }
+  ],
+  "warnings": [],
+  "abs_tol_m": 1e-09
+}

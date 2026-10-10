@@ -1,0 +1,4 @@
+{
+  "code": "ENVELOPE_PARSE_ERROR",
+  "why": "NaN is not JSON"
+}

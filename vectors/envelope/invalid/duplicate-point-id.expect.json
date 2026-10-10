@@ -1,0 +1,5 @@
+{
+  "code": "ENVELOPE_DUPLICATE_POINT_ID",
+  "where": "/points/2/id",
+  "why": "two points named elbow"
+}

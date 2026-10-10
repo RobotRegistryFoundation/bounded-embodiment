@@ -1,0 +1,29 @@
+{
+  "machine_id": "bob",
+  "converted_from": "ev03-harness arm envelope",
+  "tolerance_m": 0.01,
+  "tolerance_speed": 0.05,
+  "start_pose_deg": {
+    "shoulder_pan": 0.66,
+    "shoulder_lift": 0.13,
+    "elbow_flex": 1.63,
+    "wrist_flex": 3.82,
+    "wrist_roll": 0.66,
+    "gripper": 18
+  },
+  "joint_map": {
+    "shoulder_lift": {
+      "sign": 1,
+      "offset_deg": 7
+    },
+    "elbow_flex": {
+      "sign": 1,
+      "offset_deg": -90
+    },
+    "wrist_flex": {
+      "sign": 1,
+      "offset_deg": 80
+    }
+  },
+  "notes": "Kept out of the envelope: tolerance is a parameter of the test method (the profile's values govern scoring); the start pose and the joint map are kit configuration. joint_map: bob was calibrated with the arm straight up and the gripper pointing forward, not in LeRobot's standard pose. Offsets fitted from two side photos (2026-10-08), about +/-10 deg; confirm with the external tracker."
+}

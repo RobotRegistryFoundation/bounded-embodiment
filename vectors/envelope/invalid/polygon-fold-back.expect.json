@@ -1,0 +1,5 @@
+{
+  "code": "ENVELOPE_POLYGON_NOT_SIMPLE",
+  "where": "/workspace/zones/0/prism/polygon_m",
+  "why": "an edge runs back along the previous one (a zero-width spike)"
+}

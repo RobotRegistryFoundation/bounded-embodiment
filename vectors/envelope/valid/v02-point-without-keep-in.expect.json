@@ -1,0 +1,91 @@
+{
+  "hash": "sha256:70a52005daeec68dab507402ebf519a72b325d469e522c84854af933868f4604",
+  "upgraded_from": null,
+  "frame": "world",
+  "declared_level": null,
+  "zones": [
+    {
+      "id": "z",
+      "kind": "keep_in",
+      "shape": "box",
+      "applies_to": [
+        "p"
+      ]
+    },
+    {
+      "id": "lamp",
+      "kind": "keep_out",
+      "shape": "box",
+      "applies_to": [
+        "camera"
+      ]
+    }
+  ],
+  "points": {
+    "p": {
+      "speed_limit_mps": 1,
+      "zones": [
+        "z"
+      ],
+      "faces": [
+        [
+          "x_min",
+          "z"
+        ],
+        [
+          "x_max",
+          "z"
+        ],
+        [
+          "y_min",
+          "z"
+        ],
+        [
+          "y_max",
+          "z"
+        ],
+        [
+          "z_min",
+          "z"
+        ],
+        [
+          "z_max",
+          "z"
+        ]
+      ]
+    },
+    "camera": {
+      "speed_limit_mps": 1,
+      "zones": [
+        "lamp"
+      ],
+      "faces": []
+    }
+  },
+  "clearance": [
+    {
+      "point": "camera",
+      "xyz": [
+        0.5,
+        0.5,
+        1.0
+      ],
+      "expect_m": 0.5,
+      "why": "only the lamp bounds the camera"
+    },
+    {
+      "point": "camera",
+      "xyz": [
+        0.5,
+        0.5,
+        1.6
+      ],
+      "expect_m": -0.1,
+      "why": "0.1 m deep in the lamp"
+    }
+  ],
+  "warnings": [
+    "ENVELOPE_POINT_NO_KEEP_IN"
+  ],
+  "abs_tol_m": 1e-09
+}

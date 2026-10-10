@@ -1,0 +1,5 @@
+{
+  "code": "ENVELOPE_POLYGON_NOT_SIMPLE",
+  "where": "/workspace/keep_out/0",
+  "why": "0.1 keep-out polygon that crosses itself"
+}

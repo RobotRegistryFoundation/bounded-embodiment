@@ -1,0 +1,1545 @@
+{
+  "format": "bounded-embodiment-vectors/signing-tamper/1",
+  "description": "Documents derived from signed-sample.json and the findings verify() must return for each. 'keyring' maps kid to public JWK and defaults to the top-level keyring. 'expected' lists {code, severity, where} in order; 'where' is a JSON pointer. Detail text is not part of the vector. CC BY 4.0 (see REUSE.toml).",
+  "keyring": {
+    "kPrK_qmxVWaYVA9wwBF6Iuo3vVzz7TxHCTwXBygrS4k": {
+      "kty": "OKP",
+      "crv": "Ed25519",
+      "x": "11qYAYKxCrfVS_7TyWQHOg7hcvPapiMlrwIaaPcHURo"
+    }
+  },
+  "cases": [
+    {
+      "name": "valid",
+      "description": "The signed sample, unchanged.",
+      "document": {
+        "kind": "bounded-embodiment-signing-sample",
+        "note": "Numbers here are chosen so that a non-RFC-8785 serializer produces different bytes.",
+        "envelope": {
+          "hash": "sha256:abababababababababababababababababababababababababababababababab"
+        },
+        "numbers": [
+          5e-05,
+          1e-07,
+          1e+21,
+          0.1,
+          -0.0,
+          0.25,
+          300,
+          1.5e-07,
+          1.2345678901234568e+20
+        ],
+        "text": "Caf\u00e9 \ud83d\ude00 \u20ac",
+        "nested": {
+          "z": 1,
+          "a": [
+            true,
+            null,
+            {
+              "\ufb33": "dalet",
+              "\ud83d\ude00": "grin"
+            }
+          ]
+        },
+        "signature": [
+          {
+            "alg": "Ed25519",
+            "kid": "kPrK_qmxVWaYVA9wwBF6Iuo3vVzz7TxHCTwXBygrS4k",
+            "sig": "Cgp24cDF6y1-9uS4jcBKw39-k-tb70j6FfEqIe_q-ZMqSpN8qroYY-OgVkwUSpzQQW-r4_2yWQuShogfkAMuCg"
+          }
+        ]
+      },
+      "expected": []
+    },
+    {
+      "name": "valid_members_reordered",
+      "description": "Member order is not significant after canonicalization.",
+      "document": {
+        "signature": [
+          {
+            "alg": "Ed25519",
+            "kid": "kPrK_qmxVWaYVA9wwBF6Iuo3vVzz7TxHCTwXBygrS4k",
+            "sig": "Cgp24cDF6y1-9uS4jcBKw39-k-tb70j6FfEqIe_q-ZMqSpN8qroYY-OgVkwUSpzQQW-r4_2yWQuShogfkAMuCg"
+          }
+        ],
+        "nested": {
+          "a": [
+            true,
+            null,
+            {
+              "\ufb33": "dalet",
+              "\ud83d\ude00": "grin"
+            }
+          ],
+          "z": 1
+        },
+        "text": "Caf\u00e9 \ud83d\ude00 \u20ac",
+        "numbers": [
+          5e-05,
+          1e-07,
+          1e+21,
+          0.1,
+          -0.0,
+          0.25,
+          300,
+          1.5e-07,
+          1.2345678901234568e+20
+        ],
+        "envelope": {
+          "hash": "sha256:abababababababababababababababababababababababababababababababab"
+        },
+        "note": "Numbers here are chosen so that a non-RFC-8785 serializer produces different bytes.",
+        "kind": "bounded-embodiment-signing-sample"
+      },
+      "expected": []
+    },
+    {
+      "name": "valid_int_written_as_float",
+      "description": "300 and 300.0 are the same JSON number.",
+      "document": {
+        "kind": "bounded-embodiment-signing-sample",
+        "note": "Numbers here are chosen so that a non-RFC-8785 serializer produces different bytes.",
+        "envelope": {
+          "hash": "sha256:abababababababababababababababababababababababababababababababab"
+        },
+        "numbers": [
+          5e-05,
+          1e-07,
+          1e+21,
+          0.1,
+          -0.0,
+          0.25,
+          300.0,
+          1.5e-07,
+          1.2345678901234568e+20
+        ],
+        "text": "Caf\u00e9 \ud83d\ude00 \u20ac",
+        "nested": {
+          "z": 1,
+          "a": [
+            true,
+            null,
+            {
+              "\ufb33": "dalet",
+              "\ud83d\ude00": "grin"
+            }
+          ]
+        },
+        "signature": [
+          {
+            "alg": "Ed25519",
+            "kid": "kPrK_qmxVWaYVA9wwBF6Iuo3vVzz7TxHCTwXBygrS4k",
+            "sig": "Cgp24cDF6y1-9uS4jcBKw39-k-tb70j6FfEqIe_q-ZMqSpN8qroYY-OgVkwUSpzQQW-r4_2yWQuShogfkAMuCg"
+          }
+        ]
+      },
+      "expected": []
+    },
+    {
+      "name": "value_changed",
+      "description": "A nested value was edited after signing.",
+      "document": {
+        "kind": "bounded-embodiment-signing-sample",
+        "note": "Numbers here are chosen so that a non-RFC-8785 serializer produces different bytes.",
+        "envelope": {
+          "hash": "sha256:abababababababababababababababababababababababababababababababab"
+        },
+        "numbers": [
+          5e-05,
+          1e-07,
+          1e+21,
+          0.1,
+          -0.0,
+          0.25,
+          300,
+          1.5e-07,
+          1.2345678901234568e+20
+        ],
+        "text": "Caf\u00e9 \ud83d\ude00 \u20ac",
+        "nested": {
+          "z": 2,
+          "a": [
+            true,
+            null,
+            {
+              "\ufb33": "dalet",
+              "\ud83d\ude00": "grin"
+            }
+          ]
+        },
+        "signature": [
+          {
+            "alg": "Ed25519",
+            "kid": "kPrK_qmxVWaYVA9wwBF6Iuo3vVzz7TxHCTwXBygrS4k",
+            "sig": "Cgp24cDF6y1-9uS4jcBKw39-k-tb70j6FfEqIe_q-ZMqSpN8qroYY-OgVkwUSpzQQW-r4_2yWQuShogfkAMuCg"
+          }
+        ]
+      },
+      "expected": [
+        {
+          "code": "BAD_SIGNATURE",
+          "severity": "error",
+          "where": "/signature/0"
+        }
+      ]
+    },
+    {
+      "name": "member_added",
+      "description": "A top-level member was added after signing.",
+      "document": {
+        "kind": "bounded-embodiment-signing-sample",
+        "note": "Numbers here are chosen so that a non-RFC-8785 serializer produces different bytes.",
+        "envelope": {
+          "hash": "sha256:abababababababababababababababababababababababababababababababab"
+        },
+        "numbers": [
+          5e-05,
+          1e-07,
+          1e+21,
+          0.1,
+          -0.0,
+          0.25,
+          300,
+          1.5e-07,
+          1.2345678901234568e+20
+        ],
+        "text": "Caf\u00e9 \ud83d\ude00 \u20ac",
+        "nested": {
+          "z": 1,
+          "a": [
+            true,
+            null,
+            {
+              "\ufb33": "dalet",
+              "\ud83d\ude00": "grin"
+            }
+          ]
+        },
+        "signature": [
+          {
+            "alg": "Ed25519",
+            "kid": "kPrK_qmxVWaYVA9wwBF6Iuo3vVzz7TxHCTwXBygrS4k",
+            "sig": "Cgp24cDF6y1-9uS4jcBKw39-k-tb70j6FfEqIe_q-ZMqSpN8qroYY-OgVkwUSpzQQW-r4_2yWQuShogfkAMuCg"
+          }
+        ],
+        "extra": true
+      },
+      "expected": [
+        {
+          "code": "BAD_SIGNATURE",
+          "severity": "error",
+          "where": "/signature/0"
+        }
+      ]
+    },
+    {
+      "name": "member_removed",
+      "description": "A top-level member was removed after signing.",
+      "document": {
+        "kind": "bounded-embodiment-signing-sample",
+        "envelope": {
+          "hash": "sha256:abababababababababababababababababababababababababababababababab"
+        },
+        "numbers": [
+          5e-05,
+          1e-07,
+          1e+21,
+          0.1,
+          -0.0,
+          0.25,
+          300,
+          1.5e-07,
+          1.2345678901234568e+20
+        ],
+        "text": "Caf\u00e9 \ud83d\ude00 \u20ac",
+        "nested": {
+          "z": 1,
+          "a": [
+            true,
+            null,
+            {
+              "\ufb33": "dalet",
+              "\ud83d\ude00": "grin"
+            }
+          ]
+        },
+        "signature": [
+          {
+            "alg": "Ed25519",
+            "kid": "kPrK_qmxVWaYVA9wwBF6Iuo3vVzz7TxHCTwXBygrS4k",
+            "sig": "Cgp24cDF6y1-9uS4jcBKw39-k-tb70j6FfEqIe_q-ZMqSpN8qroYY-OgVkwUSpzQQW-r4_2yWQuShogfkAMuCg"
+          }
+        ]
+      },
+      "expected": [
+        {
+          "code": "BAD_SIGNATURE",
+          "severity": "error",
+          "where": "/signature/0"
+        }
+      ]
+    },
+    {
+      "name": "number_changed_by_one_ulp",
+      "description": "0.25 became the next double up.",
+      "document": {
+        "kind": "bounded-embodiment-signing-sample",
+        "note": "Numbers here are chosen so that a non-RFC-8785 serializer produces different bytes.",
+        "envelope": {
+          "hash": "sha256:abababababababababababababababababababababababababababababababab"
+        },
+        "numbers": [
+          5e-05,
+          1e-07,
+          1e+21,
+          0.1,
+          -0.0,
+          0.25000000000000006,
+          300,
+          1.5e-07,
+          1.2345678901234568e+20
+        ],
+        "text": "Caf\u00e9 \ud83d\ude00 \u20ac",
+        "nested": {
+          "z": 1,
+          "a": [
+            true,
+            null,
+            {
+              "\ufb33": "dalet",
+              "\ud83d\ude00": "grin"
+            }
+          ]
+        },
+        "signature": [
+          {
+            "alg": "Ed25519",
+            "kid": "kPrK_qmxVWaYVA9wwBF6Iuo3vVzz7TxHCTwXBygrS4k",
+            "sig": "Cgp24cDF6y1-9uS4jcBKw39-k-tb70j6FfEqIe_q-ZMqSpN8qroYY-OgVkwUSpzQQW-r4_2yWQuShogfkAMuCg"
+          }
+        ]
+      },
+      "expected": [
+        {
+          "code": "BAD_SIGNATURE",
+          "severity": "error",
+          "where": "/signature/0"
+        }
+      ]
+    },
+    {
+      "name": "string_unicode_normalized",
+      "description": "U+00E9 replaced by e + U+0301; JCS does not normalize Unicode.",
+      "document": {
+        "kind": "bounded-embodiment-signing-sample",
+        "note": "Numbers here are chosen so that a non-RFC-8785 serializer produces different bytes.",
+        "envelope": {
+          "hash": "sha256:abababababababababababababababababababababababababababababababab"
+        },
+        "numbers": [
+          5e-05,
+          1e-07,
+          1e+21,
+          0.1,
+          -0.0,
+          0.25,
+          300,
+          1.5e-07,
+          1.2345678901234568e+20
+        ],
+        "text": "Cafe\u0301 \ud83d\ude00 \u20ac",
+        "nested": {
+          "z": 1,
+          "a": [
+            true,
+            null,
+            {
+              "\ufb33": "dalet",
+              "\ud83d\ude00": "grin"
+            }
+          ]
+        },
+        "signature": [
+          {
+            "alg": "Ed25519",
+            "kid": "kPrK_qmxVWaYVA9wwBF6Iuo3vVzz7TxHCTwXBygrS4k",
+            "sig": "Cgp24cDF6y1-9uS4jcBKw39-k-tb70j6FfEqIe_q-ZMqSpN8qroYY-OgVkwUSpzQQW-r4_2yWQuShogfkAMuCg"
+          }
+        ]
+      },
+      "expected": [
+        {
+          "code": "BAD_SIGNATURE",
+          "severity": "error",
+          "where": "/signature/0"
+        }
+      ]
+    },
+    {
+      "name": "signature_removed",
+      "description": "No signature member.",
+      "document": {
+        "kind": "bounded-embodiment-signing-sample",
+        "note": "Numbers here are chosen so that a non-RFC-8785 serializer produces different bytes.",
+        "envelope": {
+          "hash": "sha256:abababababababababababababababababababababababababababababababab"
+        },
+        "numbers": [
+          5e-05,
+          1e-07,
+          1e+21,
+          0.1,
+          -0.0,
+          0.25,
+          300,
+          1.5e-07,
+          1.2345678901234568e+20
+        ],
+        "text": "Caf\u00e9 \ud83d\ude00 \u20ac",
+        "nested": {
+          "z": 1,
+          "a": [
+            true,
+            null,
+            {
+              "\ufb33": "dalet",
+              "\ud83d\ude00": "grin"
+            }
+          ]
+        }
+      },
+      "expected": [
+        {
+          "code": "NO_SIGNATURE",
+          "severity": "error",
+          "where": "/signature"
+        }
+      ]
+    },
+    {
+      "name": "signature_empty_list",
+      "description": "An empty signature list.",
+      "document": {
+        "kind": "bounded-embodiment-signing-sample",
+        "note": "Numbers here are chosen so that a non-RFC-8785 serializer produces different bytes.",
+        "envelope": {
+          "hash": "sha256:abababababababababababababababababababababababababababababababab"
+        },
+        "numbers": [
+          5e-05,
+          1e-07,
+          1e+21,
+          0.1,
+          -0.0,
+          0.25,
+          300,
+          1.5e-07,
+          1.2345678901234568e+20
+        ],
+        "text": "Caf\u00e9 \ud83d\ude00 \u20ac",
+        "nested": {
+          "z": 1,
+          "a": [
+            true,
+            null,
+            {
+              "\ufb33": "dalet",
+              "\ud83d\ude00": "grin"
+            }
+          ]
+        },
+        "signature": []
+      },
+      "expected": [
+        {
+          "code": "NO_SIGNATURE",
+          "severity": "error",
+          "where": "/signature"
+        }
+      ]
+    },
+    {
+      "name": "signature_legacy_string",
+      "description": "An envelope-0.1 style <alg>:<value> string has no kid.",
+      "document": {
+        "kind": "bounded-embodiment-signing-sample",
+        "note": "Numbers here are chosen so that a non-RFC-8785 serializer produces different bytes.",
+        "envelope": {
+          "hash": "sha256:abababababababababababababababababababababababababababababababab"
+        },
+        "numbers": [
+          5e-05,
+          1e-07,
+          1e+21,
+          0.1,
+          -0.0,
+          0.25,
+          300,
+          1.5e-07,
+          1.2345678901234568e+20
+        ],
+        "text": "Caf\u00e9 \ud83d\ude00 \u20ac",
+        "nested": {
+          "z": 1,
+          "a": [
+            true,
+            null,
+            {
+              "\ufb33": "dalet",
+              "\ud83d\ude00": "grin"
+            }
+          ]
+        },
+        "signature": "ed25519:Cgp24cDF6y1-9uS4jcBKw39-k-tb70j6FfEqIe_q-ZMqSpN8qroYY-OgVkwUSpzQQW-r4_2yWQuShogfkAMuCg"
+      },
+      "expected": [
+        {
+          "code": "MALFORMED_SIGNATURE",
+          "severity": "error",
+          "where": "/signature"
+        }
+      ]
+    },
+    {
+      "name": "signature_is_an_object",
+      "description": "signature must be a list.",
+      "document": {
+        "kind": "bounded-embodiment-signing-sample",
+        "note": "Numbers here are chosen so that a non-RFC-8785 serializer produces different bytes.",
+        "envelope": {
+          "hash": "sha256:abababababababababababababababababababababababababababababababab"
+        },
+        "numbers": [
+          5e-05,
+          1e-07,
+          1e+21,
+          0.1,
+          -0.0,
+          0.25,
+          300,
+          1.5e-07,
+          1.2345678901234568e+20
+        ],
+        "text": "Caf\u00e9 \ud83d\ude00 \u20ac",
+        "nested": {
+          "z": 1,
+          "a": [
+            true,
+            null,
+            {
+              "\ufb33": "dalet",
+              "\ud83d\ude00": "grin"
+            }
+          ]
+        },
+        "signature": {
+          "alg": "Ed25519",
+          "kid": "kPrK_qmxVWaYVA9wwBF6Iuo3vVzz7TxHCTwXBygrS4k",
+          "sig": "Cgp24cDF6y1-9uS4jcBKw39-k-tb70j6FfEqIe_q-ZMqSpN8qroYY-OgVkwUSpzQQW-r4_2yWQuShogfkAMuCg"
+        }
+      },
+      "expected": [
+        {
+          "code": "MALFORMED_SIGNATURE",
+          "severity": "error",
+          "where": "/signature"
+        }
+      ]
+    },
+    {
+      "name": "entry_carries_a_key",
+      "description": "An entry with an extra member (here an embedded JWK) is refused.",
+      "document": {
+        "kind": "bounded-embodiment-signing-sample",
+        "note": "Numbers here are chosen so that a non-RFC-8785 serializer produces different bytes.",
+        "envelope": {
+          "hash": "sha256:abababababababababababababababababababababababababababababababab"
+        },
+        "numbers": [
+          5e-05,
+          1e-07,
+          1e+21,
+          0.1,
+          -0.0,
+          0.25,
+          300,
+          1.5e-07,
+          1.2345678901234568e+20
+        ],
+        "text": "Caf\u00e9 \ud83d\ude00 \u20ac",
+        "nested": {
+          "z": 1,
+          "a": [
+            true,
+            null,
+            {
+              "\ufb33": "dalet",
+              "\ud83d\ude00": "grin"
+            }
+          ]
+        },
+        "signature": [
+          {
+            "alg": "Ed25519",
+            "kid": "kPrK_qmxVWaYVA9wwBF6Iuo3vVzz7TxHCTwXBygrS4k",
+            "sig": "Cgp24cDF6y1-9uS4jcBKw39-k-tb70j6FfEqIe_q-ZMqSpN8qroYY-OgVkwUSpzQQW-r4_2yWQuShogfkAMuCg",
+            "jwk": {
+              "kty": "OKP",
+              "crv": "Ed25519",
+              "x": "11qYAYKxCrfVS_7TyWQHOg7hcvPapiMlrwIaaPcHURo"
+            }
+          }
+        ]
+      },
+      "expected": [
+        {
+          "code": "MALFORMED_SIGNATURE",
+          "severity": "error",
+          "where": "/signature/0"
+        }
+      ]
+    },
+    {
+      "name": "entry_missing_kid",
+      "description": "An entry without kid.",
+      "document": {
+        "kind": "bounded-embodiment-signing-sample",
+        "note": "Numbers here are chosen so that a non-RFC-8785 serializer produces different bytes.",
+        "envelope": {
+          "hash": "sha256:abababababababababababababababababababababababababababababababab"
+        },
+        "numbers": [
+          5e-05,
+          1e-07,
+          1e+21,
+          0.1,
+          -0.0,
+          0.25,
+          300,
+          1.5e-07,
+          1.2345678901234568e+20
+        ],
+        "text": "Caf\u00e9 \ud83d\ude00 \u20ac",
+        "nested": {
+          "z": 1,
+          "a": [
+            true,
+            null,
+            {
+              "\ufb33": "dalet",
+              "\ud83d\ude00": "grin"
+            }
+          ]
+        },
+        "signature": [
+          {
+            "alg": "Ed25519",
+            "sig": "Cgp24cDF6y1-9uS4jcBKw39-k-tb70j6FfEqIe_q-ZMqSpN8qroYY-OgVkwUSpzQQW-r4_2yWQuShogfkAMuCg"
+          }
+        ]
+      },
+      "expected": [
+        {
+          "code": "MALFORMED_SIGNATURE",
+          "severity": "error",
+          "where": "/signature/0"
+        }
+      ]
+    },
+    {
+      "name": "kid_not_a_thumbprint",
+      "description": "kid must be a 43-character SHA-256 thumbprint.",
+      "document": {
+        "kind": "bounded-embodiment-signing-sample",
+        "note": "Numbers here are chosen so that a non-RFC-8785 serializer produces different bytes.",
+        "envelope": {
+          "hash": "sha256:abababababababababababababababababababababababababababababababab"
+        },
+        "numbers": [
+          5e-05,
+          1e-07,
+          1e+21,
+          0.1,
+          -0.0,
+          0.25,
+          300,
+          1.5e-07,
+          1.2345678901234568e+20
+        ],
+        "text": "Caf\u00e9 \ud83d\ude00 \u20ac",
+        "nested": {
+          "z": 1,
+          "a": [
+            true,
+            null,
+            {
+              "\ufb33": "dalet",
+              "\ud83d\ude00": "grin"
+            }
+          ]
+        },
+        "signature": [
+          {
+            "alg": "Ed25519",
+            "kid": "lab-key-1",
+            "sig": "Cgp24cDF6y1-9uS4jcBKw39-k-tb70j6FfEqIe_q-ZMqSpN8qroYY-OgVkwUSpzQQW-r4_2yWQuShogfkAMuCg"
+          }
+        ]
+      },
+      "expected": [
+        {
+          "code": "MALFORMED_SIGNATURE",
+          "severity": "error",
+          "where": "/signature/0"
+        }
+      ]
+    },
+    {
+      "name": "sig_standard_base64",
+      "description": "sig in standard base64 with padding instead of base64url.",
+      "document": {
+        "kind": "bounded-embodiment-signing-sample",
+        "note": "Numbers here are chosen so that a non-RFC-8785 serializer produces different bytes.",
+        "envelope": {
+          "hash": "sha256:abababababababababababababababababababababababababababababababab"
+        },
+        "numbers": [
+          5e-05,
+          1e-07,
+          1e+21,
+          0.1,
+          -0.0,
+          0.25,
+          300,
+          1.5e-07,
+          1.2345678901234568e+20
+        ],
+        "text": "Caf\u00e9 \ud83d\ude00 \u20ac",
+        "nested": {
+          "z": 1,
+          "a": [
+            true,
+            null,
+            {
+              "\ufb33": "dalet",
+              "\ud83d\ude00": "grin"
+            }
+          ]
+        },
+        "signature": [
+          {
+            "alg": "Ed25519",
+            "kid": "kPrK_qmxVWaYVA9wwBF6Iuo3vVzz7TxHCTwXBygrS4k",
+            "sig": "Cgp24cDF6y1+9uS4jcBKw39+k+tb70j6FfEqIe/q+ZMqSpN8qroYY+OgVkwUSpzQQW+r4/2yWQuShogfkAMuCg=="
+          }
+        ]
+      },
+      "expected": [
+        {
+          "code": "MALFORMED_SIGNATURE",
+          "severity": "error",
+          "where": "/signature/0"
+        }
+      ]
+    },
+    {
+      "name": "sig_padded",
+      "description": "base64url with '=' padding is not accepted.",
+      "document": {
+        "kind": "bounded-embodiment-signing-sample",
+        "note": "Numbers here are chosen so that a non-RFC-8785 serializer produces different bytes.",
+        "envelope": {
+          "hash": "sha256:abababababababababababababababababababababababababababababababab"
+        },
+        "numbers": [
+          5e-05,
+          1e-07,
+          1e+21,
+          0.1,
+          -0.0,
+          0.25,
+          300,
+          1.5e-07,
+          1.2345678901234568e+20
+        ],
+        "text": "Caf\u00e9 \ud83d\ude00 \u20ac",
+        "nested": {
+          "z": 1,
+          "a": [
+            true,
+            null,
+            {
+              "\ufb33": "dalet",
+              "\ud83d\ude00": "grin"
+            }
+          ]
+        },
+        "signature": [
+          {
+            "alg": "Ed25519",
+            "kid": "kPrK_qmxVWaYVA9wwBF6Iuo3vVzz7TxHCTwXBygrS4k",
+            "sig": "Cgp24cDF6y1-9uS4jcBKw39-k-tb70j6FfEqIe_q-ZMqSpN8qroYY-OgVkwUSpzQQW-r4_2yWQuShogfkAMuCg=="
+          }
+        ]
+      },
+      "expected": [
+        {
+          "code": "MALFORMED_SIGNATURE",
+          "severity": "error",
+          "where": "/signature/0"
+        }
+      ]
+    },
+    {
+      "name": "sig_truncated",
+      "description": "63 bytes instead of 64.",
+      "document": {
+        "kind": "bounded-embodiment-signing-sample",
+        "note": "Numbers here are chosen so that a non-RFC-8785 serializer produces different bytes.",
+        "envelope": {
+          "hash": "sha256:abababababababababababababababababababababababababababababababab"
+        },
+        "numbers": [
+          5e-05,
+          1e-07,
+          1e+21,
+          0.1,
+          -0.0,
+          0.25,
+          300,
+          1.5e-07,
+          1.2345678901234568e+20
+        ],
+        "text": "Caf\u00e9 \ud83d\ude00 \u20ac",
+        "nested": {
+          "z": 1,
+          "a": [
+            true,
+            null,
+            {
+              "\ufb33": "dalet",
+              "\ud83d\ude00": "grin"
+            }
+          ]
+        },
+        "signature": [
+          {
+            "alg": "Ed25519",
+            "kid": "kPrK_qmxVWaYVA9wwBF6Iuo3vVzz7TxHCTwXBygrS4k",
+            "sig": "Cgp24cDF6y1-9uS4jcBKw39-k-tb70j6FfEqIe_q-ZMqSpN8qroYY-OgVkwUSpzQQW-r4_2yWQuShogfkAMu"
+          }
+        ]
+      },
+      "expected": [
+        {
+          "code": "MALFORMED_SIGNATURE",
+          "severity": "error",
+          "where": "/signature/0"
+        }
+      ]
+    },
+    {
+      "name": "sig_bit_flipped",
+      "description": "One bit of the signature flipped.",
+      "document": {
+        "kind": "bounded-embodiment-signing-sample",
+        "note": "Numbers here are chosen so that a non-RFC-8785 serializer produces different bytes.",
+        "envelope": {
+          "hash": "sha256:abababababababababababababababababababababababababababababababab"
+        },
+        "numbers": [
+          5e-05,
+          1e-07,
+          1e+21,
+          0.1,
+          -0.0,
+          0.25,
+          300,
+          1.5e-07,
+          1.2345678901234568e+20
+        ],
+        "text": "Caf\u00e9 \ud83d\ude00 \u20ac",
+        "nested": {
+          "z": 1,
+          "a": [
+            true,
+            null,
+            {
+              "\ufb33": "dalet",
+              "\ud83d\ude00": "grin"
+            }
+          ]
+        },
+        "signature": [
+          {
+            "alg": "Ed25519",
+            "kid": "kPrK_qmxVWaYVA9wwBF6Iuo3vVzz7TxHCTwXBygrS4k",
+            "sig": "Cgp24cDF6y1-9uW4jcBKw39-k-tb70j6FfEqIe_q-ZMqSpN8qroYY-OgVkwUSpzQQW-r4_2yWQuShogfkAMuCg"
+          }
+        ]
+      },
+      "expected": [
+        {
+          "code": "BAD_SIGNATURE",
+          "severity": "error",
+          "where": "/signature/0"
+        }
+      ]
+    },
+    {
+      "name": "kid_not_in_keyring",
+      "description": "The keyring does not hold the signer's key.",
+      "document": {
+        "kind": "bounded-embodiment-signing-sample",
+        "note": "Numbers here are chosen so that a non-RFC-8785 serializer produces different bytes.",
+        "envelope": {
+          "hash": "sha256:abababababababababababababababababababababababababababababababab"
+        },
+        "numbers": [
+          5e-05,
+          1e-07,
+          1e+21,
+          0.1,
+          -0.0,
+          0.25,
+          300,
+          1.5e-07,
+          1.2345678901234568e+20
+        ],
+        "text": "Caf\u00e9 \ud83d\ude00 \u20ac",
+        "nested": {
+          "z": 1,
+          "a": [
+            true,
+            null,
+            {
+              "\ufb33": "dalet",
+              "\ud83d\ude00": "grin"
+            }
+          ]
+        },
+        "signature": [
+          {
+            "alg": "Ed25519",
+            "kid": "kPrK_qmxVWaYVA9wwBF6Iuo3vVzz7TxHCTwXBygrS4k",
+            "sig": "Cgp24cDF6y1-9uS4jcBKw39-k-tb70j6FfEqIe_q-ZMqSpN8qroYY-OgVkwUSpzQQW-r4_2yWQuShogfkAMuCg"
+          }
+        ]
+      },
+      "keyring": {
+        "FtIu-VbGrfe_KB6CH7GNwODB72MNxj_ml11dEvO-7kk": {
+          "kty": "OKP",
+          "crv": "Ed25519",
+          "x": "PUAXw-hDiVqStwqnTRt-vJyYLM8uxJaMwM1V8Sr0Zgw"
+        }
+      },
+      "expected": [
+        {
+          "code": "UNKNOWN_KID",
+          "severity": "error",
+          "where": "/signature/0"
+        }
+      ]
+    },
+    {
+      "name": "embedded_key_is_ignored",
+      "description": "Edited and re-signed by another key that the document itself carries; only the keyring counts.",
+      "document": {
+        "kind": "bounded-embodiment-signing-sample",
+        "note": "Numbers here are chosen so that a non-RFC-8785 serializer produces different bytes.",
+        "envelope": {
+          "hash": "sha256:abababababababababababababababababababababababababababababababab"
+        },
+        "numbers": [
+          5e-05,
+          1e-07,
+          1e+21,
+          0.1,
+          -0.0,
+          0.25,
+          300,
+          1.5e-07,
+          1.2345678901234568e+20
+        ],
+        "text": "Caf\u00e9 \ud83d\ude00 \u20ac",
+        "nested": {
+          "z": 999,
+          "a": [
+            true,
+            null,
+            {
+              "\ufb33": "dalet",
+              "\ud83d\ude00": "grin"
+            }
+          ]
+        },
+        "signer_public_jwk": {
+          "kty": "OKP",
+          "crv": "Ed25519",
+          "x": "PUAXw-hDiVqStwqnTRt-vJyYLM8uxJaMwM1V8Sr0Zgw"
+        },
+        "signature": [
+          {
+            "alg": "Ed25519",
+            "kid": "FtIu-VbGrfe_KB6CH7GNwODB72MNxj_ml11dEvO-7kk",
+            "sig": "Dx4PFzFHZYJZ9SWYSH3rFzcHIgWyvzUZJ7ll-18y-nQnyEmQAZpdFE33UkNrn-MDVEso4bC2e1le2xrRMrC-BQ"
+          }
+        ]
+      },
+      "expected": [
+        {
+          "code": "UNKNOWN_KID",
+          "severity": "error",
+          "where": "/signature/0"
+        }
+      ]
+    },
+    {
+      "name": "kid_swapped",
+      "description": "The entry names another registered key; the signature does not verify under it.",
+      "document": {
+        "kind": "bounded-embodiment-signing-sample",
+        "note": "Numbers here are chosen so that a non-RFC-8785 serializer produces different bytes.",
+        "envelope": {
+          "hash": "sha256:abababababababababababababababababababababababababababababababab"
+        },
+        "numbers": [
+          5e-05,
+          1e-07,
+          1e+21,
+          0.1,
+          -0.0,
+          0.25,
+          300,
+          1.5e-07,
+          1.2345678901234568e+20
+        ],
+        "text": "Caf\u00e9 \ud83d\ude00 \u20ac",
+        "nested": {
+          "z": 1,
+          "a": [
+            true,
+            null,
+            {
+              "\ufb33": "dalet",
+              "\ud83d\ude00": "grin"
+            }
+          ]
+        },
+        "signature": [
+          {
+            "alg": "Ed25519",
+            "kid": "FtIu-VbGrfe_KB6CH7GNwODB72MNxj_ml11dEvO-7kk",
+            "sig": "Cgp24cDF6y1-9uS4jcBKw39-k-tb70j6FfEqIe_q-ZMqSpN8qroYY-OgVkwUSpzQQW-r4_2yWQuShogfkAMuCg"
+          }
+        ]
+      },
+      "keyring": {
+        "kPrK_qmxVWaYVA9wwBF6Iuo3vVzz7TxHCTwXBygrS4k": {
+          "kty": "OKP",
+          "crv": "Ed25519",
+          "x": "11qYAYKxCrfVS_7TyWQHOg7hcvPapiMlrwIaaPcHURo"
+        },
+        "FtIu-VbGrfe_KB6CH7GNwODB72MNxj_ml11dEvO-7kk": {
+          "kty": "OKP",
+          "crv": "Ed25519",
+          "x": "PUAXw-hDiVqStwqnTRt-vJyYLM8uxJaMwM1V8Sr0Zgw"
+        }
+      },
+      "expected": [
+        {
+          "code": "BAD_SIGNATURE",
+          "severity": "error",
+          "where": "/signature/0"
+        }
+      ]
+    },
+    {
+      "name": "keyring_entry_holds_another_key",
+      "description": "The keyring maps the kid to a key with a different thumbprint.",
+      "document": {
+        "kind": "bounded-embodiment-signing-sample",
+        "note": "Numbers here are chosen so that a non-RFC-8785 serializer produces different bytes.",
+        "envelope": {
+          "hash": "sha256:abababababababababababababababababababababababababababababababab"
+        },
+        "numbers": [
+          5e-05,
+          1e-07,
+          1e+21,
+          0.1,
+          -0.0,
+          0.25,
+          300,
+          1.5e-07,
+          1.2345678901234568e+20
+        ],
+        "text": "Caf\u00e9 \ud83d\ude00 \u20ac",
+        "nested": {
+          "z": 1,
+          "a": [
+            true,
+            null,
+            {
+              "\ufb33": "dalet",
+              "\ud83d\ude00": "grin"
+            }
+          ]
+        },
+        "signature": [
+          {
+            "alg": "Ed25519",
+            "kid": "kPrK_qmxVWaYVA9wwBF6Iuo3vVzz7TxHCTwXBygrS4k",
+            "sig": "Cgp24cDF6y1-9uS4jcBKw39-k-tb70j6FfEqIe_q-ZMqSpN8qroYY-OgVkwUSpzQQW-r4_2yWQuShogfkAMuCg"
+          }
+        ]
+      },
+      "keyring": {
+        "kPrK_qmxVWaYVA9wwBF6Iuo3vVzz7TxHCTwXBygrS4k": {
+          "kty": "OKP",
+          "crv": "Ed25519",
+          "x": "PUAXw-hDiVqStwqnTRt-vJyYLM8uxJaMwM1V8Sr0Zgw"
+        }
+      },
+      "expected": [
+        {
+          "code": "UNKNOWN_KID",
+          "severity": "error",
+          "where": "/signature/0"
+        }
+      ]
+    },
+    {
+      "name": "keyring_entry_not_a_key",
+      "description": "The keyring entry is not an Ed25519 JWK.",
+      "document": {
+        "kind": "bounded-embodiment-signing-sample",
+        "note": "Numbers here are chosen so that a non-RFC-8785 serializer produces different bytes.",
+        "envelope": {
+          "hash": "sha256:abababababababababababababababababababababababababababababababab"
+        },
+        "numbers": [
+          5e-05,
+          1e-07,
+          1e+21,
+          0.1,
+          -0.0,
+          0.25,
+          300,
+          1.5e-07,
+          1.2345678901234568e+20
+        ],
+        "text": "Caf\u00e9 \ud83d\ude00 \u20ac",
+        "nested": {
+          "z": 1,
+          "a": [
+            true,
+            null,
+            {
+              "\ufb33": "dalet",
+              "\ud83d\ude00": "grin"
+            }
+          ]
+        },
+        "signature": [
+          {
+            "alg": "Ed25519",
+            "kid": "kPrK_qmxVWaYVA9wwBF6Iuo3vVzz7TxHCTwXBygrS4k",
+            "sig": "Cgp24cDF6y1-9uS4jcBKw39-k-tb70j6FfEqIe_q-ZMqSpN8qroYY-OgVkwUSpzQQW-r4_2yWQuShogfkAMuCg"
+          }
+        ]
+      },
+      "keyring": {
+        "kPrK_qmxVWaYVA9wwBF6Iuo3vVzz7TxHCTwXBygrS4k": {
+          "kty": "RSA",
+          "n": "AQAB",
+          "e": "AQAB"
+        }
+      },
+      "expected": [
+        {
+          "code": "UNKNOWN_KID",
+          "severity": "error",
+          "where": "/signature/0"
+        }
+      ]
+    },
+    {
+      "name": "unsupported_alg_only",
+      "description": "The only entry uses an algorithm this method does not support.",
+      "document": {
+        "kind": "bounded-embodiment-signing-sample",
+        "note": "Numbers here are chosen so that a non-RFC-8785 serializer produces different bytes.",
+        "envelope": {
+          "hash": "sha256:abababababababababababababababababababababababababababababababab"
+        },
+        "numbers": [
+          5e-05,
+          1e-07,
+          1e+21,
+          0.1,
+          -0.0,
+          0.25,
+          300,
+          1.5e-07,
+          1.2345678901234568e+20
+        ],
+        "text": "Caf\u00e9 \ud83d\ude00 \u20ac",
+        "nested": {
+          "z": 1,
+          "a": [
+            true,
+            null,
+            {
+              "\ufb33": "dalet",
+              "\ud83d\ude00": "grin"
+            }
+          ]
+        },
+        "signature": [
+          {
+            "alg": "RS256",
+            "kid": "kPrK_qmxVWaYVA9wwBF6Iuo3vVzz7TxHCTwXBygrS4k",
+            "sig": "Cgp24cDF6y1-9uS4jcBKw39-k-tb70j6FfEqIe_q-ZMqSpN8qroYY-OgVkwUSpzQQW-r4_2yWQuShogfkAMuCg"
+          }
+        ]
+      },
+      "expected": [
+        {
+          "code": "UNSUPPORTED_ALG",
+          "severity": "warn",
+          "where": "/signature/0"
+        },
+        {
+          "code": "NO_SIGNATURE",
+          "severity": "error",
+          "where": "/signature"
+        }
+      ]
+    },
+    {
+      "name": "alg_wrong_case",
+      "description": "Algorithm names are case-sensitive.",
+      "document": {
+        "kind": "bounded-embodiment-signing-sample",
+        "note": "Numbers here are chosen so that a non-RFC-8785 serializer produces different bytes.",
+        "envelope": {
+          "hash": "sha256:abababababababababababababababababababababababababababababababab"
+        },
+        "numbers": [
+          5e-05,
+          1e-07,
+          1e+21,
+          0.1,
+          -0.0,
+          0.25,
+          300,
+          1.5e-07,
+          1.2345678901234568e+20
+        ],
+        "text": "Caf\u00e9 \ud83d\ude00 \u20ac",
+        "nested": {
+          "z": 1,
+          "a": [
+            true,
+            null,
+            {
+              "\ufb33": "dalet",
+              "\ud83d\ude00": "grin"
+            }
+          ]
+        },
+        "signature": [
+          {
+            "alg": "ed25519",
+            "kid": "kPrK_qmxVWaYVA9wwBF6Iuo3vVzz7TxHCTwXBygrS4k",
+            "sig": "Cgp24cDF6y1-9uS4jcBKw39-k-tb70j6FfEqIe_q-ZMqSpN8qroYY-OgVkwUSpzQQW-r4_2yWQuShogfkAMuCg"
+          }
+        ]
+      },
+      "expected": [
+        {
+          "code": "UNSUPPORTED_ALG",
+          "severity": "warn",
+          "where": "/signature/0"
+        },
+        {
+          "code": "NO_SIGNATURE",
+          "severity": "error",
+          "where": "/signature"
+        }
+      ]
+    },
+    {
+      "name": "unsupported_alg_beside_valid",
+      "description": "An unknown algorithm next to a valid Ed25519 entry is only a warning.",
+      "document": {
+        "kind": "bounded-embodiment-signing-sample",
+        "note": "Numbers here are chosen so that a non-RFC-8785 serializer produces different bytes.",
+        "envelope": {
+          "hash": "sha256:abababababababababababababababababababababababababababababababab"
+        },
+        "numbers": [
+          5e-05,
+          1e-07,
+          1e+21,
+          0.1,
+          -0.0,
+          0.25,
+          300,
+          1.5e-07,
+          1.2345678901234568e+20
+        ],
+        "text": "Caf\u00e9 \ud83d\ude00 \u20ac",
+        "nested": {
+          "z": 1,
+          "a": [
+            true,
+            null,
+            {
+              "\ufb33": "dalet",
+              "\ud83d\ude00": "grin"
+            }
+          ]
+        },
+        "signature": [
+          {
+            "alg": "Ed25519",
+            "kid": "kPrK_qmxVWaYVA9wwBF6Iuo3vVzz7TxHCTwXBygrS4k",
+            "sig": "Cgp24cDF6y1-9uS4jcBKw39-k-tb70j6FfEqIe_q-ZMqSpN8qroYY-OgVkwUSpzQQW-r4_2yWQuShogfkAMuCg"
+          },
+          {
+            "alg": "ES256",
+            "kid": "FtIu-VbGrfe_KB6CH7GNwODB72MNxj_ml11dEvO-7kk",
+            "sig": "AAAA"
+          }
+        ]
+      },
+      "expected": [
+        {
+          "code": "UNSUPPORTED_ALG",
+          "severity": "warn",
+          "where": "/signature/1"
+        }
+      ]
+    },
+    {
+      "name": "two_valid_signatures",
+      "description": "Signed by both keys, both registered.",
+      "document": {
+        "kind": "bounded-embodiment-signing-sample",
+        "note": "Numbers here are chosen so that a non-RFC-8785 serializer produces different bytes.",
+        "envelope": {
+          "hash": "sha256:abababababababababababababababababababababababababababababababab"
+        },
+        "numbers": [
+          5e-05,
+          1e-07,
+          1e+21,
+          0.1,
+          -0.0,
+          0.25,
+          300,
+          1.5e-07,
+          1.2345678901234568e+20
+        ],
+        "text": "Caf\u00e9 \ud83d\ude00 \u20ac",
+        "nested": {
+          "z": 1,
+          "a": [
+            true,
+            null,
+            {
+              "\ufb33": "dalet",
+              "\ud83d\ude00": "grin"
+            }
+          ]
+        },
+        "signature": [
+          {
+            "alg": "Ed25519",
+            "kid": "kPrK_qmxVWaYVA9wwBF6Iuo3vVzz7TxHCTwXBygrS4k",
+            "sig": "Cgp24cDF6y1-9uS4jcBKw39-k-tb70j6FfEqIe_q-ZMqSpN8qroYY-OgVkwUSpzQQW-r4_2yWQuShogfkAMuCg"
+          },
+          {
+            "alg": "Ed25519",
+            "kid": "FtIu-VbGrfe_KB6CH7GNwODB72MNxj_ml11dEvO-7kk",
+            "sig": "CYFVZdCs_lvXhFxkrNNoKdRGs8WOHooHW1NMCqMG0S7FXyVq959AVVAAkgLHy0okQMGe8NOjfjrUJs-q13EZCw"
+          }
+        ]
+      },
+      "keyring": {
+        "kPrK_qmxVWaYVA9wwBF6Iuo3vVzz7TxHCTwXBygrS4k": {
+          "kty": "OKP",
+          "crv": "Ed25519",
+          "x": "11qYAYKxCrfVS_7TyWQHOg7hcvPapiMlrwIaaPcHURo"
+        },
+        "FtIu-VbGrfe_KB6CH7GNwODB72MNxj_ml11dEvO-7kk": {
+          "kty": "OKP",
+          "crv": "Ed25519",
+          "x": "PUAXw-hDiVqStwqnTRt-vJyYLM8uxJaMwM1V8Sr0Zgw"
+        }
+      },
+      "expected": []
+    },
+    {
+      "name": "second_signer_unregistered",
+      "description": "Every entry must verify; an unregistered co-signer is an error.",
+      "document": {
+        "kind": "bounded-embodiment-signing-sample",
+        "note": "Numbers here are chosen so that a non-RFC-8785 serializer produces different bytes.",
+        "envelope": {
+          "hash": "sha256:abababababababababababababababababababababababababababababababab"
+        },
+        "numbers": [
+          5e-05,
+          1e-07,
+          1e+21,
+          0.1,
+          -0.0,
+          0.25,
+          300,
+          1.5e-07,
+          1.2345678901234568e+20
+        ],
+        "text": "Caf\u00e9 \ud83d\ude00 \u20ac",
+        "nested": {
+          "z": 1,
+          "a": [
+            true,
+            null,
+            {
+              "\ufb33": "dalet",
+              "\ud83d\ude00": "grin"
+            }
+          ]
+        },
+        "signature": [
+          {
+            "alg": "Ed25519",
+            "kid": "kPrK_qmxVWaYVA9wwBF6Iuo3vVzz7TxHCTwXBygrS4k",
+            "sig": "Cgp24cDF6y1-9uS4jcBKw39-k-tb70j6FfEqIe_q-ZMqSpN8qroYY-OgVkwUSpzQQW-r4_2yWQuShogfkAMuCg"
+          },
+          {
+            "alg": "Ed25519",
+            "kid": "FtIu-VbGrfe_KB6CH7GNwODB72MNxj_ml11dEvO-7kk",
+            "sig": "CYFVZdCs_lvXhFxkrNNoKdRGs8WOHooHW1NMCqMG0S7FXyVq959AVVAAkgLHy0okQMGe8NOjfjrUJs-q13EZCw"
+          }
+        ]
+      },
+      "expected": [
+        {
+          "code": "UNKNOWN_KID",
+          "severity": "error",
+          "where": "/signature/1"
+        }
+      ]
+    },
+    {
+      "name": "signature_entries_reordered",
+      "description": "Entries are independent of each other and of their order.",
+      "document": {
+        "kind": "bounded-embodiment-signing-sample",
+        "note": "Numbers here are chosen so that a non-RFC-8785 serializer produces different bytes.",
+        "envelope": {
+          "hash": "sha256:abababababababababababababababababababababababababababababababab"
+        },
+        "numbers": [
+          5e-05,
+          1e-07,
+          1e+21,
+          0.1,
+          -0.0,
+          0.25,
+          300,
+          1.5e-07,
+          1.2345678901234568e+20
+        ],
+        "text": "Caf\u00e9 \ud83d\ude00 \u20ac",
+        "nested": {
+          "z": 1,
+          "a": [
+            true,
+            null,
+            {
+              "\ufb33": "dalet",
+              "\ud83d\ude00": "grin"
+            }
+          ]
+        },
+        "signature": [
+          {
+            "alg": "Ed25519",
+            "kid": "FtIu-VbGrfe_KB6CH7GNwODB72MNxj_ml11dEvO-7kk",
+            "sig": "CYFVZdCs_lvXhFxkrNNoKdRGs8WOHooHW1NMCqMG0S7FXyVq959AVVAAkgLHy0okQMGe8NOjfjrUJs-q13EZCw"
+          },
+          {
+            "alg": "Ed25519",
+            "kid": "kPrK_qmxVWaYVA9wwBF6Iuo3vVzz7TxHCTwXBygrS4k",
+            "sig": "Cgp24cDF6y1-9uS4jcBKw39-k-tb70j6FfEqIe_q-ZMqSpN8qroYY-OgVkwUSpzQQW-r4_2yWQuShogfkAMuCg"
+          }
+        ]
+      },
+      "keyring": {
+        "kPrK_qmxVWaYVA9wwBF6Iuo3vVzz7TxHCTwXBygrS4k": {
+          "kty": "OKP",
+          "crv": "Ed25519",
+          "x": "11qYAYKxCrfVS_7TyWQHOg7hcvPapiMlrwIaaPcHURo"
+        },
+        "FtIu-VbGrfe_KB6CH7GNwODB72MNxj_ml11dEvO-7kk": {
+          "kty": "OKP",
+          "crv": "Ed25519",
+          "x": "PUAXw-hDiVqStwqnTRt-vJyYLM8uxJaMwM1V8Sr0Zgw"
+        }
+      },
+      "expected": []
+    },
+    {
+      "name": "duplicate_entry",
+      "description": "The same valid entry twice still verifies.",
+      "document": {
+        "kind": "bounded-embodiment-signing-sample",
+        "note": "Numbers here are chosen so that a non-RFC-8785 serializer produces different bytes.",
+        "envelope": {
+          "hash": "sha256:abababababababababababababababababababababababababababababababab"
+        },
+        "numbers": [
+          5e-05,
+          1e-07,
+          1e+21,
+          0.1,
+          -0.0,
+          0.25,
+          300,
+          1.5e-07,
+          1.2345678901234568e+20
+        ],
+        "text": "Caf\u00e9 \ud83d\ude00 \u20ac",
+        "nested": {
+          "z": 1,
+          "a": [
+            true,
+            null,
+            {
+              "\ufb33": "dalet",
+              "\ud83d\ude00": "grin"
+            }
+          ]
+        },
+        "signature": [
+          {
+            "alg": "Ed25519",
+            "kid": "kPrK_qmxVWaYVA9wwBF6Iuo3vVzz7TxHCTwXBygrS4k",
+            "sig": "Cgp24cDF6y1-9uS4jcBKw39-k-tb70j6FfEqIe_q-ZMqSpN8qroYY-OgVkwUSpzQQW-r4_2yWQuShogfkAMuCg"
+          },
+          {
+            "alg": "Ed25519",
+            "kid": "kPrK_qmxVWaYVA9wwBF6Iuo3vVzz7TxHCTwXBygrS4k",
+            "sig": "Cgp24cDF6y1-9uS4jcBKw39-k-tb70j6FfEqIe_q-ZMqSpN8qroYY-OgVkwUSpzQQW-r4_2yWQuShogfkAMuCg"
+          }
+        ]
+      },
+      "expected": []
+    }
+  ]
+}

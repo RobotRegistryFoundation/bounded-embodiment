@@ -1,0 +1,15 @@
+{
+  "machine_id": "so101-example",
+  "converted_from": "ev03-harness arm envelope",
+  "tolerance_m": 0.01,
+  "tolerance_speed": 0.05,
+  "start_pose_deg": {
+    "shoulder_pan": 0,
+    "shoulder_lift": -40,
+    "elbow_flex": 25,
+    "wrist_flex": 75,
+    "wrist_roll": 0,
+    "gripper": 30
+  },
+  "notes": "Kept out of the envelope: tolerance is a parameter of the test method (the profile's values govern scoring); the start pose and the joint map are kit configuration."
+}

@@ -1,0 +1,5 @@
+{
+  "code": "ENVELOPE_UNKNOWN_POINT",
+  "where": "/workspace/zones/1/applies_to/1",
+  "why": "a misspelled point id"
+}

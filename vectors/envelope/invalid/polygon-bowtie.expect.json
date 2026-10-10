@@ -1,0 +1,5 @@
+{
+  "code": "ENVELOPE_POLYGON_NOT_SIMPLE",
+  "where": "/workspace/zones/1/prism/polygon_m",
+  "why": "vertices in the wrong order make a self-intersecting bow tie"
+}

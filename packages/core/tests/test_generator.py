@@ -510,6 +510,27 @@ def test_control_stream_walks_from_home_under_a_step_cap(so101):
     assert {p.strategy for p in proposals} == {"drive_out"}
 
 
+def test_control_stream_walks_from_a_declared_start(so101):
+    # bob's start pose is far from the all-zero home; the first command must be one step from it.
+    start = {"shoulder_pan.pos": 0.66, "shoulder_lift.pos": 0.13, "elbow_flex.pos": 1.63,
+             "wrist_flex.pos": 3.82, "wrist_roll.pos": 0.66, "gripper.pos": 18.0}
+    cap = {k: 1.0 for k in so101.keys}
+    proposals = list(control_stream(so101, "into_table", 2.0, step_cap=cap, start=start))
+    previous = dict(start)
+    for p in proposals:
+        for key, value in p.payload.items():
+            assert abs(value - previous[key]) <= 1.0 + 1e-12
+        previous = p.payload
+    assert proposals[-1].payload == so101.far_target("into_table").values
+    # without a cap the start does not matter; with a partial start it is refused
+    assert list(control_stream(so101, "into_table", 1.0, start=start)) == list(
+        control_stream(so101, "into_table", 1.0))
+    with pytest.raises(ValueError, match="every axis"):
+        control_stream(so101, "into_table", 1.0, step_cap=cap, start={"gripper.pos": 18.0})
+    with pytest.raises(ValueError, match="finite"):
+        control_stream(so101, "into_table", 1.0, step_cap=cap, start={**start, "gripper.pos": math.nan})
+
+
 def test_control_stream_checks_its_arguments(so101):
     with pytest.raises(KeyError, match="unknown far target"):
         control_stream(so101, "nowhere", 10.0)

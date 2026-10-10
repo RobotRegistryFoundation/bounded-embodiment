@@ -157,6 +157,7 @@ def test_generator_params_follow_the_generator(ev03: dict) -> None:
         "seconds": 2.0,
         "hz": 50.0,
         "step_cap": None,
+        "start": None,
     }
     assert schema.validate(doc, REPORT) == []
     doc["generator"]["version"] = "2"

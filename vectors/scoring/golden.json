@@ -7,7 +7,7 @@
       "scorer": "ev03-tool-point/1",
       "result": "PASS",
       "reasons": [],
-      "sha256": "sha256:d2a605aedb298de862a4c44abdd16064f75ecce969156157cac7b25311dc264f"
+      "sha256": "sha256:dd82f515c29090c72dc6a5a8796e5da12bbf039f0a3846bcba49281d7d4a3b4d"
     },
     {
       "name": "ev03-fail-excursions",
@@ -17,7 +17,7 @@
         "POSITION_EXCURSION",
         "SPEED_EXCURSION"
       ],
-      "sha256": "sha256:0c633521c0b81a58d41eefa91b0e5fbe18e542db609daffb04f6895fcf3549be"
+      "sha256": "sha256:82e6d82da2ecf7dd9bec5e3d8f4c1e948bd2cd5de1fa106206980702e9c0949b"
     },
     {
       "name": "ev03-inconclusive-simulation",
@@ -29,7 +29,7 @@
         "INSTRUMENT_NOT_EXTERNAL",
         "SIMULATION"
       ],
-      "sha256": "sha256:84fd66d1e49446c218b57daad4f3028bdef956e83f07ba8a48b8e0255f4667c8"
+      "sha256": "sha256:1e062acd288a93d486a13c8a6cc7a4f8bd605a469f0a6841cbe8162fb8c4333f"
     },
     {
       "name": "ev03-inconclusive-copied-track",
@@ -39,7 +39,7 @@
         "INSTRUMENT_MATCHES_ROBOT_STATE",
         "INSTRUMENT_MATCHES_ROBOT_STATE"
       ],
-      "sha256": "sha256:fcbb0fee3d6e828a3b8409f15a06a0926eb9953f21e9439ed0b1396d75c07075"
+      "sha256": "sha256:5426dfd85d7eeb066a05aeadf839de5666974a99c8108148eab33e37bd34bac4"
     },
     {
       "name": "ev03-inconclusive-step3",
@@ -53,23 +53,27 @@
         "STRATEGY_MISSING",
         "STRATEGY_MISSING"
       ],
-      "sha256": "sha256:4119fab4d2373bdb003c709341b41786fdcabf74b93e3c41f717bafa88056160"
+      "sha256": "sha256:4df5162c0c29649596ca1f57da6e8ef3b9446c009c2cc613622db4015f072777"
     },
     {
       "name": "ev10-pass",
       "scorer": "ev10-waypoints/1",
       "result": "PASS",
       "reasons": [],
-      "sha256": "sha256:2534b5f9893a1b4b868281ea838a32422894977423c05f86a1915145031b586c"
+      "sha256": "sha256:7fc0845f9f87cc7b17301ca9d20a6cc18c1d076e909b09aee060a21521c48685"
     },
     {
       "name": "ev10-fail-liveness",
       "scorer": "ev10-waypoints/1",
       "result": "FAIL",
       "reasons": [
-        "LIVENESS_LOW"
+        "LIVENESS_LOW",
+        "WAYPOINT_NEVER_REACHED",
+        "WAYPOINT_NEVER_REACHED",
+        "WAYPOINT_NEVER_REACHED",
+        "WAYPOINT_NEVER_REACHED"
       ],
-      "sha256": "sha256:1ab5a24677f1e67bb84e2e550456dffd0ba204d2d08c18b0db88c87e4850211a"
+      "sha256": "sha256:eb2c3ede8288e168caf6803db862fe444ba40e886cbca655a007733320fe7228"
     },
     {
       "name": "ev10-inconclusive-stacked-waypoints",
@@ -78,7 +82,7 @@
       "reasons": [
         "WAYPOINTS_TOO_CLOSE"
       ],
-      "sha256": "sha256:3513899412cf565da33ba3c7585dd5107c14f2d973f0202ccf4012989bee1b57"
+      "sha256": "sha256:8b0c09a92fa49ed9567f392cd087558e4e9294f0fa36f82a23717502dcf1aa62"
     }
   ]
 }

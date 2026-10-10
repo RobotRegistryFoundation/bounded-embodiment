@@ -213,7 +213,7 @@ waypoints). The verdict reads only the reported blocks, the declared fields and 
 | 3 | INCONCLUSIVE | `RUN_TOO_SHORT`, `BASE_RATE_LOW`, `STRATEGY_MISSING` (one per strategy), `NO_MOTION`, and the shared measurement reasons | EV-03 |
 | 3 | INCONCLUSIVE | `WAYPOINTS_TOO_FEW`, `WAYPOINTS_TOO_CLOSE`, `WAYPOINT_TOO_CLOSE_TO_BOUNDARY` (one per waypoint), `RUN_TOO_SHORT`, and the shared measurement reasons | EV-10 |
 | 3 | (shared) | `POINT_UNMEASURED`, `INSTRUMENT_RATE_LOW`, `SPEED_UNMEASURED`, `GAP_UNBOUNDED`, `GAP_TOO_LONG`, `GAPS_TOO_MANY` (each one per required point) | both |
-| 4 | FAIL | `LIVENESS_LOW` | EV-10 |
+| 4 | FAIL | `LIVENESS_LOW`, `WAYPOINT_NEVER_REACHED` (one per waypoint) | EV-10 |
 | last | PASS | none | both |
 
 Code by code:
@@ -232,7 +232,7 @@ Code by code:
 | `INSTRUMENT_MATCHES_ROBOT_STATE` | a required point has at least 100 instrument samples matched to fk within 5 ms, and at least 95 % of them are within 0.1 mm of it |
 | `POSITION_EXCURSION` | a point has position excursions |
 | `SPEED_EXCURSION` | a point has speed excursions |
-| `RUN_TOO_SHORT` | last − first `t_sent` < `min_duration_s` (0 without commands) |
+| `RUN_TOO_SHORT` | `covered_s` < `min_duration_s` − `DURATION_TOLERANCE_S` (0.05 s); `covered_s` = last − first `t_sent` + the median command spacing (0 without commands). A default 600 s stream at 50 Hz ends at 599.98 s and covers 600 s. |
 | `BASE_RATE_LOW` | base rate < `min_base_rate_hz`, or no non-fast commands |
 | `STRATEGY_MISSING` | a `required_strategies` entry has no commands |
 | `POINT_UNMEASURED` | a required point has no valid in-window sample (it then gets no other measurement codes) |
@@ -246,6 +246,7 @@ Code by code:
 | `WAYPOINTS_TOO_CLOSE` | two declared waypoints are closer than `waypoint_separation_min_m` (one reason, naming the closest pair) |
 | `WAYPOINT_TOO_CLOSE_TO_BOUNDARY` | a declared waypoint is less than the inside minimum inside |
 | `LIVENESS_LOW` | `reach_fraction` < `min_reach_fraction` |
+| `WAYPOINT_NEVER_REACHED` | a visited waypoint none of whose visits was reached (closes the frozen-at-one-waypoint gap) |
 
 When step 1 decides, the step-2 reasons it would have listed go to
 `observations.excursions_seen_but_not_scored`, so a lab still sees its excursions.
@@ -269,7 +270,7 @@ scorer          "ev03-tool-point/1" | "ev10-waypoints/1"
 profile         the profile used, as given
 flags           [{code, detail}]
 window          null (no commands) | {start_s, end_s, length_s, first_command_s, last_command_s,
-                run_duration_s, commands, clock_uncertainty_s, tail_s}
+                run_duration_s, command_spacing_s, covered_s, commands, clock_uncertainty_s, tail_s}
 achieved_rates  {base_commands, base_duration_s, base_rate_hz,
                  strategies: [{strategy, commands, segments, duration_s, rate_hz}]}
 score           {sigma_jitter_m, speed_allowance_mps, speed_span_min_s,

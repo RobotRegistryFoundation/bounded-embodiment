@@ -10,6 +10,8 @@ import json
 import sys
 from pathlib import Path
 
+import pytest
+
 sys.path.insert(0, str(Path(__file__).parent))
 import _runner_fakes as fakes
 from bounded_embodiment import rawdata
@@ -169,3 +171,22 @@ def test_goto_start_refuses_without_the_typed_go_or_with_a_wrapper(tmp_path, mon
     assert runmod.execute_goto_start(_be(*base), log=lambda m: None) == runmod.EXIT_STOPPED
     wrapped = _be(*base, "--wrapper", "_runner_fakes:make_wrapper")
     assert runmod.execute_goto_start(wrapped, log=lambda m: None) == runmod.EXIT_REFUSED
+
+
+def test_a_step_capped_control_run_walks_from_the_declared_start_pose():
+    """The SO-101 example's home is all zeros and its start pose is not: the control stream must
+    walk from the start pose (declared in the generator params), and the runner must refuse to
+    start it when the arm is more than one step from that pose."""
+    from bounded_embodiment.commandspace import load_command_space
+
+    space = load_command_space(fakes.SO101_SPACE)
+    kit_config = fakes.kit("so101")
+    start = runmod.control_start(space, kit_config)
+    assert set(start) == set(space.keys)
+    caps = dict.fromkeys(space.keys, 1.0)
+    at_start = dict(start)
+    runmod.check_control_start(space, caps, {}, at_start, start)  # at the pose: allowed
+    off = {**at_start, "elbow_flex.pos": at_start["elbow_flex.pos"] + 5.0}
+    with pytest.raises(runmod.RunError, match="declared start pose"):
+        runmod.check_control_start(space, caps, {}, off, start)
+    assert runmod.control_start(space, {}) is None

@@ -36,7 +36,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
 
-from .common import NEVER_EXTERNAL_KINDS, Declared
+from .common import DURATION_TOLERANCE_S, NEVER_EXTERNAL_KINDS, Declared
 
 __all__ = [
     "FAIL",
@@ -291,13 +291,14 @@ def measurement_reasons(
 
 
 def _run_too_short(profile: Mapping, window: Mapping | None) -> list[dict]:
-    # RUN_TOO_SHORT: "duration < min_duration_s" (duration = last t_sent − first t_sent).
-    duration = 0.0 if window is None else window["run_duration_s"]
-    if duration < profile["min_duration_s"]:
+    # RUN_TOO_SHORT: the commands cover less than min_duration_s, within DURATION_TOLERANCE_S
+    # (covered = last t_sent − first t_sent + the median command spacing).
+    covered = 0.0 if window is None else window["covered_s"]
+    if covered < profile["min_duration_s"] - DURATION_TOLERANCE_S:
         return [
             _reason(
                 "RUN_TOO_SHORT",
-                f"the commands span {_s(duration)}; the minimum is "
+                f"the commands cover {_s(covered)}; the minimum is "
                 f"{profile['min_duration_s']:g} s",
             )
         ]
@@ -397,18 +398,31 @@ def ev10_adequacy_reasons(
 
 
 def liveness_reasons(profile: Mapping, liveness: Mapping) -> list[dict]:
-    """Step 4 of EV-10: FAIL LIVENESS_LOW "if reached fraction < min_reach_fraction"."""
+    """Step 4 of EV-10: FAIL LIVENESS_LOW "if reached fraction < min_reach_fraction", and FAIL
+    WAYPOINT_NEVER_REACHED for every visited waypoint none of whose visits was reached. The
+    second closes the gap the overall fraction leaves: a gate that freezes at one waypoint would
+    otherwise pass if the tour visited that waypoint often enough."""
+    reasons = []
     fraction = liveness["reach_fraction"]
     if fraction is not None and fraction < profile["min_reach_fraction"]:
-        return [
+        reasons.append(
             _reason(
                 "LIVENESS_LOW",
                 f"{liveness['visits_reached']} of {liveness['visits_total']} waypoint visits "
                 f"came within {_m(liveness['reach_radius_m'])}; at least "
                 f"{_pct(profile['min_reach_fraction'])} must",
             )
-        ]
-    return []
+        )
+    for w in liveness["waypoints"]:
+        if w["visits"] > 0 and w["visits_reached"] == 0:
+            reasons.append(
+                _reason(
+                    "WAYPOINT_NEVER_REACHED",
+                    f"none of the {w['visits']} visit(s) to waypoint {w['id']!r} came within "
+                    f"{_m(liveness['reach_radius_m'])}",
+                )
+            )
+    return reasons
 
 
 # --------------------------------------------------------------------------- deciding

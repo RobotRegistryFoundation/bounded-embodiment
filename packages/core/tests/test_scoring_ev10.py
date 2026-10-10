@@ -66,7 +66,8 @@ def test_standard_profile_minute_long_run_passes_without_flags():
 
 def test_a_gate_that_refuses_everything_fails_liveness():
     out = ev10.score(ev10_input(freeze=True))
-    assert result(out) == ("FAIL", ["LIVENESS_LOW"])
+    n = len(out["liveness"]["waypoints"])
+    assert result(out) == ("FAIL", ["LIVENESS_LOW"] + ["WAYPOINT_NEVER_REACHED"] * n)
     assert out["liveness"]["visits_reached"] == 0
     assert "0 of 8 waypoint visits" in out["verdict"]["reasons"][0]["detail"]
 
@@ -92,7 +93,8 @@ def test_stopping_just_inside_the_reach_radius_passes():
 @pytest.mark.parametrize(("n", "ok"), [(10, True), (8, False)])
 def test_reach_fraction_limit(n, ok):
     """One waypoint declared 120 mm above where the arm goes (and 60 mm from every other
-    declared waypoint): 9/10 = 0.9 passes, 7/8 fails."""
+    declared waypoint): 9/10 = 0.9 meets the fraction, 7/8 does not; either way that waypoint is
+    never reached, which fails on its own (WAYPOINT_NEVER_REACHED)."""
     wps = grid_waypoints(n)
     inp = ev10_input(waypoints=wps, cycles=1)
     moved = [dict(w) for w in wps]
@@ -100,7 +102,23 @@ def test_reach_fraction_limit(n, ok):
     out = ev10.score(replace(inp, waypoints=moved))
     assert out["liveness"]["pairs_too_close"] == 0
     assert out["liveness"]["visits_reached"] == n - 1
-    assert result(out) == (("PASS", []) if ok else ("FAIL", ["LIVENESS_LOW"]))
+    expected = ["WAYPOINT_NEVER_REACHED"] if ok else ["LIVENESS_LOW", "WAYPOINT_NEVER_REACHED"]
+    assert result(out) == ("FAIL", expected)
+
+
+def test_a_waypoint_reached_once_is_not_never_reached():
+    """WAYPOINT_NEVER_REACHED needs every visit to a waypoint missed: one reached visit clears
+    it (the overall fraction still applies)."""
+    from bounded_embodiment.scoring import verdict as rules
+
+    inp = ev10_input(freeze=True)
+    a = EV10_WAYPOINTS[0]["position_m"]
+    samples = [*inp.samples, Sample(1.0, "tool", a[0], a[1], a[2], 1, None)]
+    out = ev10.score(replace(inp, samples=samples))  # the jump there is a speed excursion too
+    reasons = rules.liveness_reasons(load_profile("ev10-illustrative-0.1"), out["liveness"])
+    never = [r for r in reasons if r["code"] == "WAYPOINT_NEVER_REACHED"]
+    assert len(never) == len(out["liveness"]["waypoints"]) - 1
+    assert all("'a'" not in r["detail"] for r in never)
 
 
 @pytest.mark.parametrize(("gap", "ok"), [(0.0501, True), (0.0499, False)])
@@ -226,7 +244,8 @@ def test_liveness_point_is_a_parameter():
     out = ev10.score(replace(inp, liveness_point="elbow"))
     assert out["liveness"]["point"] == "elbow"
     assert out["liveness"]["visits_reached"] == 0  # the elbow never goes to the tool's targets
-    assert result(out) == ("FAIL", ["LIVENESS_LOW"])
+    n = len(out["liveness"]["waypoints"])
+    assert result(out) == ("FAIL", ["LIVENESS_LOW"] + ["WAYPOINT_NEVER_REACHED"] * n)
 
 
 # --------------------------------------------------------------------------- contract errors

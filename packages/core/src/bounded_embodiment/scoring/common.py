@@ -22,6 +22,7 @@ from ..profiles import load_profile
 from ..rawdata import AccuracyRow, Command, Sample
 
 __all__ = [
+    "DURATION_TOLERANCE_S",
     "GAP_RATE_FACTOR",
     "INSTRUMENT_KINDS",
     "MIN_ACCURACY_POINTS",
@@ -55,6 +56,11 @@ __all__ = [
 
 WINDOW_TAIL_S = 1.0
 """The scoring window runs to the last command + this + the clock uncertainty."""
+
+DURATION_TOLERANCE_S = 0.05
+"""How far the covered time may fall short of min_duration_s and still count: the scheduled
+stream ends one command period before ``seconds`` and the send times jitter by milliseconds, so a
+600 s stream covers 600 s only to within a few ms."""
 
 SPEED_MIN_SPAN_FRACTION = 0.5
 """A speed is taken only over a span of at least this fraction of speed_window_s (w).

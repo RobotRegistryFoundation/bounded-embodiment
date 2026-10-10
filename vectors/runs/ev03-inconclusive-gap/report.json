@@ -163,6 +163,8 @@
     "first_command_s": 0.0,
     "last_command_s": 2.9999999999999996,
     "run_duration_s": 2.9999999999999996,
+    "command_spacing_s": 0.020000000000000018,
+    "covered_s": 3.0199999999999996,
     "commands": 157,
     "clock_uncertainty_s": 0.005,
     "tail_s": 1.0
@@ -515,7 +517,7 @@
     {
       "alg": "Ed25519",
       "kid": "JJdiTUjDxOdGPEUxDG7iofB6pXrYDw9x3jGC_j6-djc",
-      "sig": "yvAqFUxqMxKKvqsEdSr-dQa9FwQgIrh7F0CvaXL-i08wk8hkt09L5RESPTg3jaZ9W7NGJurnmYGP8Bqazzt1Bg"
+      "sig": "IGLDA805B-OTJ7rcaIAwc3bgdtjcqdylf2vJsZ7o-G253MUnyLFvMXNA89mf03JbIBXyhs9rKzTgXlXslFbZAw"
     }
   ]
 }

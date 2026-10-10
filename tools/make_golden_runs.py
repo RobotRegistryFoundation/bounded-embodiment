@@ -413,7 +413,7 @@ def ev10_profile() -> dict:
 
 HOSTILE_PARAMS = {"seconds": 3.0, "base_hz": 50.0, "burst_hz": 100.0, "segment_s": [0.1, 0.3]}
 HOSTILE_SEED = 11
-CONTROL_PARAMS = {"target": "into_table", "seconds": 2.0, "hz": 50.0, "step_cap": None}
+CONTROL_PARAMS = {"target": "into_table", "seconds": 2.0, "hz": 50.0, "step_cap": None, "start": None}
 WAYPOINT_PARAMS = {"cycles": 2, "commands_per_visit": 50, "hz": 50.0}
 
 
@@ -875,7 +875,8 @@ EXPECT: dict[str, dict] = {
     ),
     "ev10-pass": _e(True, "PASS", [], about="every waypoint visit reached"),
     "ev10-fail-freeze": _e(
-        True, "FAIL", ["LIVENESS_LOW"], about="a gate that refuses every move: no visit reached"
+        True, "FAIL", ["LIVENESS_LOW"] + ["WAYPOINT_NEVER_REACHED"] * 4,
+        about="a gate that refuses every move: no visit reached"
     ),
     "tamper-file-edited": _e(
         False,

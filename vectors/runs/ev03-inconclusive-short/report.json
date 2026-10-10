@@ -163,6 +163,8 @@
     "first_command_s": 0.0,
     "last_command_s": 2.9999999999999996,
     "run_duration_s": 2.9999999999999996,
+    "command_spacing_s": 0.020000000000000018,
+    "covered_s": 3.0199999999999996,
     "commands": 157,
     "clock_uncertainty_s": 0.005,
     "tail_s": 1.0
@@ -448,7 +450,7 @@
     "reasons": [
       {
         "code": "RUN_TOO_SHORT",
-        "detail": "the commands span 3.000 s; the minimum is 600 s"
+        "detail": "the commands cover 3.020 s; the minimum is 600 s"
       }
     ],
     "points_measured": [
@@ -502,7 +504,7 @@
     {
       "alg": "Ed25519",
       "kid": "JJdiTUjDxOdGPEUxDG7iofB6pXrYDw9x3jGC_j6-djc",
-      "sig": "Xs9XV--eVmqwrib4MHGBMLIbDsSFm0t3q6wGIM6DgdyKzEoMB41WV9EoEpbMds6z6uKQNzJXmL1oVQRlXa1vCw"
+      "sig": "RT5qgclSFhBXWPMaairtP2KDlLtbRTujTcjNvOEoB1dC7uNdj8ismXCP3IOklbwPVe5kiBY199HxHmfBMf9-BA"
     }
   ]
 }

@@ -81,7 +81,7 @@ def test_compare_rows_is_compare_to_commands_for_any_stream() -> None:
             "be-control",
             "1",
             0,
-            {"target": "nowhere", "seconds": 1.0, "hz": 50.0, "step_cap": None},
+            {"target": "nowhere", "seconds": 1.0, "hz": 50.0, "step_cap": None, "start": None},
             "STREAM_PARAMS_INVALID",
         ),
         ("be-control", "1", 0, {"target": "into_table", "seconds": 1.0}, "STREAM_PARAMS_INVALID"),
@@ -89,7 +89,7 @@ def test_compare_rows_is_compare_to_commands_for_any_stream() -> None:
             "be-control",
             "1",
             0,
-            {"target": "into_table", "seconds": 1.0, "hz": 50.0, "step_cap": {"x": 0.1}},
+            {"target": "into_table", "seconds": 1.0, "hz": 50.0, "step_cap": {"x": 0.1}, "start": None},
             "STREAM_PARAMS_INVALID",
         ),
         (
@@ -121,7 +121,7 @@ def test_control_stream_is_the_generators() -> None:
     p = golden().CONTROL_PARAMS
     mine = list(streams.control_stream(space(), p))
     theirs = list(
-        generator.control_stream(space(), p["target"], p["seconds"], p["hz"], p["step_cap"])
+        generator.control_stream(space(), p["target"], p["seconds"], p["hz"], p["step_cap"], p["start"])
     )
     assert mine == theirs and len(mine) == 100 and {c.strategy for c in mine} == {"drive_out"}
 
@@ -138,9 +138,9 @@ def test_control_digest_matches_the_golden_report() -> None:
 
 def test_control_params_normalize_numbers() -> None:
     a = streams.normalize(
-        "be-control", {"target": "into_table", "seconds": 2, "hz": 50, "step_cap": {"x": 1}}
+        "be-control", {"target": "into_table", "seconds": 2, "hz": 50, "step_cap": {"x": 1}, "start": None}
     )
-    assert a == {"target": "into_table", "seconds": 2.0, "hz": 50.0, "step_cap": {"x": 1.0}}
+    assert a == {"target": "into_table", "seconds": 2.0, "hz": 50.0, "step_cap": {"x": 1.0}, "start": None}
     assert streams.normalize("be-control", a) == a
 
 

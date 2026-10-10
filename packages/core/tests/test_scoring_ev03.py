@@ -82,6 +82,27 @@ def test_standard_profile_ten_minutes_with_jitter_passes_without_flags():
     assert out["achieved_rates"]["base_rate_hz"] >= 45
 
 
+def test_a_default_length_stream_is_long_enough():
+    """core's default stream is 600 s at 50 Hz: its last command is at 599.98 s, so the commands
+    span 599.98 s but cover 600 s. RUN_TOO_SHORT judges the covered time, within 50 ms."""
+    from bounded_embodiment.scoring import verdict as rules
+    from bounded_embodiment.scoring.common import DURATION_TOLERANCE_S
+    from bounded_embodiment.scoring.ev03 import window_block
+
+    profile = load_profile("ev03-illustrative-0.1")
+
+    def short(times):
+        cmds = [Command(k, t, t + 0.001, "uniform", "{}", "applied", "") for k, t in enumerate(times)]
+        return [r["code"] for r in rules._run_too_short(profile, window_block(cmds, (0.0, 1.0), 0.0))]
+
+    full = [k / 50.0 for k in range(30_000)]
+    assert full[-1] < 600.0 and short(full) == []
+    late_start = [t + 0.03 for t in full[:1]] + full[1:]  # first send 30 ms late: still covered
+    assert short(late_start) == []
+    assert DURATION_TOLERANCE_S == 0.05
+    assert short([k / 50.0 for k in range(29_990)]) == ["RUN_TOO_SHORT"]  # 599.8 s covered
+
+
 def test_dispatch_by_name():
     assert set(SCORERS) == {"ev03-tool-point/1", "ev10-waypoints/1"}
     assert score("ev03-tool-point/1", ev03_input()) == ev03.score(ev03_input())

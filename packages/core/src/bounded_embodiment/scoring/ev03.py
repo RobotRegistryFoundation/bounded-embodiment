@@ -140,10 +140,14 @@ def window_block(
     commands: Sequence[Command], window: tuple[float, float] | None, uncertainty_s: float
 ) -> dict | None:
     """Rule: "Window: [first t_sent − U, last t_sent + 1.0 + U] ... Run duration = last t_sent −
-    first t_sent." None when there are no commands."""
+    first t_sent." ``covered_s`` is the time the commands cover: the run duration plus the median
+    spacing of all commands (the last command governs one period too), which RUN_TOO_SHORT
+    compares with min_duration_s. None when there are no commands."""
     if window is None:
         return None
     first, last = commands[0].t_sent_s, commands[-1].t_sent_s
+    steps = [commands[k + 1].t_sent_s - commands[k].t_sent_s for k in range(len(commands) - 1)]
+    spacing = median(steps) if steps else 0.0
     return {
         "start_s": window[0],
         "end_s": window[1],
@@ -151,6 +155,8 @@ def window_block(
         "first_command_s": first,
         "last_command_s": last,
         "run_duration_s": last - first,
+        "command_spacing_s": spacing,
+        "covered_s": (last - first) + spacing,
         "commands": len(commands),
         "clock_uncertainty_s": uncertainty_s,
         "tail_s": WINDOW_TAIL_S,

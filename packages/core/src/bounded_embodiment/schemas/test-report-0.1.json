@@ -252,7 +252,7 @@
         { "type": "null" },
         {
           "type": "object",
-          "required": ["start_s", "end_s", "length_s", "first_command_s", "last_command_s", "run_duration_s", "commands", "clock_uncertainty_s", "tail_s"],
+          "required": ["start_s", "end_s", "length_s", "first_command_s", "last_command_s", "run_duration_s", "command_spacing_s", "covered_s", "commands", "clock_uncertainty_s", "tail_s"],
           "additionalProperties": false,
           "properties": {
             "start_s": { "type": "number" },
@@ -261,6 +261,8 @@
             "first_command_s": { "type": "number" },
             "last_command_s": { "type": "number" },
             "run_duration_s": { "type": "number" },
+            "command_spacing_s": { "type": "number" },
+            "covered_s": { "type": "number" },
             "commands": { "$ref": "#/$defs/count" },
             "clock_uncertainty_s": { "type": "number" },
             "tail_s": { "type": "number" }
@@ -786,9 +788,9 @@
       }
     },
     "control_params": {
-      "description": "be-control: every command is the lab far target `target` (labelled drive_out), at hz for seconds; with step_cap, walking there from home by at most the cap per axis per command.",
+      "description": "be-control: every command is the lab far target `target` (labelled drive_out), at hz for seconds; with step_cap, walking there from `start` (the declared start pose, every axis; null for each axis's home) by at most the cap per axis per command.",
       "type": "object",
-      "required": ["target", "seconds", "hz", "step_cap"],
+      "required": ["target", "seconds", "hz", "step_cap", "start"],
       "additionalProperties": false,
       "properties": {
         "target": { "type": "string", "pattern": "^[A-Za-z0-9_.-]{1,64}$" },
@@ -802,6 +804,17 @@
               "minProperties": 1,
               "propertyNames": { "$ref": "#/$defs/axis_key" },
               "additionalProperties": { "type": "number", "exclusiveMinimum": 0 }
+            }
+          ]
+        },
+        "start": {
+          "oneOf": [
+            { "type": "null" },
+            {
+              "type": "object",
+              "minProperties": 1,
+              "propertyNames": { "$ref": "#/$defs/axis_key" },
+              "additionalProperties": { "type": "number" }
             }
           ]
         }

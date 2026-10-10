@@ -139,6 +139,8 @@
     "first_command_s": 0.0,
     "last_command_s": 7.98,
     "run_duration_s": 7.98,
+    "command_spacing_s": 0.020000000000000018,
+    "covered_s": 8.0,
     "commands": 400,
     "clock_uncertainty_s": 0.005,
     "tail_s": 1.0
@@ -526,6 +528,22 @@
       {
         "code": "LIVENESS_LOW",
         "detail": "0 of 8 waypoint visits came within 0.0200 m; at least 90.0% must"
+      },
+      {
+        "code": "WAYPOINT_NEVER_REACHED",
+        "detail": "none of the 2 visit(s) to waypoint 'a' came within 0.0200 m"
+      },
+      {
+        "code": "WAYPOINT_NEVER_REACHED",
+        "detail": "none of the 2 visit(s) to waypoint 'b' came within 0.0200 m"
+      },
+      {
+        "code": "WAYPOINT_NEVER_REACHED",
+        "detail": "none of the 2 visit(s) to waypoint 'c' came within 0.0200 m"
+      },
+      {
+        "code": "WAYPOINT_NEVER_REACHED",
+        "detail": "none of the 2 visit(s) to waypoint 'd' came within 0.0200 m"
       }
     ],
     "points_measured": [
@@ -586,7 +604,7 @@
     {
       "alg": "Ed25519",
       "kid": "JJdiTUjDxOdGPEUxDG7iofB6pXrYDw9x3jGC_j6-djc",
-      "sig": "wGZA4QG1GA2rVn2kMqSbiJ6pEosk5sHMalm301poIzTaFTcr2TjpaNVr-xxfdL8knaG9oaQoXH0M6-fcKBHUBg"
+      "sig": "Hmf1wx2vITI35Ot7YmGFQSieXQjP1gPBTa_OxSH27ceWyMogzgDqIuUowcLnrxc5VNt7WaJezibKAtKLQz2uCQ"
     }
   ]
 }

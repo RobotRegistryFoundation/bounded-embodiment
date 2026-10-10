@@ -6,7 +6,8 @@
     :func:`bounded_embodiment.generator.stream_sha256`.
 ``be-control/1``
     :func:`bounded_embodiment.generator.control_stream` over one lab far target (an EV-03 control
-    or rehearsal). Params: ``{"target", "seconds", "hz", "step_cap"}``.
+    or rehearsal). Params: ``{"target", "seconds", "hz", "step_cap", "start"}`` (``start`` is
+    the declared start pose, every axis, or null for each axis's home).
 ``be-waypoints/1``
     The EV-10 tour (:func:`waypoint_stream`): the waypoints of ``ev10-waypoints.json`` in declared
     order, ``cycles`` times round, each held for ``commands_per_visit`` commands at ``hz``; every
@@ -66,7 +67,7 @@ MAX_STREAM_COMMANDS = 2_000_000
 """A declared stream longer than this is refused (STREAM_TOO_LARGE) rather than regenerated: a
 600 s EV-03 run at 50 Hz with 500 Hz bursts is under 100,000 commands."""
 
-_CONTROL_KEYS = ("target", "seconds", "hz", "step_cap")
+_CONTROL_KEYS = ("target", "seconds", "hz", "step_cap", "start")
 _WAYPOINT_KEYS = ("cycles", "commands_per_visit", "hz")
 _POSITION_KINDS = ("joint_position", "cartesian_position")
 
@@ -83,6 +84,18 @@ def _number(name: str, value: object, upper: float) -> float:
         raise ValueError(f"{name} {value!r} is too large") from None
     if not math.isfinite(x) or not 0.0 < x <= upper:
         raise ValueError(f"{name} must be above 0 and at most {upper:g}, not {value!r}")
+    return x
+
+
+def _finite(name: str, value: object) -> float:
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise ValueError(f"{name} must be a number, not {value!r}")  # noqa: TRY004
+    try:
+        x = float(value) + 0.0
+    except OverflowError:
+        raise ValueError(f"{name} {value!r} is too large") from None
+    if not math.isfinite(x):
+        raise ValueError(f"{name} must be finite, not {value!r}")
     return x
 
 
@@ -124,11 +137,17 @@ def normalize(name: str, params: object) -> dict:
             if not isinstance(cap, Mapping) or not cap:
                 raise ValueError(f"step_cap must be null or a mapping of axis to cap, not {cap!r}")
             cap = {str(k): _number(f"step_cap[{k!r}]", v, math.inf) for k, v in cap.items()}
+        start = p["start"]
+        if start is not None:
+            if not isinstance(start, Mapping) or not start:
+                raise ValueError(f"start must be null or a mapping of axis to value, not {start!r}")
+            start = {str(k): _finite(f"start[{k!r}]", v) for k, v in start.items()}
         return {
             "target": target,
             "seconds": _number("seconds", p["seconds"], generator.MAX_SECONDS),
             "hz": _number("hz", p["hz"], generator.MAX_HZ),
             "step_cap": cap,
+            "start": start,
         }
     if name == WAYPOINTS:
         p = _exact_keys(params, _WAYPOINT_KEYS, WAYPOINTS)
@@ -157,7 +176,9 @@ def control_stream(space: CommandSpace, params: Mapping) -> Iterator[Proposal]:
     """The be-control stream for (normalized) params: ``generator.control_stream`` over the far
     target ``params["target"]`` (KeyError if the command space has no such far target)."""
     p = normalize(CONTROL, params)
-    return generator.control_stream(space, p["target"], p["seconds"], p["hz"], p["step_cap"])
+    return generator.control_stream(
+        space, p["target"], p["seconds"], p["hz"], p["step_cap"], p["start"]
+    )
 
 
 def waypoint_stream(

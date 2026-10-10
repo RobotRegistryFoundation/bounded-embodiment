@@ -149,15 +149,28 @@ def parse_step_cap(text: str | None, space) -> dict[str, float] | None:
     return dict.fromkeys(space.keys, value)
 
 
+def control_start(space, kit_config: Mapping) -> dict[str, float] | None:
+    """The declared pose a control run starts from: the kit config's start pose on every axis it
+    names, home on the rest; None when the kit config declares no start pose (home throughout).
+    It goes into the generator params, so CI regenerates the same stream."""
+    pose = kit_config.get("start_pose_deg")
+    if not isinstance(pose, dict):
+        return None
+    named = start_command(space, pose)
+    return {a.key: named.get(a.key, a.home) for a in space.axes}
+
+
 def check_control_start(space, caps: dict[str, float] | None, adapter_config: Mapping,
-                        present: Mapping[str, float] | None) -> None:
+                        present: Mapping[str, float] | None,
+                        start: Mapping[str, float] | None = None) -> None:
     """Refuse a control stream whose first command would jump the machine.
 
-    Core's ``control_stream`` walks from the command space's ``home`` toward the target, at most
-    ``step_cap`` per command. That is only a step limit if the machine starts at home: the SO-101
-    example's home is all zeros while its start pose is not, so the first command would swing the
-    wrist about 74 deg. So with a step cap, every capped axis must be within one cap of home now.
-    With ``--step-cap none`` every command is the far target itself, and the per-command limit is
+    Core's ``control_stream`` walks from the declared ``start`` (each axis's home when None)
+    toward the target, at most ``step_cap`` per command. That is only a step limit if the
+    machine really is at that start: the SO-101 example's home is all zeros while its start pose
+    is not, so walking from home would swing the wrist about 74 deg on the first command. So
+    with a step cap, every capped axis must be within one cap of the declared start now. With
+    ``--step-cap none`` every command is the far target itself, and the per-command limit is
     the adapter's own (LeRobot's max_relative_target, relative to the present position: hw.py's
     control case), which the adapter's config must declare."""
     if caps is None:
@@ -168,12 +181,14 @@ def check_control_start(space, caps: dict[str, float] | None, adapter_config: Ma
         return
     if present is None:
         raise RunError("a step-capped control stream needs the robot's state to check where it starts")
-    far = {k: present[k] - space.axis(k).home for k in caps
-           if k in present and abs(present[k] - space.axis(k).home) > caps[k] + 1e-9}
+    origin = {a.key: a.home for a in space.axes} if start is None else dict(start)
+    far = {k: present[k] - origin[k] for k in caps
+           if k in present and abs(present[k] - origin[k]) > caps[k] + 1e-9}
     if far:
-        raise RunError(f"the control stream walks from the command space's home, and these axes are "
-                       f"more than one step from it now: {far}. Use --step-cap none with "
-                       "--max-relative-target, or move the machine to home first.")
+        where = "home" if start is None else "the declared start pose"
+        raise RunError(f"the control stream walks from {where}, and these axes are more than one "
+                       f"step from it now: {far}. Run goto-start first, or use --step-cap none with "
+                       "--max-relative-target.")
 
 
 def build_proposals(mode: str, space, args, kit_config: dict, limits: Limits,
@@ -184,10 +199,12 @@ def build_proposals(mode: str, space, args, kit_config: dict, limits: Limits,
             raise RunError("control needs --target: one of the command space's far_targets ids")
         seconds = args.seconds or limits.control_seconds
         caps = parse_step_cap(args.step_cap, space)
-        check_control_start(space, caps, adapter_config or {}, present)
-        stream = control_stream(space, args.target, seconds, limits.control_hz, caps)
+        start = control_start(space, kit_config) if caps is not None else None
+        check_control_start(space, caps, adapter_config or {}, present, start)
+        stream = control_stream(space, args.target, seconds, limits.control_hz, caps, start)
         block = {"name": "control", "target_id": args.target, "seconds": float(seconds),
-                 "hz": limits.control_hz, "step_cap": caps, "command_space_digest": space.digest}
+                 "hz": limits.control_hz, "step_cap": caps, "start": start,
+                 "command_space_digest": space.digest}
         return stream, block, float(seconds)
     if mode == "shakedown":
         pose = kit_config.get("start_pose_deg")

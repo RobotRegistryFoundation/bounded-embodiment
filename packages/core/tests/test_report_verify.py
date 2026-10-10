@@ -191,7 +191,11 @@ def test_a_report_with_any_member_mangled_never_raises(tmp_path: Path) -> None:
         except ValueError:  # 2**60 cannot be signed (RFC 8785); write it as it is
             (run / "report.json").write_text(json.dumps(doc), encoding="utf-8")
         result = rep.verify(run, keyring())
-        assert not result.consistent or doc == base, (i, path)
+        # A mangled report may stay consistent only if the change touched an optional DECLARED
+        # member (dropping software[].role, say): nothing derived from the data may change.
+        if result.consistent:
+            for key in (*rep.DERIVED_BLOCKS, "envelope", "generator"):
+                assert doc.get(key) == base.get(key), (i, path)
         _check_result(result)
 
 

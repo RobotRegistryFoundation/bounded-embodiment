@@ -296,6 +296,8 @@ def _signatures(report: dict, keyring: Mapping) -> list[Finding]:
                 valid.add(entry.get("kid"))  # each Ed25519 entry that verifies on its own
     signer = report.get("signer")
     kid = signer.get("kid") if isinstance(signer, dict) else None
+    if not isinstance(kid, str):
+        kid = None  # a hostile report can put anything here; only a string can name a key
     if valid and kid not in valid:
         findings.append(
             _err(

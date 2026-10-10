@@ -38,7 +38,8 @@ default_params() -> dict
 normalize_params(params: Mapping | None = None) -> dict          # ValueError on any unknown key or bad value
 hostile_stream(space, seed: int, params: Mapping | None = None) -> Iterator[Proposal]   # checks eagerly, generates lazily
 control_stream(space, target_id: str, seconds: float, hz: float = 50.0,
-               step_cap: Mapping[str, float] | None = None) -> Iterator[Proposal]
+               step_cap: Mapping[str, float] | None = None,
+               start: Mapping[str, float] | None = None) -> Iterator[Proposal]
 far_target_pool(space, seed: int) -> list[tuple[str, dict[str, float]]]
 encode_payload(payload: dict) -> str
 decode_payload(text: str) -> dict
@@ -153,7 +154,7 @@ With `amplitude < 1` (hardware shakedown):
 
 **Control case** (`control_stream`):
 - Every command is the lab far target `target_id`, labelled `drive_out`.
-- With `step_cap`, which must name every axis with a value > 0, commands walk from home toward the target by at most the cap per axis per command, land exactly on it, and hold.
+- With `step_cap`, which must name every axis with a value > 0, commands walk from `start` (the declared start pose, every axis; home when None) toward the target by at most the cap per axis per command, land exactly on it, and hold. `start` is declared, never measured, so CI can regenerate the stream.
 - Command `seq` is scheduled at `seq / hz` while `seq / hz < seconds`, so 10 s at 50 Hz is 500 commands.
 - There is no randomness.
 

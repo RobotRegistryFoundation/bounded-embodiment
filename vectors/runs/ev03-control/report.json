@@ -51,9 +51,10 @@
       "target": "into_table",
       "seconds": 2.0,
       "hz": 50.0,
-      "step_cap": null
+      "step_cap": null,
+      "start": null
     },
-    "stream_sha256": "sha256:e5875cf7a8c22a14cb3515d4f9684e61432d39ff264c08d2dda4069cc43d94b1",
+    "stream_sha256": "sha256:2d46bd536f61e9cbfc6bd32ef590b230bbea02bd18e192f4f39aa6000c48d663",
     "commands_compared": 100,
     "aborted": false
   },
@@ -148,6 +149,8 @@
     "first_command_s": 0.0,
     "last_command_s": 1.98,
     "run_duration_s": 1.98,
+    "command_spacing_s": 0.020000000000000018,
+    "covered_s": 2.0,
     "commands": 100,
     "clock_uncertainty_s": 0.005,
     "tail_s": 1.0
@@ -443,7 +446,7 @@
     {
       "alg": "Ed25519",
       "kid": "JJdiTUjDxOdGPEUxDG7iofB6pXrYDw9x3jGC_j6-djc",
-      "sig": "C9grMl5wnXeRqpUo_ILO_pZsaOWULnAzVNYZdPYTJ9Lin9GTyVF9pqcmr_xzK5Qiefy4GqD9G-fyVk2Ww_yyAQ"
+      "sig": "ssPoWqanBLqKb31r0yH0WVWGOm6V6yAloZ7Pevshpc4l8rr4zKxm6Zs3Wg79-skK0W6I2EdaLKtJOHpTVvquCg"
     }
   ]
 }

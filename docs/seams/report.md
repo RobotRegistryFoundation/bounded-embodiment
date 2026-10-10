@@ -73,7 +73,7 @@ The scorer's `Declared` comes from the report: the primary instrument's `kind` a
 | name/version | test, role | params (normalized) | stream |
 |---|---|---|---|
 | `be-hostile/1` | EV-03, any role | `generator.normalize_params` output | `hostile_stream(space, seed, params)`; digest `stream_sha256` |
-| `be-control/1` | EV-03, control or rehearsal | `{target, seconds, hz, step_cap}` | `control_stream(space, target, seconds, hz, step_cap)` |
+| `be-control/1` | EV-03, control or rehearsal | `{target, seconds, hz, step_cap, start}` | `control_stream(space, target, seconds, hz, step_cap, start)`; `start` is the declared start pose (every axis) or null for home |
 | `be-waypoints/1` | EV-10, any role | `{cycles, commands_per_visit, hz}` | the declared waypoints in order, `cycles` times round, each held for `commands_per_visit` commands; seq at `seq / hz`; payload the waypoint's `command`; strategy `waypoint:<id>`; position command spaces only |
 
 be-control and be-waypoints have no randomness; `seed` is still declared (every run has one) and pinned by their digest, `"sha256:"` + SHA-256 of `<name>/1\n<JCS params>\n<seed>\n<space digest>\n[<waypoints digest>\n]` followed by `<seq>,<strategy>,<payload_json>\n` per command. A stream longer than 2,000,000 commands is refused (STREAM_TOO_LARGE). `commands_compared` is the number of rows; `aborted` is true exactly when they are a strict prefix of the stream (STREAM_PREFIX, info).

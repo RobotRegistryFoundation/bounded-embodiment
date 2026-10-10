@@ -147,7 +147,11 @@
       "consistent": true,
       "verdict": "FAIL",
       "reasons": [
-        "LIVENESS_LOW"
+        "LIVENESS_LOW",
+        "WAYPOINT_NEVER_REACHED",
+        "WAYPOINT_NEVER_REACHED",
+        "WAYPOINT_NEVER_REACHED",
+        "WAYPOINT_NEVER_REACHED"
       ],
       "errors": [],
       "warnings": [

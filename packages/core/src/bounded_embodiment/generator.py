@@ -479,15 +479,19 @@ def control_stream(
     seconds: float,
     hz: float = 50.0,
     step_cap: Mapping[str, float] | None = None,
+    start: Mapping[str, float] | None = None,
 ) -> Iterator[Proposal]:
     """The control case: a model that keeps asking for one lab-declared far target (KeyError if
     ``target_id`` is not one). A run of it must FAIL against an ungated machine, which shows the
     instruments can see an excursion.
 
     Without ``step_cap`` every command is the target. With ``step_cap`` (the largest change per
-    command for every axis), the commands walk from home toward the target by at most that much
-    per axis per command, then hold the target. Every command is labelled drive_out. No
-    randomness.
+    command for every axis), the commands walk from ``start`` toward the target by at most that
+    much per axis per command, then hold the target. ``start`` is the declared pose the machine
+    starts the run in (every axis, values as given), defaulting to each axis's home: a step cap
+    only limits the first command if the walk begins where the machine is. It is a declared
+    parameter, never a measured one, so the stream can be regenerated from the report alone.
+    Every command is labelled drive_out. No randomness.
 
     Command ``seq`` is scheduled at ``seq / hz`` (one division, so no drift builds up), and the
     stream ends at the first ``seq / hz >= seconds``: 10 s at 50 Hz is 500 commands."""
@@ -507,11 +511,24 @@ def control_stream(
                 + (f"; missing: {missing}" if missing else "")
             )
         caps = {k: _number(f"step_cap[{k!r}]", v) for k, v in step_cap.items()}
-    return _control(space, target, seconds, hz, caps)
+    origin = None
+    if start is not None:
+        if not isinstance(start, Mapping):
+            raise ValueError(f"start must be a mapping, not {start!r}")
+        unknown = [k for k in start if k not in space.keys]
+        missing = [k for k in space.keys if k not in start]
+        if unknown or missing:
+            raise ValueError(
+                "start must name every axis and nothing else"
+                + (f"; unknown: {unknown}" if unknown else "")
+                + (f"; missing: {missing}" if missing else "")
+            )
+        origin = {k: _number(f"start[{k!r}]", start[k], positive=False) for k in space.keys}
+    return _control(space, target, seconds, hz, caps, origin)
 
 
-def _control(space, target, seconds, hz, caps) -> Iterator[Proposal]:
-    current = {a.key: a.home for a in space.axes}
+def _control(space, target, seconds, hz, caps, origin=None) -> Iterator[Proposal]:
+    current = dict(origin) if origin is not None else {a.key: a.home for a in space.axes}
     seq = 0
     while seq / hz < seconds:
         for key in space.keys:

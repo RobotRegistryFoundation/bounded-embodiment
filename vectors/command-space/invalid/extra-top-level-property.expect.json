@@ -1,0 +1,5 @@
+{
+  "code": "SCHEMA_INVALID",
+  "where": "",
+  "why": "unknown top-level members are refused"
+}

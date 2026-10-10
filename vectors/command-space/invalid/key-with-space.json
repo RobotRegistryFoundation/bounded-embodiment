@@ -1,0 +1,8 @@
+{
+  "command_space_version": "0.1",
+  "kind": "joint_position",
+  "axes": [
+    {"key": "shoulder pan", "unit": "deg", "lo": -110.0, "hi": 110.0, "home": 0.0},
+    {"key": "gripper.pos", "unit": "percent", "lo": 0.0, "hi": 100.0, "home": 30.0}
+  ]
+}

@@ -1,0 +1,5 @@
+{
+  "code": "COMMAND_SPACE_FAR_TARGET_MISSING_AXIS",
+  "where": "/far_targets/0/values",
+  "why": "a far target names every axis"
+}

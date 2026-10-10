@@ -1,0 +1,5 @@
+{
+  "code": "SCHEMA_INVALID",
+  "where": "/far_targets/0",
+  "why": "a far target has id, values and description only"
+}

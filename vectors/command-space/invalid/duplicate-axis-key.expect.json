@@ -1,0 +1,5 @@
+{
+  "code": "COMMAND_SPACE_DUPLICATE_AXIS",
+  "where": "/axes/1/key",
+  "why": "two axes with the same key"
+}

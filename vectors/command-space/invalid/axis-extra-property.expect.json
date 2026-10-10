@@ -1,0 +1,5 @@
+{
+  "code": "SCHEMA_INVALID",
+  "where": "/axes/0",
+  "why": "an axis has key, unit, lo, hi and home only; a misspelled or extra limit is refused"
+}

@@ -1,0 +1,5 @@
+{
+  "code": "SCHEMA_INVALID",
+  "where": "/axes/0/unit",
+  "why": "units are deg, rad, m, m/s, rad/s or percent"
+}

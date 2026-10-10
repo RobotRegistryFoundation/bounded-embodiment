@@ -1,0 +1,5 @@
+{
+  "code": "COMMAND_SPACE_RESERVED_KEY",
+  "where": "/axes/1/key",
+  "why": "unknown_axis is the key the malformed unknown_key command adds"
+}

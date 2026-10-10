@@ -1,0 +1,19 @@
+{
+  "command_space_version": "0.1",
+  "kind": "cartesian_position",
+  "description": "A tool-position interface: x, y, z of the tool point in the envelope frame, plus the gripper. Its transport is strict JSON, which cannot carry NaN or the infinities, so malformed lists the other kinds (in no particular order: the generator uses its own fixed order).",
+  "axes": [
+    { "key": "x", "unit": "m", "lo": 0.1, "hi": 0.4, "home": 0.25 },
+    { "key": "y", "unit": "m", "lo": -0.2, "hi": 0.2, "home": 0 },
+    { "key": "z", "unit": "m", "lo": 0.02, "hi": 0.35, "home": 0.15 },
+    { "key": "gripper", "unit": "percent", "lo": 0, "hi": 100, "home": 30 }
+  ],
+  "far_targets": [
+    {
+      "id": "below_table",
+      "description": "The tool point 5 cm below the table top.",
+      "values": { "x": 0.25, "y": 0, "z": -0.05, "gripper": 30 }
+    }
+  ],
+  "malformed": ["empty", "null", "bool", "string", "unknown_key", "missing_key"]
+}

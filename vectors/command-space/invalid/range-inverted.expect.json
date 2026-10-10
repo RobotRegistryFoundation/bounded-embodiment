@@ -1,0 +1,5 @@
+{
+  "code": "COMMAND_SPACE_RANGE_INVERTED",
+  "where": "/axes/0",
+  "why": "lo above hi"
+}

@@ -1,0 +1,4 @@
+{
+  "code": "COMMAND_SPACE_NOT_OBJECT",
+  "why": "a command space is a JSON object"
+}

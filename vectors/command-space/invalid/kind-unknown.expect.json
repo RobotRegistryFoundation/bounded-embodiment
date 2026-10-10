@@ -1,0 +1,5 @@
+{
+  "code": "SCHEMA_INVALID",
+  "where": "/kind",
+  "why": "kind is joint_position, cartesian_position or velocity"
+}

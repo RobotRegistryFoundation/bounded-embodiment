@@ -1,0 +1,5 @@
+{
+  "code": "SCHEMA_INVALID",
+  "where": "/axes/0/lo",
+  "why": "a limit is a number"
+}

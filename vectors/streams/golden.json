@@ -1,0 +1,280 @@
+{
+  "generator": "be-hostile/1",
+  "description": "Golden hostile command streams. Each case names a command space (a path from the repository root, with its digest), a seed and the full normalized generator parameters. stream_sha256 is bounded_embodiment.generator.stream_sha256 of them, commands and per_strategy count the stream's commands, and head, where given, lists the first lines of the text the digest is taken over (the four header lines, then the first two command lines; each ends with a line feed in the hashed text). Every value must come out the same on every platform and on every supported Python. A deliberate change to the stream bumps GENERATOR_VERSION and replaces this file.",
+  "cases": [
+    {
+      "id": "so101-seed7",
+      "space": "examples/command-spaces/so101.command-space.json",
+      "space_digest": "sha256:37fe3e0873ba607c6feec3c7fadd6cf70846f432ad54b1251df94e4e0dd9a086",
+      "seed": 7,
+      "params": {
+        "seconds": 600.0,
+        "base_hz": 50.0,
+        "burst_hz": 500.0,
+        "segment_s": [
+          0.5,
+          4.0
+        ],
+        "amplitude": 1.0,
+        "center": null,
+        "strategies": [
+          "uniform",
+          "boundary",
+          "max",
+          "sign_flip",
+          "drive_out",
+          "fast",
+          "partial",
+          "malformed"
+        ]
+      },
+      "commands": 50664,
+      "per_strategy": {
+        "uniform": 4995,
+        "boundary": 3610,
+        "max": 3268,
+        "sign_flip": 4015,
+        "drive_out": 3405,
+        "fast": 22959,
+        "partial": 3082,
+        "malformed": 5330
+      },
+      "stream_sha256": "sha256:5f164e45e6cafefeb60c95e782b4eb0e8727c6a45a41f9defd85ce2d58844087"
+    },
+    {
+      "id": "so101-seed11",
+      "space": "examples/command-spaces/so101.command-space.json",
+      "space_digest": "sha256:37fe3e0873ba607c6feec3c7fadd6cf70846f432ad54b1251df94e4e0dd9a086",
+      "seed": 11,
+      "params": {
+        "seconds": 600.0,
+        "base_hz": 50.0,
+        "burst_hz": 500.0,
+        "segment_s": [
+          0.5,
+          4.0
+        ],
+        "amplitude": 1.0,
+        "center": null,
+        "strategies": [
+          "uniform",
+          "boundary",
+          "max",
+          "sign_flip",
+          "drive_out",
+          "fast",
+          "partial",
+          "malformed"
+        ]
+      },
+      "commands": 58125,
+      "per_strategy": {
+        "uniform": 3062,
+        "boundary": 4897,
+        "max": 2870,
+        "sign_flip": 4165,
+        "drive_out": 3874,
+        "fast": 31249,
+        "partial": 3499,
+        "malformed": 4509
+      },
+      "stream_sha256": "sha256:76a79320ee235a29b4048f0b97ab934c7615eda15b7e9e4c3003269b40bc40d5"
+    },
+    {
+      "id": "so101-seed23",
+      "space": "examples/command-spaces/so101.command-space.json",
+      "space_digest": "sha256:37fe3e0873ba607c6feec3c7fadd6cf70846f432ad54b1251df94e4e0dd9a086",
+      "seed": 23,
+      "params": {
+        "seconds": 600.0,
+        "base_hz": 50.0,
+        "burst_hz": 500.0,
+        "segment_s": [
+          0.5,
+          4.0
+        ],
+        "amplitude": 1.0,
+        "center": null,
+        "strategies": [
+          "uniform",
+          "boundary",
+          "max",
+          "sign_flip",
+          "drive_out",
+          "fast",
+          "partial",
+          "malformed"
+        ]
+      },
+      "commands": 69585,
+      "per_strategy": {
+        "uniform": 3703,
+        "boundary": 3265,
+        "max": 3029,
+        "sign_flip": 3642,
+        "drive_out": 3985,
+        "fast": 43983,
+        "partial": 3719,
+        "malformed": 4259
+      },
+      "stream_sha256": "sha256:8fd442ee530e052fdfeaf877f6b5dd7b36f7f941a5a5696baa83ebd30146a8bb"
+    },
+    {
+      "id": "rover-seed7",
+      "space": "examples/command-spaces/rover.command-space.json",
+      "space_digest": "sha256:9245c041ebe1095b3692b682bf38db30bdb4e09deab62e281e593a40e1ef640f",
+      "seed": 7,
+      "params": {
+        "seconds": 600.0,
+        "base_hz": 50.0,
+        "burst_hz": 500.0,
+        "segment_s": [
+          0.5,
+          4.0
+        ],
+        "amplitude": 1.0,
+        "center": null,
+        "strategies": [
+          "uniform",
+          "boundary",
+          "max",
+          "sign_flip",
+          "drive_out",
+          "fast",
+          "partial",
+          "malformed"
+        ]
+      },
+      "commands": 85665,
+      "per_strategy": {
+        "uniform": 3817,
+        "boundary": 2993,
+        "max": 4269,
+        "sign_flip": 3168,
+        "drive_out": 3310,
+        "fast": 61849,
+        "partial": 4230,
+        "malformed": 2029
+      },
+      "stream_sha256": "sha256:d30e9ce30c64de590d4f93f75f822098e601fa44231333376695354a01e83011"
+    },
+    {
+      "id": "so101-seed7-5s",
+      "space": "examples/command-spaces/so101.command-space.json",
+      "space_digest": "sha256:37fe3e0873ba607c6feec3c7fadd6cf70846f432ad54b1251df94e4e0dd9a086",
+      "seed": 7,
+      "params": {
+        "seconds": 5.0,
+        "base_hz": 50.0,
+        "burst_hz": 500.0,
+        "segment_s": [
+          0.5,
+          4.0
+        ],
+        "amplitude": 1.0,
+        "center": null,
+        "strategies": [
+          "uniform",
+          "boundary",
+          "max",
+          "sign_flip",
+          "drive_out",
+          "fast",
+          "partial",
+          "malformed"
+        ]
+      },
+      "commands": 929,
+      "per_strategy": {
+        "uniform": 99,
+        "fast": 754,
+        "partial": 76
+      },
+      "stream_sha256": "sha256:42563a644986b2e6137ca93f4b98bbdbf6b0a6a52183905c6157c9f55d4849f9",
+      "head": [
+        "be-hostile/1",
+        "{\"amplitude\":1,\"base_hz\":50,\"burst_hz\":500,\"center\":null,\"seconds\":5,\"segment_s\":[0.5,4],\"strategies\":[\"uniform\",\"boundary\",\"max\",\"sign_flip\",\"drive_out\",\"fast\",\"partial\",\"malformed\"]}",
+        "7",
+        "sha256:37fe3e0873ba607c6feec3c7fadd6cf70846f432ad54b1251df94e4e0dd9a086",
+        "0,fast,{\"elbow_flex.pos\":-95.0,\"gripper.pos\":30.0,\"shoulder_lift.pos\":-50.0,\"shoulder_pan.pos\":0.0,\"wrist_flex.pos\":-60.0,\"wrist_roll.pos\":0.0}",
+        "1,fast,{\"elbow_flex.pos\":-95.0,\"gripper.pos\":30.0,\"shoulder_lift.pos\":-50.0,\"shoulder_pan.pos\":0.0,\"wrist_flex.pos\":-60.0,\"wrist_roll.pos\":0.0}"
+      ]
+    },
+    {
+      "id": "so101-seed7-shakedown-60s",
+      "space": "examples/command-spaces/so101.command-space.json",
+      "space_digest": "sha256:37fe3e0873ba607c6feec3c7fadd6cf70846f432ad54b1251df94e4e0dd9a086",
+      "seed": 7,
+      "params": {
+        "seconds": 60.0,
+        "base_hz": 50.0,
+        "burst_hz": 500.0,
+        "segment_s": [
+          0.5,
+          4.0
+        ],
+        "amplitude": 0.15,
+        "center": {
+          "shoulder_pan.pos": 0.0,
+          "shoulder_lift.pos": -40.0,
+          "elbow_flex.pos": 25.0,
+          "wrist_flex.pos": 75.0,
+          "wrist_roll.pos": 0.0
+        },
+        "strategies": [
+          "uniform",
+          "boundary",
+          "sign_flip",
+          "partial"
+        ]
+      },
+      "commands": 3000,
+      "per_strategy": {
+        "uniform": 890,
+        "boundary": 815,
+        "sign_flip": 606,
+        "partial": 689
+      },
+      "stream_sha256": "sha256:a8c5f70692a3bf74e72026c83acb36778435d61458cff59c6a4c9f9d3a9ae397"
+    },
+    {
+      "id": "cartesian-arm-seed7-120s",
+      "space": "vectors/command-space/valid/cartesian-arm.json",
+      "space_digest": "sha256:5f162b9a6f2a265553a66c656858bbad297935ecaac5037bfcee03d47ae45b37",
+      "seed": 7,
+      "params": {
+        "seconds": 120.0,
+        "base_hz": 50.0,
+        "burst_hz": 500.0,
+        "segment_s": [
+          0.5,
+          4.0
+        ],
+        "amplitude": 1.0,
+        "center": null,
+        "strategies": [
+          "uniform",
+          "boundary",
+          "max",
+          "sign_flip",
+          "drive_out",
+          "fast",
+          "partial",
+          "malformed"
+        ]
+      },
+      "commands": 14350,
+      "per_strategy": {
+        "uniform": 538,
+        "boundary": 736,
+        "max": 799,
+        "sign_flip": 322,
+        "drive_out": 1322,
+        "fast": 9277,
+        "partial": 978,
+        "malformed": 378
+      },
+      "stream_sha256": "sha256:afe89e82b596fcd8b34797d543e0fa3f08a81d787f8c7a82d0306ab7c3ec48d9"
+    }
+  ]
+}

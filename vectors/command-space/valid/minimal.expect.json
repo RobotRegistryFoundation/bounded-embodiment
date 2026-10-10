@@ -1,0 +1,10 @@
+{
+  "digest": "sha256:b80ad9bf8fbb88e8489012d952c02b013e1c2b422ae125fbbb0c53420f074138",
+  "kind": "velocity",
+  "axes": [
+    ["throttle", "percent", 0.0, 100.0, 0.0]
+  ],
+  "far_targets": [],
+  "malformed": ["nan", "inf", "neg_inf", "string", "null", "bool", "missing_key", "unknown_key", "empty"],
+  "why": "one axis, integer spellings, home at a limit, malformed left out (every kind)"
+}

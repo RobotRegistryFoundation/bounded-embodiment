@@ -1,0 +1,5 @@
+{
+  "code": "COMMAND_SPACE_DUPLICATE_FAR_TARGET",
+  "where": "/far_targets/1/id",
+  "why": "two far targets with one id"
+}

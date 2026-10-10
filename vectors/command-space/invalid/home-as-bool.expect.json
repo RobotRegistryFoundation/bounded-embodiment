@@ -1,0 +1,5 @@
+{
+  "code": "SCHEMA_INVALID",
+  "where": "/axes/0/home",
+  "why": "true is not a number, although Python's bool is an int"
+}

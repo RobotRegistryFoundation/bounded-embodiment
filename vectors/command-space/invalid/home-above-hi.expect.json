@@ -1,0 +1,5 @@
+{
+  "code": "COMMAND_SPACE_HOME_OUTSIDE",
+  "where": "/axes/1/home",
+  "why": "home above hi"
+}

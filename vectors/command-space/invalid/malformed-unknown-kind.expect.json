@@ -1,0 +1,5 @@
+{
+  "code": "SCHEMA_INVALID",
+  "where": "/malformed/1",
+  "why": "overflow is not a malformed kind"
+}

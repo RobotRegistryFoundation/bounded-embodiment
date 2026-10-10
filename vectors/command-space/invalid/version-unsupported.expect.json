@@ -1,0 +1,5 @@
+{
+  "code": "COMMAND_SPACE_VERSION_UNSUPPORTED",
+  "where": "/command_space_version",
+  "why": "0.2 does not exist"
+}

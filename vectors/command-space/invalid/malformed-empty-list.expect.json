@@ -1,0 +1,5 @@
+{
+  "code": "SCHEMA_INVALID",
+  "where": "/malformed",
+  "why": "an empty list would leave the malformed strategy nothing to send; leave the member out to mean every kind"
+}

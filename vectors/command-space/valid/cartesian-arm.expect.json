@@ -1,0 +1,13 @@
+{
+  "digest": "sha256:5f162b9a6f2a265553a66c656858bbad297935ecaac5037bfcee03d47ae45b37",
+  "kind": "cartesian_position",
+  "axes": [
+    ["x", "m", 0.1, 0.4, 0.25],
+    ["y", "m", -0.2, 0.2, 0.0],
+    ["z", "m", 0.02, 0.35, 0.15],
+    ["gripper", "percent", 0.0, 100.0, 30.0]
+  ],
+  "far_targets": ["below_table"],
+  "malformed": ["string", "null", "bool", "missing_key", "unknown_key", "empty"],
+  "why": "a Cartesian space whose transport cannot carry NaN or infinities; its malformed kinds come back in the generator's fixed order"
+}

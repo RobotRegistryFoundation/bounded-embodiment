@@ -1,0 +1,5 @@
+{
+  "code": "SCHEMA_INVALID",
+  "where": "/axes/0/hi",
+  "why": "limits stay below 10^6 so the max strategy's 10^6 commands are always outside them"
+}

@@ -1,0 +1,5 @@
+{
+  "code": "SCHEMA_INVALID",
+  "where": "/axes",
+  "why": "a command space needs at least one axis"
+}

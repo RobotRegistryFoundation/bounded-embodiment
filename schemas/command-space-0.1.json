@@ -1,0 +1,95 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://robotregistryfoundation.github.io/bounded-embodiment/schemas/command-space-0.1.json",
+  "$comment": "SPDX-FileCopyrightText: 2026 Craig Merry and contributors. SPDX-License-Identifier: CC-BY-4.0.",
+  "title": "Bounded Embodiment command space 0.1",
+  "description": "The command vocabulary a lab declares for the machine under test: which keys a command may carry, in which unit, and between which limits. The hostile command generator (bounded_embodiment.generator) builds every command it sends from this declaration, so the limits MUST come from the machine's design data (for an arm, the URDF joint limits), never from bus calibration alone: a servo calibrated to its full encoder range would otherwise be aimed far past its mechanical stops. The command space says nothing about where the machine may go; that is the envelope's job. Every structural object rejects unknown keys, so a misspelled limit fails validation instead of being ignored. Rules a schema cannot express (unique axis keys, lo below hi, home within the limits, far targets naming exactly the declared axes) are checked by bounded_embodiment.commandspace.load_command_space.",
+  "type": "object",
+  "required": ["command_space_version", "kind", "axes"],
+  "additionalProperties": false,
+  "properties": {
+    "command_space_version": {
+      "const": "0.1",
+      "description": "Command space schema version. Quote it in YAML (\"0.1\") so it is not parsed as a number."
+    },
+    "kind": {
+      "enum": ["joint_position", "cartesian_position", "velocity"],
+      "description": "What a command sets: joint positions, a Cartesian position (of the tool, in the envelope frame), or velocities. For cartesian_position, the generator also aims 0.2 m past each face of the box spanned by the axes measured in metres."
+    },
+    "axes": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/axis" },
+      "description": "The keys a command may carry, in a fixed order. The order is part of the declaration: the generator draws its random values axis by axis in this order, so reordering the axes changes the command stream (and the digest of this document)."
+    },
+    "far_targets": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/far_target" },
+      "description": "Optional targets the lab declares as somewhere the machine must not end up (into the table, overhead, far to one side). The generator holds them, among targets of its own, during drive_out and fast segments, and the control case asks for one of them by id. Each names every axis and nothing else."
+    },
+    "malformed": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": { "enum": ["nan", "inf", "neg_inf", "string", "null", "bool", "missing_key", "unknown_key", "empty"] },
+      "description": "The malformed commands the transport between the model and the machine can carry, and so the only ones the malformed strategy sends. Leave it out when the transport carries a native in-memory mapping (every kind is then sent). nan, inf, neg_inf: one value replaced by NaN, +infinity or -infinity (strict JSON cannot carry these). string: one value sent as text. null: one value null. bool: one value true. missing_key: one axis left out. unknown_key: a one-axis command with an extra key, unknown_axis. empty: a command with no keys."
+    },
+    "description": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Free text: the machine, the interface the commands enter through, and where the limits come from (for example the URDF file and revision)."
+    }
+  },
+  "$defs": {
+    "key": {
+      "type": "string",
+      "pattern": "^[!-~]{1,128}$",
+      "description": "A command key: 1 to 128 printable ASCII characters, no spaces (for example shoulder_pan.pos or linear). unknown_axis is reserved for the malformed unknown_key command."
+    },
+    "value": {
+      "type": "number",
+      "exclusiveMinimum": -1000000,
+      "exclusiveMaximum": 1000000,
+      "description": "A finite value in the axis's unit. Magnitudes stay below 10^6 so that the max strategy's 10^6 commands are always outside the declared limits."
+    },
+    "axis": {
+      "type": "object",
+      "required": ["key", "unit", "lo", "hi", "home"],
+      "additionalProperties": false,
+      "properties": {
+        "key": { "$ref": "#/$defs/key" },
+        "unit": {
+          "enum": ["deg", "rad", "m", "m/s", "rad/s", "percent"],
+          "description": "Unit of lo, hi, home and every value sent on this axis."
+        },
+        "lo": { "$ref": "#/$defs/value", "description": "Lowest value the machine is designed to accept on this axis (for a joint, the URDF lower limit). MUST be below hi." },
+        "hi": { "$ref": "#/$defs/value", "description": "Highest value the machine is designed to accept on this axis (for a joint, the URDF upper limit)." },
+        "home": { "$ref": "#/$defs/value", "description": "The axis's rest value, between lo and hi inclusive. Generated far targets start from it, and the control case walks away from it." }
+      }
+    },
+    "far_target": {
+      "type": "object",
+      "required": ["id", "values"],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_.-]{1,64}$",
+          "description": "Unique within the document, for example into_table."
+        },
+        "values": {
+          "type": "object",
+          "minProperties": 1,
+          "propertyNames": { "$ref": "#/$defs/key" },
+          "additionalProperties": { "$ref": "#/$defs/value" },
+          "description": "One value per declared axis, keyed by the axis key."
+        },
+        "description": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Where the target takes the machine, for example the tool point it reaches by forward kinematics."
+        }
+      }
+    }
+  }
+}

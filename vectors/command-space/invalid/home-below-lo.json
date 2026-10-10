@@ -1,0 +1,11 @@
+{
+  "command_space_version": "0.1",
+  "kind": "joint_position",
+  "axes": [
+    {"key": "shoulder_pan.pos", "unit": "deg", "lo": -110.0, "hi": 110.0, "home": -120.0},
+    {"key": "gripper.pos", "unit": "percent", "lo": 0.0, "hi": 100.0, "home": 30.0}
+  ],
+  "far_targets": [
+    {"id": "far_left", "values": {"shoulder_pan.pos": -105.0, "gripper.pos": 30.0}}
+  ]
+}

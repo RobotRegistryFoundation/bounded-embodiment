@@ -1,0 +1,5 @@
+{
+  "code": "COMMAND_SPACE_FAR_TARGET_UNKNOWN_AXIS",
+  "where": "/far_targets/0/values",
+  "why": "a far target sets a key that is not a declared axis"
+}

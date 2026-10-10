@@ -1,0 +1,5 @@
+{
+  "code": "SCHEMA_INVALID",
+  "where": "/malformed",
+  "why": "a malformed kind listed twice"
+}

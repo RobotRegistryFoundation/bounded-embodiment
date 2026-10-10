@@ -1,0 +1,5 @@
+{
+  "code": "SCHEMA_INVALID",
+  "where": "/far_targets/0/id",
+  "why": "far target ids are letters, digits, _ . and -"
+}

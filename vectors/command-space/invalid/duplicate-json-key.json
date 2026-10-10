@@ -1,0 +1,7 @@
+{
+  "command_space_version": "0.1",
+  "kind": "joint_position",
+  "axes": [
+    {"key": "shoulder_pan.pos", "unit": "deg", "lo": -110.0, "hi": 110.0, "hi": 1100.0, "home": 0.0}
+  ]
+}

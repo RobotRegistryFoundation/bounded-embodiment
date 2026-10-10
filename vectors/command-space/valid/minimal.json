@@ -1,0 +1,7 @@
+{
+  "command_space_version": "0.1",
+  "kind": "velocity",
+  "axes": [
+    { "key": "throttle", "unit": "percent", "lo": 0, "hi": 100, "home": 0 }
+  ]
+}

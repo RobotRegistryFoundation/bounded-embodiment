@@ -1,0 +1,16 @@
+{
+  "command_space_version": "0.1",
+  "kind": "velocity",
+  "description": "Differential-drive rover (the ev03-harness rover), commanded with {linear, angular} velocities. The limits are the drive's top speeds: 1.5 m/s forward and back, 1.5 rad/s either way; the harness's normalised actuator unit 1.0 is these limits. malformed is left out: the commands are in-memory Python mappings, which carry every malformed kind.",
+  "axes": [
+    { "key": "linear", "unit": "m/s", "lo": -1.5, "hi": 1.5, "home": 0.0 },
+    { "key": "angular", "unit": "rad/s", "lo": -1.5, "hi": 1.5, "home": 0.0 }
+  ],
+  "far_targets": [
+    {
+      "id": "straight_out",
+      "description": "Straight ahead at top speed, no steering: the harness rover fuzzer's drive_out, which tries to leave the workspace.",
+      "values": { "linear": 1.5, "angular": 0.0 }
+    }
+  ]
+}

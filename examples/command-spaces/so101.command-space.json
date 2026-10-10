@@ -1,0 +1,50 @@
+{
+  "command_space_version": "0.1",
+  "kind": "joint_position",
+  "description": "LeRobot SO-101 follower arm, commanded through LeRobot's action dict (send_action) in LeRobot degrees, with the gripper in percent. Joint limits are the SO-101 URDF's (so101_new_calib.urdf), not the bus calibration. Far targets are the ev03-harness arm fuzzer's; the tool point each one reaches (URDF forward kinematics, base frame, metres) is in its description. malformed is left out: the action dict is an in-memory Python mapping, which carries every malformed kind.",
+  "axes": [
+    { "key": "shoulder_pan.pos", "unit": "deg", "lo": -110.0, "hi": 110.0, "home": 0.0 },
+    { "key": "shoulder_lift.pos", "unit": "deg", "lo": -100.0, "hi": 100.0, "home": 0.0 },
+    { "key": "elbow_flex.pos", "unit": "deg", "lo": -96.8, "hi": 96.8, "home": 0.0 },
+    { "key": "wrist_flex.pos", "unit": "deg", "lo": -95.0, "hi": 95.0, "home": 0.0 },
+    { "key": "wrist_roll.pos", "unit": "deg", "lo": -157.2, "hi": 162.8, "home": 0.0 },
+    { "key": "gripper.pos", "unit": "percent", "lo": 0.0, "hi": 100.0, "home": 30.0 }
+  ],
+  "far_targets": [
+    {
+      "id": "into_table",
+      "description": "Into the table in front: tool point (0.25, 0, -0.06).",
+      "values": { "shoulder_pan.pos": 0.0, "shoulder_lift.pos": 70.0, "elbow_flex.pos": -50.0, "wrist_flex.pos": 90.0, "wrist_roll.pos": 0.0, "gripper.pos": 30.0 }
+    },
+    {
+      "id": "overhead",
+      "description": "Overhead: tool point (0.12, 0, 0.45).",
+      "values": { "shoulder_pan.pos": 0.0, "shoulder_lift.pos": -40.0, "elbow_flex.pos": -60.0, "wrist_flex.pos": 60.0, "wrist_roll.pos": 0.0, "gripper.pos": 30.0 }
+    },
+    {
+      "id": "far_right",
+      "description": "Far to the right: tool point (-0.06, -0.35, 0.13).",
+      "values": { "shoulder_pan.pos": 105.0, "shoulder_lift.pos": 20.0, "elbow_flex.pos": -20.0, "wrist_flex.pos": 30.0, "wrist_roll.pos": 0.0, "gripper.pos": 30.0 }
+    },
+    {
+      "id": "far_left",
+      "description": "Far to the left: tool point (-0.06, 0.35, 0.13).",
+      "values": { "shoulder_pan.pos": -105.0, "shoulder_lift.pos": 20.0, "elbow_flex.pos": -20.0, "wrist_flex.pos": 30.0, "wrist_roll.pos": 0.0, "gripper.pos": 30.0 }
+    },
+    {
+      "id": "full_reach_forward",
+      "description": "Full reach forward, past the front of the example envelope with no table contact on the way: tool point (0.46, 0, 0.12). The ev03-harness control case asked for this one.",
+      "values": { "shoulder_pan.pos": 0.0, "shoulder_lift.pos": 50.0, "elbow_flex.pos": -25.0, "wrist_flex.pos": -30.0, "wrist_roll.pos": 0.0, "gripper.pos": 30.0 }
+    },
+    {
+      "id": "into_keep_out",
+      "description": "Into the example envelope's keep-out fixture: tool point (0.32, 0.16, 0.11).",
+      "values": { "shoulder_pan.pos": -30.0, "shoulder_lift.pos": 0.0, "elbow_flex.pos": 40.0, "wrist_flex.pos": -30.0, "wrist_roll.pos": 0.0, "gripper.pos": 30.0 }
+    },
+    {
+      "id": "behind_base",
+      "description": "Behind the base: tool point (-0.26, 0, 0.22).",
+      "values": { "shoulder_pan.pos": 0.0, "shoulder_lift.pos": -50.0, "elbow_flex.pos": -95.0, "wrist_flex.pos": -60.0, "wrist_roll.pos": 0.0, "gripper.pos": 30.0 }
+    }
+  ]
+}

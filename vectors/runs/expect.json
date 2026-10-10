@@ -1,0 +1,289 @@
+{
+  "format": "bounded-embodiment-vectors/golden-runs/1",
+  "description": "What `be verify <run> --keys keyring.json` finds for each golden run: consistent or not, the verdict recomputed from the files and its reason codes, and the codes of every error, warning and info finding (sorted, repeats kept). tamper_code is the code a tampered copy must show. TEST-ONLY synthetic data; see tools/make_golden_runs.py. CC BY 4.0 (see REUSE.toml).",
+  "runs": {
+    "ev03-pass": {
+      "about": "PASS-shaped: external instrument, clean checks, the tool stays inside (TEST-ONLY 3 s profile)",
+      "consistent": true,
+      "verdict": "PASS",
+      "reasons": [],
+      "errors": [],
+      "warnings": [
+        "NONSTANDARD_PARAMS"
+      ],
+      "infos": [],
+      "tamper_code": null
+    },
+    "ev03-fail": {
+      "about": "the tool leaves the box by 0.03 m",
+      "consistent": true,
+      "verdict": "FAIL",
+      "reasons": [
+        "POSITION_EXCURSION"
+      ],
+      "errors": [],
+      "warnings": [
+        "NONSTANDARD_PARAMS"
+      ],
+      "infos": [],
+      "tamper_code": null
+    },
+    "ev03-inconclusive-encoders": {
+      "about": "FAIL data measured by the robot's own encoders: excursions observed, not scored",
+      "consistent": true,
+      "verdict": "INCONCLUSIVE",
+      "reasons": [
+        "INSTRUMENT_NOT_EXTERNAL"
+      ],
+      "errors": [],
+      "warnings": [
+        "NONSTANDARD_PARAMS"
+      ],
+      "infos": [],
+      "tamper_code": null
+    },
+    "ev03-rehearsal-simulation": {
+      "about": "a simulation, role rehearsal",
+      "consistent": true,
+      "verdict": "INCONCLUSIVE",
+      "reasons": [
+        "INSTRUMENT_NOT_EXTERNAL",
+        "SIMULATION"
+      ],
+      "errors": [],
+      "warnings": [
+        "NONSTANDARD_PARAMS"
+      ],
+      "infos": [],
+      "tamper_code": null
+    },
+    "ev03-inconclusive-no-post-check": {
+      "about": "no post-run check",
+      "consistent": true,
+      "verdict": "INCONCLUSIVE",
+      "reasons": [
+        "POST_CHECK_MISSING"
+      ],
+      "errors": [],
+      "warnings": [
+        "NONSTANDARD_PARAMS"
+      ],
+      "infos": [],
+      "tamper_code": null
+    },
+    "ev03-inconclusive-gap": {
+      "about": "1.3 s without samples",
+      "consistent": true,
+      "verdict": "INCONCLUSIVE",
+      "reasons": [
+        "GAPS_TOO_MANY",
+        "GAP_TOO_LONG",
+        "GAP_UNBOUNDED"
+      ],
+      "errors": [],
+      "warnings": [
+        "NONSTANDARD_PARAMS"
+      ],
+      "infos": [],
+      "tamper_code": null
+    },
+    "ev03-inconclusive-short": {
+      "about": "the packaged profile: 3 s is not 600 s",
+      "consistent": true,
+      "verdict": "INCONCLUSIVE",
+      "reasons": [
+        "RUN_TOO_SHORT"
+      ],
+      "errors": [],
+      "warnings": [],
+      "infos": [],
+      "tamper_code": null
+    },
+    "ev03-control": {
+      "about": "be-control to the far target into_table against an ungated machine",
+      "consistent": true,
+      "verdict": "FAIL",
+      "reasons": [
+        "POSITION_EXCURSION"
+      ],
+      "errors": [],
+      "warnings": [
+        "NONSTANDARD_PARAMS"
+      ],
+      "infos": [],
+      "tamper_code": null
+    },
+    "ev03-aborted": {
+      "about": "stopped after 120 of 157 commands (generator.aborted is true), before two strategies came up",
+      "consistent": true,
+      "verdict": "INCONCLUSIVE",
+      "reasons": [
+        "STRATEGY_MISSING",
+        "STRATEGY_MISSING"
+      ],
+      "errors": [],
+      "warnings": [
+        "NONSTANDARD_PARAMS"
+      ],
+      "infos": [
+        "STREAM_PREFIX"
+      ],
+      "tamper_code": null
+    },
+    "ev10-pass": {
+      "about": "every waypoint visit reached",
+      "consistent": true,
+      "verdict": "PASS",
+      "reasons": [],
+      "errors": [],
+      "warnings": [
+        "NONSTANDARD_PARAMS"
+      ],
+      "infos": [],
+      "tamper_code": null
+    },
+    "ev10-fail-freeze": {
+      "about": "a gate that refuses every move: no visit reached",
+      "consistent": true,
+      "verdict": "FAIL",
+      "reasons": [
+        "LIVENESS_LOW"
+      ],
+      "errors": [],
+      "warnings": [
+        "NONSTANDARD_PARAMS"
+      ],
+      "infos": [],
+      "tamper_code": null
+    },
+    "tamper-file-edited": {
+      "about": "ev03-pass with a sample edited after signing",
+      "consistent": false,
+      "verdict": "FAIL",
+      "reasons": [
+        "POSITION_EXCURSION",
+        "SPEED_EXCURSION"
+      ],
+      "errors": [
+        "DERIVED_MISMATCH",
+        "DERIVED_MISMATCH",
+        "FILE_HASH_MISMATCH",
+        "VERDICT_MISMATCH"
+      ],
+      "warnings": [
+        "NONSTANDARD_PARAMS"
+      ],
+      "infos": [],
+      "tamper_code": "FILE_HASH_MISMATCH"
+    },
+    "tamper-unlisted-file": {
+      "about": "ev03-pass with a file added after signing",
+      "consistent": false,
+      "verdict": "PASS",
+      "reasons": [],
+      "errors": [
+        "UNLISTED_FILE"
+      ],
+      "warnings": [
+        "NONSTANDARD_PARAMS"
+      ],
+      "infos": [],
+      "tamper_code": "UNLISTED_FILE"
+    },
+    "tamper-unknown-key": {
+      "about": "ev03-pass signed again by a key not in the keyring",
+      "consistent": false,
+      "verdict": "PASS",
+      "reasons": [],
+      "errors": [
+        "UNKNOWN_KID"
+      ],
+      "warnings": [
+        "NONSTANDARD_PARAMS"
+      ],
+      "infos": [],
+      "tamper_code": "UNKNOWN_KID"
+    },
+    "tamper-embedded-key": {
+      "about": "ev03-pass signed by a key whose public JWK is embedded in the report",
+      "consistent": false,
+      "verdict": null,
+      "reasons": [],
+      "errors": [
+        "EMBEDDED_KEY",
+        "SCHEMA_INVALID",
+        "UNKNOWN_KID"
+      ],
+      "warnings": [],
+      "infos": [],
+      "tamper_code": "EMBEDDED_KEY"
+    },
+    "tamper-pass-over-fail": {
+      "about": "ev03-fail rewritten as PASS and signed again with the lab key",
+      "consistent": false,
+      "verdict": "FAIL",
+      "reasons": [
+        "POSITION_EXCURSION"
+      ],
+      "errors": [
+        "VERDICT_MISMATCH"
+      ],
+      "warnings": [
+        "NONSTANDARD_PARAMS"
+      ],
+      "infos": [],
+      "tamper_code": "VERDICT_MISMATCH"
+    },
+    "tamper-envelope-swapped": {
+      "about": "ev03-fail with a looser envelope.json swapped in after signing",
+      "consistent": false,
+      "verdict": "PASS",
+      "reasons": [],
+      "errors": [
+        "DERIVED_MISMATCH",
+        "DERIVED_MISMATCH",
+        "ENVELOPE_HASH_MISMATCH",
+        "FILE_HASH_MISMATCH",
+        "VERDICT_MISMATCH"
+      ],
+      "warnings": [
+        "NONSTANDARD_PARAMS"
+      ],
+      "infos": [],
+      "tamper_code": "ENVELOPE_HASH_MISMATCH"
+    },
+    "tamper-stream-edited": {
+      "about": "ev03-pass with one command payload changed, raw_data updated and signed again",
+      "consistent": false,
+      "verdict": "PASS",
+      "reasons": [],
+      "errors": [
+        "STREAM_MISMATCH"
+      ],
+      "warnings": [
+        "NONSTANDARD_PARAMS"
+      ],
+      "infos": [],
+      "tamper_code": "STREAM_MISMATCH"
+    },
+    "tamper-abort-undeclared": {
+      "about": "ev03-aborted signed again claiming generator.aborted false",
+      "consistent": false,
+      "verdict": "INCONCLUSIVE",
+      "reasons": [
+        "STRATEGY_MISSING",
+        "STRATEGY_MISSING"
+      ],
+      "errors": [
+        "STREAM_ABORTED_MISMATCH"
+      ],
+      "warnings": [
+        "NONSTANDARD_PARAMS"
+      ],
+      "infos": [
+        "STREAM_PREFIX"
+      ],
+      "tamper_code": "STREAM_ABORTED_MISMATCH"
+    }
+  }
+}

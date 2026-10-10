@@ -72,6 +72,7 @@ __all__ = [
     "SHAKEDOWN_STRATEGIES",
     "STRATEGIES",
     "Proposal",
+    "compare_rows",
     "compare_to_commands",
     "control_stream",
     "decode_payload",
@@ -597,6 +598,12 @@ def compare_to_commands(
     except ValueError as e:
         return [Finding("STREAM_PARAMS_INVALID", "error", _clip(str(e)))]
     return _compare_rows(stream, rows)
+
+
+def compare_rows(stream: Iterable[Proposal], rows: Iterable[tuple]) -> list[Finding]:
+    """:func:`compare_to_commands` for any stream of proposals, a control run's
+    (:func:`control_stream`) for instance: the same rules, codes and ``where``."""
+    return _compare_rows(iter(stream), rows)
 
 
 def _compare_rows(stream: Iterator[Proposal], rows: Iterable[tuple]) -> list[Finding]:

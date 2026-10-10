@@ -1,0 +1,31 @@
+{
+  "format": "bounded-embodiment-vectors/golden-run-keys/1",
+  "description": "TEST-ONLY Ed25519 keys for the golden runs in vectors/runs, derived from fixed strings by tools/make_golden_runs.py. They are public test material: never register them for a lab or sign anything real with them. 'lab' is in keyring.json; 'outsider' and 'embedded' are not.",
+  "lab": {
+    "kid": "JJdiTUjDxOdGPEUxDG7iofB6pXrYDw9x3jGC_j6-djc",
+    "private_jwk": {
+      "kty": "OKP",
+      "crv": "Ed25519",
+      "x": "vdvQpqfwQ1oYEAey3RDlSHhxQgFH3Zda8G_X3veP-1k",
+      "d": "CHdX1X-VW8z5a7ZmvVFhCUYYyn3J9Obe4p_zcT0Ye_c"
+    }
+  },
+  "outsider": {
+    "kid": "mZt9tWrIsOLxhaRAOxp7GHzzjsf6b1UUDQTuoSuGFqY",
+    "private_jwk": {
+      "kty": "OKP",
+      "crv": "Ed25519",
+      "x": "ccOWyP5lA-TUi8u3mPqie0diycbpIbIGWV51Q_n7Ajw",
+      "d": "O3jmznqo4HLWw_pVvcITjjw9M7d5piQ7-V4PtqXioCg"
+    }
+  },
+  "embedded": {
+    "kid": "JW0tRGCSSCSP8zXEyqn7XmciLCkePJUIVzVvkZkmZBE",
+    "private_jwk": {
+      "kty": "OKP",
+      "crv": "Ed25519",
+      "x": "7DWtzPIeRP1xnfpnaRLL3IHgyHmlnW3RFXIfKEag6lU",
+      "d": "SxLSFqQiaAdLgzk96l_XsmFxBcRk-L6hiZp7yzqeX4w"
+    }
+  }
+}

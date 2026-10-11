@@ -31,5 +31,5 @@ packages = ["src/bounded_embodiment_kit"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 markers = [
-  "slow: renders synthetic recordings and fits them end to end (a few minutes in all); -m 'not slow' leaves them out",
+  "slow: renders synthetic recordings and fits them end to end, and runs the B6 matrix's 10-minute cases (about ten minutes on two cores); -m 'not slow' leaves them out",
 ]

@@ -47,6 +47,8 @@ jobs:
         run: python tools/fetch_robot_assets.py examples/robots/so101
       - run: lint-imports
       - run: python -m pytest -q packages/kit/tests -m "not slow"
-      - name: slow tests (markerless fit end to end)
+      - name: reference gates (examples, never published; never imported by core or the kit)
+        run: python -m pytest -q examples/reference-gates/tests
+      - name: slow tests (markerless fit end to end; the B6 matrix's 10-minute runs)
         if: github.event_name == 'push'
         run: python -m pytest -q packages/kit/tests -m slow

@@ -1,0 +1,27 @@
+[build-system]
+requires = ["hatchling>=1.25"]
+build-backend = "hatchling.build"
+
+[project]
+name = "bounded-embodiment-reference-gates"
+version = "0.1.0.dev0"
+description = "Reference gates for the Bounded Embodiment tests. Examples, not products: installable from the repo, never published."
+readme = "README.md"
+requires-python = ">=3.10"
+license = "Apache-2.0"
+authors = [{ name = "Craig Merry" }]
+dependencies = ["bounded-embodiment~=0.1.0.dev0", "bounded-embodiment-kit~=0.1.0.dev0", "numpy>=1.24"]
+# PyPI refuses any upload that carries this classifier.
+classifiers = ["Private :: Do Not Upload"]
+
+[project.optional-dependencies]
+test = ["pytest>=8"]
+
+[project.urls]
+Repository = "https://github.com/RobotRegistryFoundation/bounded-embodiment"
+
+[tool.hatch.build.targets.wheel]
+packages = ["reference_gates"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

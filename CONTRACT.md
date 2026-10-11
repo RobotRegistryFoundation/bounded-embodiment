@@ -195,10 +195,13 @@ These documents are part of the contract. Each was built to the plan, then integ
 | Test report 0.1, `be verify`, the `be-control/1` and `be-waypoints/1` streams | `docs/seams/report.md` | built, golden runs in `vectors/runs/` |
 | Markerless instrument `be fit` (OAK-D depth fit of the URDF) | `docs/seams/markerless.md` | built, validated on synthetic data only |
 | Adapters, runner and watchdog | `docs/seams/runner.md` | **draft: line-by-line human review before any hardware use** |
+| `be report` and `be submit`: packaging, timebase, scrubbing, signing, submission checks | `docs/seams/submission.md` | built, exercised in simulation |
+| Reference gates (examples, never imported by core or the kit) and the B6 simulation matrix | `examples/reference-gates/README.md`, `packages/kit/tests/test_b6_matrix.py` | built |
 
 Decisions taken while integrating:
 - **Control runs** walk from a declared start pose (`be-control/1` param `start`, every axis, or null for home), so a step cap limits the first command too.
 - **Run length** is judged on the time the commands cover (span plus the median command spacing), within 50 ms: a 600 s stream at 50 Hz ends at 599.98 s.
 - **EV-10** fails a waypoint that no visit reached (`WAYPOINT_NEVER_REACHED`), besides the overall reach fraction.
+- **End of a run.** The runner stays open 1.5 s after the last command, watchdog on and nothing sent, so the instrument covers the scoring window to its end.
 - **Instrument timebase.** An instrument's own output (for `be fit`, `samples.csv` stamped with the recording's `t_mono_s`) is converted to the run timebase by `be report`, using the run's `clock` block; the scorer only ever sees the run timebase.
 - **Frames for the SO-101.** The envelope frame is the URDF's `base_link`. The tape measurements in a recording are taken from the point on the table under the shoulder_pan axis (frame F); `be fit register` converts: `base_link = F + (pan_x, pan_y, z_min)`, read from the URDF (38.8 mm, 0, −2.4 mm for `so101_new_calib.urdf`).

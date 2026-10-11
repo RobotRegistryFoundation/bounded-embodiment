@@ -189,7 +189,7 @@ One timebase: `time.monotonic()` at run start = 0. The runner never writes a sco
 |---|---|---|
 | `margin_m` | full 0.05, shakedown 0.03, control 0.015, goto-start 0.015 (keep-outs) | position tripwires, both kinds |
 | `tool_speed_factor` | 3.0 | instrument tool speed tripwire, x the envelope limit |
-| `speed_window_s` | 0.2 | speed spans 0.75w..w (joint speed: >= 0.5w) |
+| `speed_window_s` | 0.2 | speed spans 0.5w..w, as the scorer (joint speed: >= 0.5w) |
 | `feed_silent_s` | 0.5 | no datagram at all |
 | `tool_unseen_s` / `tool_unseen_no_fk_s` | 1.0 / 0.2 | no valid tool sample |
 | `state_stale_s` | 0.25 | newest robot state too old (FK tripwire) |

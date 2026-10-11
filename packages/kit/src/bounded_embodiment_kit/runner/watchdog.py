@@ -182,14 +182,15 @@ def _dist(a: Sequence[float], b: Sequence[float]) -> float:
 
 def window_speed(samples: Sequence[tuple[float, tuple]], window_s: float) -> float | None:
     """Speed (m/s) of the newest sample against the earliest one within ``window_s`` of it, only
-    over a span of at least 0.75 * window_s (the scorer's rule); None if there is no such span."""
+    over a span of at least 0.5 * window_s (the scorer's rule, ev03-tool-point/1: any instrument
+    faster than 5 Hz yields such a span); None if there is no such span."""
     if len(samples) < 2:
         return None
     t_n, p_n = samples[-1]
     for t_j, p_j in samples:
         if t_n - t_j <= window_s:
             span = t_n - t_j
-            if span >= 0.75 * window_s:
+            if span >= 0.5 * window_s:
                 return _dist(p_n, p_j) / span
             return None
     return None

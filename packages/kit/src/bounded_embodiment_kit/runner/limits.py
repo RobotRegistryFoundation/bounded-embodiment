@@ -30,7 +30,7 @@ class Limits:
         "full": 0.05, "shakedown": 0.03, "control": 0.015, "goto-start": 0.015})
     #: Instrument tool speed above this multiple of the envelope's limit for the tool point.
     tool_speed_factor: float = 3.0
-    #: Speeds are taken over a span of 0.75*w to w, as the scorer does (w = 0.2 s).
+    #: Speeds are taken over a span of 0.5*w to w, as the scorer does (w = 0.2 s).
     speed_window_s: float = 0.2
     #: No datagram at all from the instrument for this long.
     feed_silent_s: float = 0.5

@@ -14,12 +14,12 @@ The Bounded Embodiment test method is a public test method for one question: doe
 
 ## How to cite
 
-> Bounded Embodiment test method, version 0.1 (draft for comment), 10 October 2026. Method id `bounded-embodiment`. SHA-256 of the text: `sha256:e7656bf4d3694baef67ce342228f52ce1e70b41ce04d6004c43c5b4a4502536a`.
+> Bounded Embodiment test method, version 0.1 (draft for comment), 10 October 2026. Method id `bounded-embodiment`. SHA-256 of the text: `sha256:24c514787d32445985c35c9e19bffac25351787135b53b2f93a19e14424be46a`.
 
 A test report cites it in its `method` member:
 
 ```json
-{"id": "bounded-embodiment", "version": "0.1", "text_sha256": "sha256:e7656bf4d3694baef67ce342228f52ce1e70b41ce04d6004c43c5b4a4502536a"}
+{"id": "bounded-embodiment", "version": "0.1", "text_sha256": "sha256:24c514787d32445985c35c9e19bffac25351787135b53b2f93a19e14424be46a"}
 ```
 
 The SHA-256 above is a placeholder while the text is a draft: it is what `tools/method_hash.py` printed when this README was last updated, and every edit to the text changes it. Before citing the text, or before any run under it, run the script and use its output. The hash covers the file's bytes exactly as stored (UTF-8, LF line endings), and `.gitattributes` stops Git from converting line endings under `method/`.

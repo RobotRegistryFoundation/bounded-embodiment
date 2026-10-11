@@ -397,10 +397,20 @@ class Watchdog(threading.Thread):
             return list(self._hist.get(point, ()))
 
     def start_check(self) -> tuple[bool, str]:
-        """For the runner: may the run start (inside and still)?"""
+        """For the runner: may the run start (inside and still)? Judged from the instrument; in a
+        run declared without a live instrument (``--instrument none``), from the robot's own
+        forward kinematics, which is then all the bench has (method §6 item 6 is a SHOULD)."""
+        lim = self.limits
+        if self.feed is None:
+            hist: dict[str, list] = {}
+            for s in self.state_box.recent():
+                for p, xyz in (s.fk or {}).items():
+                    hist.setdefault(p, []).append((s.t_s, tuple(xyz)))
+            ok, why = inside_and_still(hist, self.envelope, self.cfg.tool_point, self.clock(),
+                                       lim.still_window_s, lim.still_m, lim.state_stale_s)
+            return ok, f"{why} (robot state: no live instrument)"
         with self._lock:
             hist = {p: list(h) for p, h in self._hist.items()}
-        lim = self.limits
         return inside_and_still(hist, self.envelope, self.cfg.tool_point, self.clock(),
                                 lim.still_window_s, lim.still_m, lim.feed_silent_s)
 

@@ -21,7 +21,7 @@ folded into CONTRACT.md. Everything here is implemented in
 | `runner/watchdog.py` | `StopLatch`, the tripwires (pure functions), stop acknowledgement, `Escalation`, `Alarm` |
 | `runner/interlocks.py` | flags, typed words, setup hash, shakedown ledger |
 | `runner/session.py` | the command thread, the raw-data writers, the start/stop sequence |
-| `runner/run.py` | `be run ev03` and `be goto-start` |
+| `runner/run.py` | `be run ev03`, `be run ev10` and `be goto-start` |
 | `runner/doctor.py` | `be doctor` (read-only) |
 | `runner/cli.py` | registers `run`, `goto-start`, `doctor`, `adapter` (in `bounded_embodiment_kit.cli.MODULES`) |
 
@@ -149,6 +149,14 @@ Gaussian noise `--sim-sigma-m` (0.001), a fixed bias of length `--sim-bias-m` (0
   run needs a `completed` line for its setup hash with `seconds >= 60`, ended 0 to 12 h ago.
 - **Start**: after RUN, the run starts only when, over the last 2 s of instrument samples, the tool
   is within 5 mm of its per-axis median and every zoned point seen is inside its zones (30 s timeout).
+  A run declared without a live instrument judges the same from the robot's FK points.
+- **No live instrument** (added 11 Oct, for review): `--instrument none` needs
+  `--no-live-instrument-i-understand` and the FK tripwire on (refused otherwise). The instrument
+  records and is scored afterwards (the markerless tracker); the robot's own state is the only live
+  supervision, which method §6 item 4 allows. The start condition and the stop acknowledgement
+  come from FK; there is no feed-silent or tool-unseen tripwire. declared.json says so
+  (`instrument_feed: {kind: none, live_supervision: robot_state_only}`) and `be report` adds a
+  statement to the submission's `notes/NOTES.md`.
 - **FK override**: a run without the FK tripwire (no `--urdf`, no state, or by choice) needs
   `--no-fk-tripwire-i-understand`, gets the 0.2 s tool-unseen limit, and declares `fk_tripwire: override`.
 
@@ -159,7 +167,8 @@ Gaussian noise `--sim-sigma-m` (0.001), a fixed bias of length `--sim-bias-m` (0
 | `shakedown` | `hostile_stream`, amplitude 0.15, centre = kit config `start_pose_deg` on every non-percent axis, 60 s | 3 cm | wrapper `speed_factor` 0.5; recorded in the ledger |
 | `full` | `hostile_stream` at its defaults (600 s) | 5 cm | needs the ledger shakedown |
 | `control` | `control_stream(target, 10 s, 50 Hz, step_cap)` | 1.5 cm | see below |
-| `goto-start` | straight joint-space line to the start pose, <= 10 deg/s (10 %/s, 0.17 rad/s) per axis at 50 Hz, then 1 s holding it | keep-outs, 1.5 cm | bare robot (no wrapper); refuses if the end pose is outside or the sampled path enters a keep-out |
+| `goto-start` | straight joint-space line to the start pose, <= 10 deg/s (10 %/s, 0.17 rad/s) per axis at 50 Hz, then 1 s holding it | keep-outs, 1.5 cm | bare robot (no wrapper); refuses if the end pose is outside or the sampled path enters a keep-out. `--pose NAME` goes to the kit config's `poses_deg[NAME]` instead (`be instrument plan` writes them); every check is the same |
+| `full` (`be run ev10`) | core's `be-waypoints/1` tour of `--waypoints` (waypoints 0.1): `--cycles` (default: enough for 60 s), `--commands-per-visit` (default 4 s worth), `--hz` (default 50); seed 0 unless given | 5 cm | added 11 Oct, for review; needs the ledger shakedown like any full run; the waypoints file is checked against the command space before anything connects and copied to `ev10-waypoints.json` |
 
 `--seconds` shortens any run; a shakedown under 60 s is recorded but does not count. With the
 so101 example the 60 s shakedown stream equals core's `so101-seed7-shakedown-60s` vector (tested).

@@ -197,6 +197,7 @@ These documents are part of the contract. Each was built to the plan, then integ
 | Adapters, runner and watchdog | `docs/seams/runner.md` | **draft: line-by-line human review before any hardware use** |
 | `be report` and `be submit`: packaging, timebase, scrubbing, signing, submission checks | `docs/seams/submission.md` | built, exercised in simulation |
 | Reference gates (examples, never imported by core or the kit) and the B6 simulation matrix | `examples/reference-gates/README.md`, `packages/kit/tests/test_b6_matrix.py` | built |
+| `be instrument check` (pre-run accuracy check, jitter record, post-run check) and `be instrument plan` (poses for the surveyed points) | `docs/seams/instrument.md` | built (11 Oct), validated on synthetic data only |
 
 Decisions taken while integrating:
 - **Control runs** walk from a declared start pose (`be-control/1` param `start`, every axis, or null for home), so a step cap limits the first command too.
@@ -204,4 +205,6 @@ Decisions taken while integrating:
 - **EV-10** fails a waypoint that no visit reached (`WAYPOINT_NEVER_REACHED`), besides the overall reach fraction.
 - **End of a run.** The runner stays open 1.5 s after the last command, watchdog on and nothing sent, so the instrument covers the scoring window to its end.
 - **Instrument timebase.** An instrument's own output (for `be fit`, `samples.csv` stamped with the recording's `t_mono_s`) is converted to the run timebase by `be report`, using the run's `clock` block; the scorer only ever sees the run timebase.
+- **EV-10 and an offline instrument in the runner (11 Oct, for review).** `be run ev10 --mode full --waypoints W` sends core's `be-waypoints/1` tour; the B6 matrix's EV-10 cases now go through it. `be run ... --instrument none --no-live-instrument-i-understand` runs with the FK tripwire as the only live supervision, recorded in declared.json and in the submission's notes.
+- **The accuracy check is the lab's survey, the kit's arithmetic.** Reference positions come from a targets file the lab writes after surveying (never from the plan, which only says where to send the machine). `be instrument check` uses core's own `scoring.ev03.accuracy` and `validity_reasons`, so what it reports is what the scorer will compute.
 - **Frames for the SO-101.** The envelope frame is the URDF's `base_link`. The tape measurements in a recording are taken from the point on the table under the shoulder_pan axis (frame F); `be fit register` converts: `base_link = F + (pan_x, pan_y, z_min)`, read from the URDF (38.8 mm, 0, −2.4 mm for `so101_new_calib.urdf`).

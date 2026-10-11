@@ -190,3 +190,73 @@ def test_a_step_capped_control_run_walks_from_the_declared_start_pose():
     with pytest.raises(runmod.RunError, match="declared start pose"):
         runmod.check_control_start(space, caps, {}, off, start)
     assert runmod.control_start(space, {}) is None
+
+
+# ----- no live instrument (an instrument that only records, scored offline by be fit) --------------------------
+def _shakedown_argv(tmp_path, *extra):
+    return ["run", "ev03", "--mode", "shakedown", "--adapter", "sim-so101",
+            "--envelope", str(fakes.envelope_path("so101")), "--command-space", str(fakes.SO101_SPACE),
+            "--kit-config", str(fakes.ENVELOPES / "so101.kit.json"), "--urdf", str(fakes.URDF),
+            "--out", str(tmp_path / "run"), "--seconds", "3", "--i-accept-the-risk",
+            "--hardware-stop", "none (simulation)", "--ledger", str(tmp_path / "ledger.jsonl"), *extra]
+
+
+def test_a_run_without_a_live_instrument_needs_the_declaration_and_the_fk_tripwire(tmp_path, monkeypatch):
+    _typing(monkeypatch, "RUN", "")
+    logs = []
+    args = _be(*_shakedown_argv(tmp_path, "--instrument", "none"))
+    assert runmod.execute_run(args, log=logs.append) == runmod.EXIT_REFUSED
+    assert "--no-live-instrument-i-understand" in logs[-1]
+    args = _be(*_shakedown_argv(tmp_path, "--instrument", "none", "--no-live-instrument-i-understand",
+                                "--no-fk-tripwire-i-understand"))
+    assert runmod.execute_run(args, log=logs.append) == runmod.EXIT_REFUSED
+    assert "FK tripwire must be on" in logs[-1]
+    args = _be(*_shakedown_argv(tmp_path, "--instrument", "sim", "--no-live-instrument-i-understand"))
+    assert runmod.execute_run(args, log=logs.append) == runmod.EXIT_REFUSED
+    assert "goes with --instrument none" in logs[-1]
+    assert not (tmp_path / "run").exists()
+
+
+def test_a_shakedown_supervised_by_the_robot_state_alone(tmp_path, monkeypatch):
+    """--instrument none: the start condition and the stop acknowledgement come from the robot's own
+    FK, and declared.json says the robot's state was the only live supervision."""
+    _typing(monkeypatch, "RUN", "")
+    logs = []
+    args = _be(*_shakedown_argv(tmp_path, "--instrument", "none", "--no-live-instrument-i-understand"))
+    code = runmod.execute_run(args, log=logs.append)
+    assert code == runmod.EXIT_OK, logs
+    declared = json.loads((tmp_path / "run" / "declared.json").read_text())
+    assert declared["instrument_feed"]["kind"] == "none"
+    assert declared["instrument_feed"]["live_supervision"] == "robot_state_only"
+    assert declared["safety"]["fk_tripwire"] == "on"
+    assert declared["end"]["stop"]["source"] == "fk (no instrument)"
+    assert any("Waiting for the robot's own state" in m for m in logs)
+    assert any("(robot state: no live instrument)" in m for m in logs)
+    assert any("NO live instrument" in m for m in logs)
+    assert not (tmp_path / "run" / "raw" / "samples.csv").exists()
+
+
+# ----- EV-10 --------------------------------------------------------------------------------------------------
+def test_ev10_takes_a_full_run_with_waypoints(tmp_path, monkeypatch):
+    _typing(monkeypatch, "RUN", "")
+    logs = []
+    base = ["run", "ev10", "--adapter", "sim-so101", "--envelope", str(fakes.envelope_path("so101")),
+            "--command-space", str(fakes.SO101_SPACE), "--kit-config", str(fakes.ENVELOPES / "so101.kit.json"),
+            "--urdf", str(fakes.URDF), "--instrument", "sim", "--out", str(tmp_path / "run"),
+            "--i-accept-the-risk", "--hardware-stop", "none (simulation)", "--ledger", str(tmp_path / "l.jsonl")]
+    assert runmod.execute_run(_be(*base, "--mode", "shakedown", "--waypoints", "w.json"),
+                              log=logs.append) == runmod.EXIT_REFUSED
+    assert "--mode full --waypoints FILE" in logs[-1]
+    assert runmod.execute_run(_be(*base, "--mode", "full"), log=logs.append) == runmod.EXIT_REFUSED
+    bad = tmp_path / "bad.json"
+    bad.write_text(json.dumps({"waypoints_version": "0.1", "waypoints": [
+        {"id": "a", "position_m": [0.2, 0, 0.2], "command": {"shoulder_pan.pos": 0}}]}))
+    assert runmod.execute_run(_be(*base, "--mode", "full", "--waypoints", str(bad)),
+                              log=logs.append) == runmod.EXIT_REFUSED
+    assert "no value for" in logs[-1]
+    assert runmod.execute_run(_be(*base, "--mode", "full", "--waypoints", str(bad), "--seconds", "5"),
+                              log=logs.append) == runmod.EXIT_REFUSED
+    assert "--seconds is for ev03" in logs[-1]
+    ev03 = ["run", "ev03", *base[2:], "--mode", "full", "--cycles", "2"]
+    assert runmod.execute_run(_be(*ev03), log=logs.append) == runmod.EXIT_REFUSED
+    assert "are for be run ev10" in logs[-1]

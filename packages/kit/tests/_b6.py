@@ -34,7 +34,7 @@ from bounded_embodiment import envelope as envelope_mod
 from bounded_embodiment import rawdata
 from bounded_embodiment.commandspace import load_command_space
 from bounded_embodiment.profiles import load_profile
-from bounded_embodiment.report import load_waypoints, waypoint_stream
+from bounded_embodiment.report import load_waypoints
 from bounded_embodiment.scoring import Declared, ScoringInput, score
 from bounded_embodiment.scoring import verdict as rules
 
@@ -146,13 +146,18 @@ CASES = _matrix()
 
 
 # ----- running a case ----------------------------------------------------------------------------
-def be_args(case: Case, run_dir: Path, ledger: Path) -> argparse.Namespace:
-    """The case as a ``be run ev03 --mode full`` command line, parsed by the kit's own parser."""
+def be_args(case: Case, run_dir: Path, ledger: Path, waypoints: Path | None = None) -> argparse.Namespace:
+    """The case as a ``be run ev03|ev10 --mode full`` command line, parsed by the kit's own parser."""
     from bounded_embodiment_kit import cli
 
     files = MACHINES[case.machine]
-    argv = ["run", "ev03", "--mode", "full", "--instrument", "sim", "--out", str(run_dir),
-            "--seed", str(case.seed), "--seconds", repr(case.seconds), "--i-accept-the-risk",
+    tour = []
+    if case.test == "ev10":
+        tour = ["--waypoints", str(waypoints), "--cycles", str(case.ev10_cycles()),
+                "--commands-per-visit", str(EV10_COMMANDS_PER_VISIT), "--hz", repr(EV10_HZ)]
+    argv = ["run", case.test, "--mode", "full", "--instrument", "sim", "--out", str(run_dir), *tour,
+            "--seed", str(case.seed), *(["--seconds", repr(case.seconds)] if case.test == "ev03" else []),
+            "--i-accept-the-risk",
             "--hardware-stop", "none (simulation)", "--ledger", str(ledger),
             "--envelope", str(files["envelope"]), "--command-space", str(files["command_space"]),
             "--sim-sigma-m", repr(FEED["sigma_m"]), "--sim-bias-m", repr(FEED["bias_m"]),
@@ -235,7 +240,7 @@ def clock_modules() -> tuple[list, list]:
 
 
 def run_case(case_id: str, out_dir: str | Path) -> dict:
-    """Run one case through ``be run ev03 --mode full`` on the virtual clock, score it, write
+    """Run one case through ``be run ev03|ev10 --mode full`` on the virtual clock, score it, write
     ``<out>/<case>/summary.json`` and return the summary. Its own process only (module docstring)."""
     from _virtual_time import VirtualClock, virtual_time
     from bounded_embodiment_kit.runner import run as runmod
@@ -244,25 +249,12 @@ def run_case(case_id: str, out_dir: str | Path) -> dict:
     root = Path(out_dir) / case.id
     root.mkdir(parents=True, exist_ok=True)
     run_dir, ledger = root / "run", root / "ledger.jsonl"
-    args = be_args(case, run_dir, ledger)
+    tour = None
+    if case.test == "ev10":   # the lab's waypoints file; `be run ev10` copies it into the run directory
+        tour = root / "ev10-waypoints.input.json"
+        tour.write_text(json.dumps(ev10_waypoints_doc(), indent=2) + "\n", encoding="utf-8")
+    args = be_args(case, run_dir, ledger, tour)
     plant_shakedown(args, ledger)
-    build_proposals = runmod.build_proposals
-    doc = None
-    if case.test == "ev10":
-        # `be run` has no EV-10 mode (the runner's v0.1 scope is EV-03), so the full run's hostile
-        # stream is swapped for core's be-waypoints/1 tour. Everything else is the runner's own.
-        doc = ev10_waypoints_doc()
-        waypoints = load_waypoints(doc)
-        params = {"cycles": case.ev10_cycles(), "commands_per_visit": EV10_COMMANDS_PER_VISIT,
-                  "hz": EV10_HZ}
-        seconds = params["cycles"] * len(EV10_TOUR) * EV10_COMMANDS_PER_VISIT / EV10_HZ
-
-        def build_proposals(mode, space, args, kit_config, limits, adapter_config=None,
-                            present=None):
-            block = {"name": "be-waypoints", "version": "1", "seed": args.seed, "params": params,
-                     "waypoints_digest": waypoints.digest, "command_space_digest": space.digest}
-            return waypoint_stream(space, waypoints, params), block, seconds
-
     logs: list[str] = []
 
     def prompt(question: str) -> str:  # RUN at the start; Enter at the OFF question (torque stays on)
@@ -271,17 +263,9 @@ def run_case(case_id: str, out_dir: str | Path) -> dict:
     modules, joins = clock_modules()
     clock = VirtualClock()
     t0, cpu0 = time.time(), time.process_time()
-    original = runmod.build_proposals
-    runmod.build_proposals = build_proposals
-    try:
-        with virtual_time(clock, modules, joins):
-            code = runmod.execute_run(args, prompt=prompt, log=logs.append)
-    finally:
-        runmod.build_proposals = original
+    with virtual_time(clock, modules, joins):
+        code = runmod.execute_run(args, prompt=prompt, log=logs.append)
     cpu1 = time.process_time()
-    if doc is not None:
-        (run_dir / "ev10-waypoints.json").write_text(json.dumps(doc, indent=2) + "\n",
-                                                     encoding="utf-8")
     declared = json.loads((run_dir / "declared.json").read_text(encoding="utf-8"))
     summary = {
         "case": asdict(case),

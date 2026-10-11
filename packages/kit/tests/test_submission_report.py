@@ -326,3 +326,25 @@ def test_converted_times_are_exact_decimals(tmp_path):
     assert out.data.decode().splitlines()[1:] == [
         "0.000000,tool,0.1,0.2,0.3,1,", "-0.126543211,tool,,,,0,0.001",
         "-500.250000,tool,0.1,0.2,0.3,1,"]
+
+
+def test_a_run_without_a_live_instrument_says_so_in_the_signed_notes(tmp_path, key):
+    """`be run --instrument none --no-live-instrument-i-understand` records it in declared.json, and
+    `be report` carries it into notes/NOTES.md (hashed and signed with the rest), after the lab's own."""
+    key_path, entry = key
+    doc = sup.declared_json("ev03-pass")
+    doc["instrument_feed"] = {"kind": "none", "live_supervision": "robot_state_only", "why": "offline fit"}
+    run = sup.runner_run(tmp_path, declared=doc)
+    (tmp_path / "NOTES.md").write_text("Bob, Tuesday.\n")
+    args = sup.report_args(tmp_path, run, key_path, extra=["--notes", tmp_path / "NOTES.md"])
+    assert _report(args) == kitreport.EXIT_OK
+    out = tmp_path / "submission"
+    assert _verify(out, entry).consistent
+    notes = (out / "notes" / "NOTES.md").read_text()
+    assert notes.startswith("Bob, Tuesday.\n\n## Live supervision")
+    assert "no live external instrument feed" in notes
+    listed = {f["path"] for f in json.loads((out / "report.json").read_text())["raw_data"]}
+    assert "notes/NOTES.md" in listed
+    # Without --notes the statement is the whole file; with a live instrument there is none.
+    assert kitreport.supervision_note({"instrument_feed": {"kind": "udp"}}) is None
+    assert kitreport.supervision_note({}) is None

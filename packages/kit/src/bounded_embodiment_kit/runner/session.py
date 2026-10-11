@@ -10,7 +10,8 @@ Order (``run_session``), after the caller has opened the adapter and checked the
 2. start the command thread, which reads the robot's state every 20 ms; wait for the first state;
 3. start the watchdog (both tripwires live from here on);
 4. ask for the typed word (RUN / GO); anything else cancels (nothing sent, no stop needed);
-5. if asked, wait until the instrument sees the arm inside and still (else cancel);
+5. if asked, wait until the instrument sees the arm inside and still (else cancel); a run declared
+   without a live instrument (``--instrument none``) judges this from the robot's own state;
 6. release the command thread: it paces the proposals by their ``t_s`` through ``adapter.send``;
 7. the stream ends, a tripwire trips, Ctrl+C, or an error: the latch is set and the command thread
    executes the stop (same goals every time) until the watchdog has acknowledged or escalated;
@@ -351,7 +352,8 @@ def _run_session(*, adapter, latch, watchdog, command, feed, prompt, confirm_wor
     previous = _install_sigint(latch, log)
     try:
         if wait_inside_and_still:
-            log("Waiting for the instrument to see the arm inside and still "
+            judge = "the instrument" if feed is not None else "the robot's own state (no live instrument)"
+            log(f"Waiting for {judge} to show the arm inside and still "
                 f"({limits.still_window_s:.0f} s, {limits.still_m * 1000:.0f} mm)...")
             ok, why = False, ""
             end = time.monotonic() + limits.start_timeout_s

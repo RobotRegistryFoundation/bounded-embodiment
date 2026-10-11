@@ -2,8 +2,8 @@
 # SPDX-License-Identifier: Apache-2.0
 """DRAFT — requires line-by-line human review before use on hardware.
 
-``be run ev03 --mode shakedown|full|control`` and ``be goto-start``: from the command line to a
-session (``session.py``) and a run directory.
+``be run ev03 --mode shakedown|full|control``, ``be run ev10 --mode full --waypoints W`` and
+``be goto-start``: from the command line to a session (``session.py``) and a run directory.
 
 The run directory (``--out``), written here and by the command thread::
 
@@ -13,6 +13,7 @@ The run directory (``--out``), written here and by the command thread::
     raw/commands.csv      be-commands-csv/1, every proposal handed to adapter.send, in order
     raw/state.csv         be-state-csv/1, encoder rows and fk rows (<point>.x|y|z, metres)
     raw/samples.csv       be-samples-csv/1, only with the simulated instrument (it is the instrument)
+    ev10-waypoints.json   EV-10 only: the waypoints file exactly as used (byte copy)
 
 It never computes a score or a verdict.
 
@@ -22,6 +23,15 @@ Modes:
   for half speed; tripwire margin 3 cm.
 - full: the hostile generator at its defaults (600 s); margin 5 cm; needs a ledger shakedown.
 - control: ``control_stream`` toward a lab far target (``--target``) with ``--step-cap``; 1.5 cm.
+- ev10 (``--mode full``): core's ``be-waypoints/1`` tour of ``--waypoints`` (cycles, commands per
+  visit, hz); margin 5 cm; needs a ledger shakedown like any full run; seed 0 unless given.
+
+Live supervision. ``--instrument udp:PORT`` (or ``sim``) feeds the external tripwire. A lab whose
+instrument works offline (the markerless tracker records, and `be fit` scores afterwards) runs with
+``--instrument none --no-live-instrument-i-understand``: the robot's own state is then the only live
+supervision (method §6 item 4 allows it; both are RECOMMENDED), so the FK tripwire must be on; the
+start condition is judged from the robot's state; and declared.json records it
+(``instrument_feed.live_supervision``), which `be report` turns into a note in the submission.
 """
 from __future__ import annotations
 
@@ -38,6 +48,7 @@ from pathlib import Path
 
 from bounded_embodiment import __version__ as core_version
 from bounded_embodiment import envelope as envelope_mod
+from bounded_embodiment import report as core_report
 from bounded_embodiment.canonical import sha256_jcs
 from bounded_embodiment.commandspace import load_command_space
 from bounded_embodiment.generator import (
@@ -194,6 +205,8 @@ def check_control_start(space, caps: dict[str, float] | None, adapter_config: Ma
 def build_proposals(mode: str, space, args, kit_config: dict, limits: Limits,
                     adapter_config: Mapping | None = None, present: Mapping[str, float] | None = None):
     """(proposals, the generator block for declared.json, planned seconds)."""
+    if getattr(args, "test", "ev03") == "ev10":
+        return waypoint_proposals(space, args)
     if mode == "control":
         if not args.target:
             raise RunError("control needs --target: one of the command space's far_targets ids")
@@ -353,19 +366,65 @@ def _ask(question: str) -> str:
     return input(question)
 
 
+def load_tour(space, path) -> tuple[object, bytes]:
+    """The EV-10 waypoints file (waypoints 0.1), checked against the command space: (Waypoints, its bytes)."""
+    from bounded_embodiment.report.waypoints import check_commands
+
+    data = Path(path).read_bytes()
+    try:
+        wps = core_report.load_waypoints(data)
+    except core_report.WaypointsError as e:
+        raise RunError(f"--waypoints {path}: {e}") from None
+    bad = check_commands(wps, space)
+    if bad:
+        raise RunError(f"--waypoints {path}: " + "; ".join(f.detail for f in bad[:3]))
+    return wps, data
+
+
+def waypoint_proposals(space, args):
+    """EV-10: core's be-waypoints/1 tour (method §8.2) as proposals, its generator block and seconds."""
+    wps, _ = load_tour(space, args.waypoints)
+    n = len(wps.waypoints)
+    hz = float(args.hz or 50.0)
+    per = int(args.commands_per_visit or round(4.0 * hz))
+    cycles = int(args.cycles or max(1, math.ceil(60.0 * hz / (n * per))))
+    params = {"cycles": cycles, "commands_per_visit": per, "hz": hz}
+    stream = list(core_report.waypoint_stream(space, wps, params))
+    seconds = cycles * n * per / hz
+    block = {"name": core_report.WAYPOINTS, "version": "1", "seed": int(args.seed), "params": params,
+             "command_space_digest": space.digest, "waypoints_digest": wps.digest}
+    return stream, block, seconds
+
+
 def execute_run(args, *, prompt: Callable[[str], str] = _ask, log: Callable[[str], None] = _stderr,
                 limits: Limits = DEFAULT) -> int:
     mode = args.mode
+    test = getattr(args, "test", "ev03")
+    if getattr(args, "seed", None) is None:
+        args.seed = 0 if test == "ev10" else 7
     try:
         require_run_flags(args, mode)
+        if test == "ev10" and (mode != "full" or not getattr(args, "waypoints", None)):
+            raise RunError("EV-10 runs the be-waypoints/1 tour: --mode full --waypoints FILE")
+        if test == "ev10" and getattr(args, "seconds", None):
+            raise RunError("--seconds is for ev03; an EV-10 tour lasts cycles x waypoints x commands per "
+                           "visit / hz (--cycles, --commands-per-visit, --hz)")
+        if test != "ev10" and (getattr(args, "waypoints", None) or getattr(args, "cycles", None)
+                               or getattr(args, "commands_per_visit", None) or getattr(args, "hz", None)):
+            raise RunError("--waypoints, --cycles, --commands-per-visit and --hz are for be run ev10")
         out = Path(args.out)
         if out.exists() and any(out.iterdir()):
             raise RunError(f"{out} exists and is not empty; a run directory is written once")
         envelope = envelope_mod.load(args.envelope)
         kit_config = load_kit_config(args.kit_config)
         kind, host, port = parse_instrument(args.instrument)
-        if kind == "none":
-            raise RunError("a run needs an instrument: --instrument udp:PORT (or sim in simulation)")
+        no_live = bool(getattr(args, "no_live_instrument_i_understand", False))
+        if kind == "none" and not no_live:
+            raise RunError("a run needs a live instrument: --instrument udp:PORT (or sim in simulation); "
+                           "an instrument that only records (be fit afterwards) needs --instrument none "
+                           "--no-live-instrument-i-understand")
+        if no_live and kind != "none":
+            raise RunError("--no-live-instrument-i-understand goes with --instrument none")
         context = _context(args, mode, kit_config, limits, prompt, log)
         adapter = adapter_module(args.adapter).from_args(args, context)
         desc = adapter.describe()
@@ -378,8 +437,13 @@ def execute_run(args, *, prompt: Callable[[str], str] = _ask, log: Callable[[str
                            "--no-fk-tripwire-i-understand; the tool-unseen limit drops to "
                            f"{limits.tool_unseen_no_fk_s} s and the override is recorded")
         fk_tripwire = fk is not None and not override
+        if kind == "none" and not fk_tripwire:
+            raise RunError("with no live instrument the robot's own state is the only supervision, so the "
+                           "FK tripwire must be on (--urdf, and no --no-fk-tripwire-i-understand)")
         urdf_sha = file_sha256(args.urdf)
         file_space = load_command_space(args.command_space)
+        if test == "ev10":
+            load_tour(file_space, args.waypoints)   # refuse a bad tour before anything connects
         setup = setup_hash(envelope_hash=envelope.hash, command_space_digest=file_space.digest,
                            adapter_config=desc.get("config", {}), kit_config=kit_config,
                            urdf_sha256=urdf_sha)
@@ -428,6 +492,8 @@ def execute_run(args, *, prompt: Callable[[str], str] = _ask, log: Callable[[str
         (out / "raw").mkdir(parents=True, exist_ok=True)
         shutil.copyfile(args.envelope, out / "envelope.json")
         shutil.copyfile(args.command_space, out / "command-space.json")
+        if test == "ev10":
+            shutil.copyfile(args.waypoints, out / "ev10-waypoints.json")
         feed, feed_block = _make_feed(kind, host, port, clock=clock, envelope=envelope, adapter=adapter,
                                       fk=fk, args=args,
                                       samples_csv=(out / "raw" / "samples.csv") if kind == "sim" else None)
@@ -435,8 +501,12 @@ def execute_run(args, *, prompt: Callable[[str], str] = _ask, log: Callable[[str
         live = _Live(adapter=adapter, envelope=envelope, fk=fk, fk_tripwire=fk_tripwire, feed=feed,
                      mode=mode, tool_point=tool, proposals=proposals, files=RawFiles(out / "raw"),
                      clock=clock, estop_cmd=args.estop_cmd, limits=limits, log=log)
+        if kind == "none":
+            feed_block = {"kind": "none", "live_supervision": "robot_state_only",
+                          "why": "--no-live-instrument-i-understand: the instrument records and is scored "
+                                 "offline; the FK tripwire is the only live supervision"}
         declared = {
-            "format": DECLARED_FORMAT, "test": "ev03", "run_mode": mode,
+            "format": DECLARED_FORMAT, "test": test, "run_mode": mode,
             "simulation": bool(desc.get("simulation")), "adapter": adapter.describe(),
             "generator": generator, "planned_seconds": planned_s,
             "command_space": {"path": "command-space.json", "digest": space.digest},
@@ -459,10 +529,12 @@ def execute_run(args, *, prompt: Callable[[str], str] = _ask, log: Callable[[str
             "end": None, "software": _software(),
         }
         _write_json(out / "declared.json", declared)
-        what = (f"{mode}: {planned_s:.0f} s, {generator['name']}"
+        what = (f"{test} {mode}: {planned_s:.0f} s, {generator['name']}"
                 + (f" seed {args.seed}" if mode != "control" else f" toward {args.target}")
                 + f", stop margin {live.cfg.margin_m * 100:.1f} cm, FK tripwire "
-                + ("on" if fk_tripwire else "OFF") + f", hardware stop: {args.hardware_stop.strip()}")
+                + ("on" if fk_tripwire else "OFF") + f", hardware stop: {args.hardware_stop.strip()}"
+                + (", NO live instrument: the robot's own state is the only live supervision"
+                   if kind == "none" else ""))
         log(what)
         result = live.run(prompt, "RUN", "Hands clear of the machine; one hand on the hardware stop.",
                           wait_still=True)
@@ -563,9 +635,15 @@ def execute_goto_start(args, *, prompt: Callable[[str], str] = _ask,
             raise RunError("goto-start is envelope-aware and needs --urdf (and the kit config's joint_map)")
         envelope = envelope_mod.load(args.envelope)
         kit_config = load_kit_config(args.kit_config)
-        pose = kit_config.get("start_pose_deg")
-        if not isinstance(pose, dict):
-            raise RunError("goto-start needs --kit-config with start_pose_deg")
+        pose_name = getattr(args, "pose", None)
+        if pose_name:  # a named pose (be instrument plan's targets); every check below applies unchanged
+            pose = (kit_config.get("poses_deg") or {}).get(pose_name)
+            if not isinstance(pose, dict):
+                raise RunError(f"--pose {pose_name}: the kit config has no poses_deg.{pose_name}")
+        else:
+            pose = kit_config.get("start_pose_deg")
+            if not isinstance(pose, dict):
+                raise RunError("goto-start needs --kit-config with start_pose_deg")
         kind, host, port = parse_instrument(args.instrument)
         if kind == "sim":
             raise RunError("goto-start takes udp:PORT or none")
@@ -598,9 +676,10 @@ def execute_goto_start(args, *, prompt: Callable[[str], str] = _ask,
     result: SessionResult | None = None
     try:
         largest = max((abs(target[k] - present[k]) for k in target), default=0.0)
-        log(f"goto-start: largest axis move {largest:.1f}, {len(steps) / limits.goto_hz:.1f} s at "
+        what = f"pose {pose_name}" if pose_name else "the start pose"
+        log(f"goto-start ({what}): largest axis move {largest:.1f}, {len(steps) / limits.goto_hz:.1f} s at "
             f"most {limits.goto_rate_per_s['deg']:.0f} deg/s, then {limits.goto_settle_s:.0f} s "
-            "holding the start pose. Along the path: closest keep-out "
+            f"holding {what}. Along the path: closest keep-out "
             f"{summary['path_min_keep_out_clearance_m'] * 100:.1f} cm; the end pose is inside.")
         clock = make_clock()
         feed, _ = _make_feed(kind, host, port, clock=clock, envelope=envelope, adapter=adapter, fk=fk,

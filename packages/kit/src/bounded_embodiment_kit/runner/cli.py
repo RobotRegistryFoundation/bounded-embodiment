@@ -7,10 +7,12 @@
 
     be doctor [--port P --id ID] [--envelope E --kit-config K --urdf U] [--instrument udp:PORT]
     be goto-start --adapter lerobot --port P --id ID --envelope E --command-space C \\
-                  --kit-config K --urdf U --hardware-stop "hand on the servo power plug"
+                  --kit-config K --urdf U --hardware-stop "hand on the servo power plug" [--pose T1]
     be run ev03 --mode shakedown --adapter lerobot --port P --id ID --wrapper gate.py:make_gate \\
                 --envelope E --command-space C --kit-config K --urdf U --instrument udp:5005 \\
                 --out runs/bob-shakedown --i-accept-the-risk --hardware-stop "..." [--estop-cmd CMD]
+    be run ev10 --mode full --waypoints ev10-waypoints.json [--cycles N --commands-per-visit K --hz H] ...
+    be run ev03 ... --instrument none --no-live-instrument-i-understand    # offline instrument (be fit)
     be adapter new NAME          write NAME_adapter.py, a python adapter template
     be adapter list
 
@@ -115,11 +117,21 @@ def _cmd_adapter(args) -> int:
 def register(subparsers) -> None:
     p = subparsers.add_parser("run", help="run a test against a machine through an adapter",
                               description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    p.add_argument("test", choices=["ev03"])
-    p.add_argument("--mode", required=True, choices=[m for m in MODES if m != "goto-start"])
-    p.add_argument("--instrument", required=True, help="udp:PORT, udp:HOST:PORT, or sim")
+    p.add_argument("test", choices=["ev03", "ev10"])
+    p.add_argument("--mode", required=True, choices=[m for m in MODES if m != "goto-start"],
+                   help="ev10 takes full")
+    p.add_argument("--instrument", required=True,
+                   help="udp:PORT, udp:HOST:PORT, sim, or none (with --no-live-instrument-i-understand)")
     p.add_argument("--out", required=True, help="the run directory (must not exist, or be empty)")
-    p.add_argument("--seed", type=int, default=7)
+    p.add_argument("--seed", type=int, default=None, help="default 7 (ev03), 0 (ev10: the tour has no randomness)")
+    p.add_argument("--no-live-instrument-i-understand", action="store_true",
+                   help="--instrument none: the instrument records for offline scoring and the FK tripwire "
+                        "is the only live supervision (recorded in declared.json and the report's notes)")
+    t = p.add_argument_group("EV-10 (be-waypoints/1)")
+    t.add_argument("--waypoints", help="the lab's ev10-waypoints.json (waypoints 0.1)")
+    t.add_argument("--cycles", type=int, help="rounds of the tour (default: enough for 60 s)")
+    t.add_argument("--commands-per-visit", type=int, help="commands held at each waypoint (default 4 s worth)")
+    t.add_argument("--hz", type=float, help="tour command rate (default 50)")
     p.add_argument("--seconds", type=float, help="shorten the run (a short shakedown does not count)")
     p.add_argument("--target", help="control: the far target id")
     p.add_argument("--step-cap", help="control: largest change per command (number, or JSON per axis)")
@@ -133,6 +145,8 @@ def register(subparsers) -> None:
     g = subparsers.add_parser("goto-start", help="move slowly to the kit config's start pose",
                               description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     g.add_argument("--instrument", default="none", help="udp:PORT, or none")
+    g.add_argument("--pose", metavar="NAME",
+                   help="go to the kit config's poses_deg[NAME] instead of start_pose_deg (be instrument plan)")
     _adapter_args(g)
     g.set_defaults(func=_cmd_goto)
 

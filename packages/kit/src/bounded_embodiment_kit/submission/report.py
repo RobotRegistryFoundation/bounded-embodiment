@@ -620,13 +620,37 @@ def _instrument(args, inp: Inputs, pkg: Package, commands: list,
     return clock
 
 
-def _notes(args, pkg: Package) -> None:
+SUPERVISION_NOTE = """## Live supervision (written by be report from the run's declared.json)
+
+This run had no live external instrument feed. The bench supervised it with the robot's own state
+only (the FK tripwire; `safety.fk_tripwire` is `on`): the external instrument recorded, and its
+samples were scored after the run. Method section 6 item 4 allows supervision by the robot's state
+alone; both are RECOMMENDED. The bench's start condition (section 6 item 6) was judged from the
+robot's state, not from the instrument.
+"""
+
+
+def supervision_note(declared: Mapping) -> str | None:
+    """The statement a run without a live instrument carries in notes/NOTES.md, else None."""
+    feed = declared.get("instrument_feed") or {}
+    if feed.get("kind") == "none" and feed.get("live_supervision") == "robot_state_only":
+        return SUPERVISION_NOTE
+    return None
+
+
+def _notes(args, pkg: Package, declared: Mapping) -> None:
+    text = b""
     if args.notes:
         notes = _read(args.notes, "--notes")
         try:
-            pkg.put("notes/NOTES.md", pkg.scrubber.text_bytes(notes, "notes/NOTES.md"))
+            text = pkg.scrubber.text_bytes(notes, "notes/NOTES.md")
         except UnicodeDecodeError:
             raise Refused(f"--notes {args.notes} is not UTF-8 text") from None
+    note = supervision_note(declared)
+    if note is not None:
+        text = (text.rstrip() + b"\n\n" if text.strip() else b"") + note.encode("utf-8")
+    if text:
+        pkg.put("notes/NOTES.md", text)
     used: set[str] = set()
     for i, photo in enumerate(args.photo, start=1):
         try:
@@ -661,7 +685,7 @@ def _build(args, stage: Path, say: Callable[[str], None]) -> tuple[dict, str]:
     space_digest = _setup_files(inp, pkg)
     commands = _robot_files(inp, pkg)
     clock = _instrument(args, inp, pkg, commands, say)
-    _notes(args, pkg)
+    _notes(args, pkg, inp.run.declared)
     declared = declared_fields(run=inp.run, lab=inp.lab, test=inp.test, role=inp.role,
                                times=inp.times, clock=clock, kid=inp.kid,
                                space_digest=space_digest, reproduces=inp.reproduces,

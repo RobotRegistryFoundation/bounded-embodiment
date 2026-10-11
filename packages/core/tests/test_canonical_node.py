@@ -3,6 +3,17 @@
 JavaScript's default sort compares UTF-16 code units and JSON.stringify of a
 number is Number::toString, so a few lines of JS are a reference RFC 8785
 implementation. Skipped when ``node`` is not on PATH.
+
+The values travel to Node as tagged arrays of numbers (strings as UTF-16 code
+units), never as JSON objects, because JSON.parse itself is not trustworthy for
+this: on Node 24 and 26 (found 10 Oct 2026; Node 20 and 22 are fine), after
+
+    JSON.parse('{"a":1,"\\\\":2}')
+
+the call JSON.parse('{"a":1,"\\u00e9":2}') returns the keys ["a", "\\"]
+instead of ["a", "é"]. A JCS cross-check built on JSON.parse fails on those
+versions for reasons that have nothing to do with canonicalization; so does
+any verifier that parses signed JSON with escaped keys on them.
 """
 
 from __future__ import annotations
@@ -37,9 +48,31 @@ function jcs(v) {
 const fs = require('fs');
 const req = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
 const dv = new DataView(new ArrayBuffer(8));
+function f64(h) { dv.setBigUint64(0, BigInt('0x' + h)); return dv.getFloat64(0); }
+function str(units) { let s = ''; for (const u of units) s += String.fromCharCode(u); return s; }
+// Rebuild a value from its tagged form; keys become own data properties ("__proto__" included).
+function dec(e) {
+  switch (e[0]) {
+    case 'n': return null;
+    case 't': return true;
+    case 'f': return false;
+    case 'i': return Number(e[1]);
+    case 'd': return f64(e[1]);
+    case 's': return str(e[1]);
+    case 'a': return e[1].map(dec);
+    case 'o': {
+      const o = {};
+      for (const [k, v] of e[1]) {
+        Object.defineProperty(o, str(k), { value: dec(v), enumerable: true, writable: true, configurable: true });
+      }
+      return o;
+    }
+  }
+  throw new Error('bad tag ' + e[0]);
+}
 const out = {
-  numbers: req.numbers.map((h) => { dv.setBigUint64(0, BigInt('0x' + h)); return jcs(dv.getFloat64(0)); }),
-  texts: req.texts.map((t) => jcs(JSON.parse(t))),
+  numbers: req.numbers.map((h) => jcs(f64(h))),
+  texts: req.values.map((e) => jcs(dec(e))),
 };
 fs.writeFileSync(process.argv[3], JSON.stringify(out), 'utf8');
 """
@@ -116,11 +149,37 @@ def _random_value(rng: random.Random, depth: int) -> object:
     return obj
 
 
+def _units(text: str) -> list[int]:
+    """The UTF-16 code units of a string, as JavaScript holds it."""
+    data = text.encode("utf-16-le", "surrogatepass")
+    return [int.from_bytes(data[i : i + 2], "little") for i in range(0, len(data), 2)]
+
+
+def _tagged(v: object) -> list:
+    """A value as tagged arrays of numbers and plain tags, so JSON.parse never sees its strings."""
+    if v is None:
+        return ["n"]
+    if v is True:
+        return ["t"]
+    if v is False:
+        return ["f"]
+    if isinstance(v, int):
+        return ["i", str(v)]
+    if isinstance(v, float):
+        return ["d", struct.pack(">d", v).hex()]
+    if isinstance(v, str):
+        return ["s", _units(v)]
+    if isinstance(v, list):
+        return ["a", [_tagged(x) for x in v]]
+    if isinstance(v, dict):
+        return ["o", [[_units(k), _tagged(x)] for k, x in v.items()]]
+    raise TypeError(type(v).__name__)
+
+
 def _run_node(tmp_path: Path, numbers: list[float], values: list[object]) -> dict:
     req = {
         "numbers": [struct.pack(">d", x).hex() for x in numbers],
-        # ensure_ascii keeps transport 7-bit; JSON.parse restores the exact strings
-        "texts": [json.dumps(v, ensure_ascii=True, allow_nan=False) for v in values],
+        "values": [_tagged(v) for v in values],
     }
     (tmp_path / "jcs.js").write_text(JS_JCS, encoding="utf-8")
     (tmp_path / "req.json").write_text(json.dumps(req), encoding="utf-8")

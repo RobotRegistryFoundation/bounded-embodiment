@@ -136,6 +136,12 @@ def test_a_mismatch_detail_is_a_readable_diff() -> None:
         (b'{"report_version": "0.2"}', "REPORT_VERSION_UNSUPPORTED"),
         (b"{}", "REPORT_VERSION_UNSUPPORTED"),
     ],
+    # Short ids: pytest names tmp_path after the test id, and a 200,000-character id is longer
+    # than a Windows path may be.
+    ids=[
+        "empty", "not-json", "binary", "bom", "duplicate-key", "nan", "infinity", "huge-number",
+        "deep-nesting", "array", "string", "version-0.2", "no-version",
+    ],
 )
 def test_hostile_report_json(content: bytes, code: str, tmp_path: Path) -> None:
     run = copy_run("ev03-pass", tmp_path)

@@ -62,8 +62,8 @@ post-run checks all need the same placement and registration (§5.3 item 5, §5.
 3. Background: with the arm resting and the scene empty, mark `background_start`, wait 5 s, mark
    `background_end`.
 
-`be fit register SESSION` and `be fit background SESSION` can run any time after the recording, but
-run them before the accuracy check's arithmetic (step 5).
+`be fit register SESSION` and `be fit background SESSION` can run any time after the recording; run
+them before `be instrument check` (step 7).
 
 ## 4. Plan the accuracy check
 
@@ -137,7 +137,7 @@ be fit background SESSION
 be fit run SESSION --envelope ENV --from ev03_full --to ev03_full_done --out SESSION/fit/ev03_full
 be instrument check --envelope ENV --targets targets.txt --session SESSION --run runs/full
 be report runs/full --lab-config LAB.json --key lab.key.json --out submissions/full \
-    --samples SESSION/fit/ev03_full/samples.csv --clock monotonic \
+    --samples SESSION/fit/ev03_full/samples.csv --clock monotonic --clock-csv SESSION/clock.csv \
     --accuracy runs/full/accuracy/accuracy.csv \
     --instrument-file SESSION/fit/registration.json --instrument-file runs/full/accuracy/accuracy-check.json
 be verify submissions/full --keys keys.json

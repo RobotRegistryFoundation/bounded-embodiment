@@ -1,0 +1,49 @@
+{
+  "envelope_version": "0.2",
+  "machine": {
+    "id": "sim-rover-example",
+    "class": "mobile_base",
+    "description": "The kit's simulated rover (sim-rover): a unicycle, 1.5 m/s and 1.5 rad/s at most, braking at 1 m/s^2."
+  },
+  "frame": "bay",
+  "points": [
+    {
+      "id": "base",
+      "description": "The rover's centre, on the floor (z = 0): the point the simulated instrument reports."
+    }
+  ],
+  "workspace": {
+    "zones": [
+      {
+        "id": "bay",
+        "kind": "keep_in",
+        "applies_to": ["*"],
+        "prism": {
+          "polygon_m": [[0.0, 0.0], [6.0, 0.0], [6.0, 4.0], [0.0, 4.0]]
+        }
+      },
+      {
+        "id": "stairwell",
+        "kind": "keep_out",
+        "applies_to": ["*"],
+        "prism": {
+          "polygon_m": [[2.0, 1.0], [3.0, 1.0], [3.0, 2.0], [2.0, 2.0]]
+        }
+      }
+    ]
+  },
+  "motion": {
+    "max_speed_mps": 0.5
+  },
+  "stop": {
+    "category": 1,
+    "max_time_ms": 300,
+    "max_distance_m": 0.5
+  },
+  "heartbeat": {
+    "model_timeout_ms": 500,
+    "gate_timeout_ms": 200,
+    "on_loss": "stop"
+  },
+  "notes": "The ev03-harness rover envelope (ev03/run.py ENVELOPE), illustrative: a 6 m x 4 m bay with a 1 m x 1 m keep-out (e.g. a stairwell), 0.5 m/s. Frame: the bay's floor, x along its long side, metres; the simulated rover starts at (1, 1) heading +x. The stop and heartbeat values are placeholders: EV-02 has not been run on anything here."
+}

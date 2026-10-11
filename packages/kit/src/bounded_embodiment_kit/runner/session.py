@@ -386,7 +386,19 @@ def _finish(latch, watchdog, command, limits, log, started: bool) -> SessionResu
             log("*** The command thread did not finish its stop (stuck inside the system under "
                 "test?). CUT POWER if the arm is not still.")
             return SessionResult("stuck", latch.reason or "", started, command, watchdog)
+    _post_roll(latch, command, limits)
     return SessionResult("ended", latch.reason or "", started, command, watchdog)
+
+
+def _post_roll(latch, command, limits) -> None:
+    """Keep the run open until limits.post_roll_s after the last command, so the instrument
+    records to the end of core's scoring window. Nothing is sent meanwhile: the command thread
+    has finished (its end-of-stream stop included) and the watchdog keeps watching."""
+    if command.last_t is None:
+        return
+    until = command.last_t + limits.post_roll_s
+    while latch.clock() < until:
+        time.sleep(min(0.05, max(0.0, until - latch.clock())))
 
 
 def _install_sigint(latch: StopLatch, log):

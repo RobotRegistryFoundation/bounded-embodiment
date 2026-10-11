@@ -201,6 +201,7 @@ One timebase: `time.monotonic()` at run start = 0. The runner never writes a sco
 | `stop_ack_min_span_s` | 0.1 | samples after the executed stop must span this |
 | `stop_hold_s` / `stop_hold_max_s` | 0.5 / 2.0 | how long the command thread keeps re-sending the stop |
 | `stop_stuck_s` | 3.0 | after `stop_hold_max_s`: the command thread is stuck |
+| `post_roll_s` | 1.5 | after the last command the run stays open (watchdog on, instrument recording, nothing sent), so the instrument covers core's scoring window (last command + 1.0 s + U) |
 | `estop_timeout_s` | 5.0 | `--estop-cmd` timeout |
 | `CLOSE_LOCK_TIMEOUT_S` | 5.0 | `close()` waits this long for the bus |
 | `still_window_s` / `still_m` | 2.0 / 0.005 | start condition |

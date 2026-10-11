@@ -68,8 +68,8 @@ The matrix as it comes out (120 s; seed 7 unless shown)
                                       FAIL only in the 10-minute runs)
   SO-101 sim  reference gate, ideal   no excursions                        reached 40 of 40
   SO-101 sim  reference gate, sag     no excursions                        reached 40 of 40
-  SO-101 sim  freeze gate             NO_MOTION                            LIVENESS_LOW at step 4,
-                                                                           INCONCLUSIVE (xfail)
+  SO-101 sim  freeze gate             NO_MOTION                            FAIL (LIVENESS_LOW,
+                                                                           WAYPOINT_NEVER_REACHED)
   bob sim     first reference gate    FAIL (position): the sag ratchet     -
   bob sim     reference gate          no excursions                        -
   Rover sim   ungated                 FAIL (position and speed)            -
@@ -78,12 +78,9 @@ The matrix as it comes out (120 s; seed 7 unless shown)
                                       the ported gate's known hole
   ==========  ======================  ===================================  ======================
 
-  Every 120 s EV-03 run is also RUN_TOO_SHORT at step 3 (the profile asks for 600 s). And every
-  run has ``GAP_UNBOUNDED`` at step 3, from one gap at the end of the scoring window: the
-  simulated instrument stops when the runner closes it, about 0.5 s after the last command, while
-  the window runs to the last command + 1.0 s. That is a kit issue (reported, not fixed here). It
-  is why the frozen gate's EV-10 run is INCONCLUSIVE rather than FAIL (step 3 decides before step
-  4), and why 10 % dropout, which adds unbounded gaps inside the run, adds no new code.
+  Every 120 s EV-03 run is also RUN_TOO_SHORT at step 3 (the profile asks for 600 s). The runner
+  stays open 1.5 s after the last command (limits.post_roll_s), so the simulated instrument covers
+  the whole scoring window and no gap is left at its end.
 """
 from __future__ import annotations
 
@@ -341,7 +338,7 @@ def test_the_reference_gate_still_does_its_job(matrix, case):
     assert sc["step4"] == []  # no LIVENESS_LOW, no WAYPOINT_NEVER_REACHED
     assert liveness["visits_reached"] == liveness["visits_total"] == 8 * len(_b6.EV10_TOUR)
     assert liveness["distinct_waypoints_visited"] == len(_b6.EV10_TOUR)
-    assert sc["step3"] == ["GAP_UNBOUNDED"]  # only the window-end gap (module docstring)
+    assert sc["step3"] == []  # the tour supports a liveness judgement
     assert all(n == 0 for n, _ in _interior_gaps(_summary(matrix, case)).values())
 
 
@@ -351,16 +348,12 @@ def test_a_gate_that_refuses_everything_fails_liveness(matrix):
     assert sc["step2"] == []
     assert sc["step4"] == ["LIVENESS_LOW", "WAYPOINT_NEVER_REACHED"]
     assert sc["result"]["liveness"]["visits_reached"] == 0
-    # The tour supports a liveness judgement: nothing at step 3 but the window-end gap.
-    assert sc["step3"] == ["GAP_UNBOUNDED"]
+    # The tour supports a liveness judgement: nothing at step 3.
+    assert sc["step3"] == []
     assert all(n == 0 for n, _ in _interior_gaps(_summary(matrix, "so101-freeze-ev10")).values())
 
 
 @uses("so101-freeze-ev10")
-@pytest.mark.xfail(strict=True, raises=AssertionError, reason=(
-    "B6 brief: EV-10 FAILs the freeze gate (LIVENESS_LOW). Measured: LIVENESS_LOW and "
-    "WAYPOINT_NEVER_REACHED are there at step 4, but step 3 decides first: GAP_UNBOUNDED from the "
-    "gap at the end of the scoring window (module docstring), so the outcome is INCONCLUSIVE."))
 def test_a_gate_that_refuses_everything_fails_ev10(matrix):
     assert _scored(matrix, "so101-freeze-ev10")["internal"] == "FAIL"
 
@@ -396,27 +389,22 @@ def test_ten_percent_dropout_leaves_unbounded_gaps_in_the_run(matrix):
 
 
 @uses("so101-freeze", "so101-freeze-dropout10")
-@pytest.mark.xfail(strict=True, raises=AssertionError, reason=(
-    "B6 brief: 10 % dropout adds its INCONCLUSIVE reason. Measured: it adds unbounded gaps inside "
-    "the run, but GAP_UNBOUNDED is already at step 3 at 2 % because of the gap at the end of the "
-    "scoring window (module docstring), so no new code appears."))
 def test_ten_percent_dropout_adds_a_reason(matrix):
     base = set(_scored(matrix, "so101-freeze")["step3"])
     assert set(_scored(matrix, "so101-freeze-dropout10")["step3"]) - base
 
 
 @uses("so101-reference-sag")
-def test_every_simulated_run_ends_with_a_gap(matrix):
-    """The kit issue the xfails above name: the simulated instrument's last sample is about 0.5 s
-    after the last command, the scoring window ends 1.0 s after it, and the spacing to the window
-    end is one unbounded gap on every required point. When the kit records to the window's end,
-    this fails, and the xfails above should start passing."""
+def test_the_instrument_records_to_the_end_of_the_scoring_window(matrix):
+    """The runner stays open limits.post_roll_s (1.5 s) after the last command, so the simulated
+    instrument records past the scoring window's end (last command + 1.0 s + U) and no gap is left
+    there. (Before the post-roll it stopped about 0.5 s after the last command, which left one
+    unbounded gap on every point and made every run INCONCLUSIVE.)"""
     s = _summary(matrix, "so101-reference-sag")
     result = s["scored"]["result"]
     window = result["window"]
     for g in result["gaps"]["points"]:
-        assert g["count"] == g["unbounded"] == 1
-        assert 0.4 < g["longest_s"] < 0.6
+        assert g["count"] == g["unbounded"] == 0
     assert window["end_s"] - window["last_command_s"] == pytest.approx(1.0)
 
 

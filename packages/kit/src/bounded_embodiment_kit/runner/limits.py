@@ -65,6 +65,11 @@ class Limits:
     stop_stuck_s: float = 3.0
     #: How long the lab's --estop-cmd may take.
     estop_timeout_s: float = 5.0
+    #: After the last command the run stays open (watchdog on, instrument recording) until this
+    #: long after it: core's scoring window runs to the last command + 1.0 s + the clock
+    #: uncertainty, and an instrument that stops earlier leaves an unbounded gap at the window's
+    #: end, which makes every run INCONCLUSIVE. 1.0 s plus 0.5 s for the uncertainty.
+    post_roll_s: float = 1.5
 
     # --- starting a run -----------------------------------------------------------------------
     #: The run starts only when the instrument has seen every zoned point inside, and the tool

@@ -1,0 +1,50 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:bounded-embodiment-kit:schema:lab-config-0.1",
+  "title": "be report lab configuration (be-lab-config/0.1)",
+  "description": "The declared fields of a test report that the runner cannot know: the machine, its gate, the software around it, the instruments and their checks, the signer, the operator and the method text. `be report --lab-config` reads it; every member is copied into the report as declared (docs/seams/submission.md). Each definition is the test report 0.1 schema's own, by reference, so the two cannot drift; unknown members are refused everywhere. The instruments' accuracy_check.at and post_run_check.at change from session to session.",
+  "type": "object",
+  "required": ["format", "machine", "gate", "instruments", "signer", "operator", "method"],
+  "additionalProperties": false,
+  "properties": {
+    "format": {
+      "const": "be-lab-config/0.1",
+      "description": "Version of this file format."
+    },
+    "machine": {
+      "$ref": "https://robotregistryfoundation.github.io/bounded-embodiment/schemas/test-report-0.1.json#/properties/system_under_test/properties/machine",
+      "description": "make, model (or \"withheld\"), class and, if known, physical_max_tool_speed_mps."
+    },
+    "gate": {
+      "$ref": "https://robotregistryfoundation.github.io/bounded-embodiment/schemas/test-report-0.1.json#/properties/system_under_test/properties/gate",
+      "description": "The gate under test: name, version and placement (name \"none\" and placement \"none\" for an ungated machine)."
+    },
+    "software": {
+      "$ref": "https://robotregistryfoundation.github.io/bounded-embodiment/schemas/test-report-0.1.json#/properties/system_under_test/properties/software",
+      "description": "Optional: software in the command path besides the kit, core and LeRobot, which be report lists itself."
+    },
+    "instruments": {
+      "$ref": "https://robotregistryfoundation.github.io/bounded-embodiment/schemas/test-report-0.1.json#/properties/instruments",
+      "description": "The instruments, exactly one primary; its samples become raw/samples.csv.gz and its checks raw/accuracy.csv."
+    },
+    "signer": {
+      "type": "object",
+      "required": ["name", "organization", "role"],
+      "additionalProperties": false,
+      "description": "Who signs; be report adds the kid of the signing key.",
+      "properties": {
+        "name": { "$ref": "https://robotregistryfoundation.github.io/bounded-embodiment/schemas/test-report-0.1.json#/$defs/name" },
+        "organization": { "$ref": "https://robotregistryfoundation.github.io/bounded-embodiment/schemas/test-report-0.1.json#/$defs/name" },
+        "role": { "$ref": "https://robotregistryfoundation.github.io/bounded-embodiment/schemas/test-report-0.1.json#/$defs/name" }
+      }
+    },
+    "operator": {
+      "$ref": "https://robotregistryfoundation.github.io/bounded-embodiment/schemas/test-report-0.1.json#/$defs/name",
+      "description": "Who ran the machine: a name or a role (POLICY.md prefers a role)."
+    },
+    "method": {
+      "$ref": "https://robotregistryfoundation.github.io/bounded-embodiment/schemas/test-report-0.1.json#/properties/method",
+      "description": "The method text the run followed: id, version, text_sha256."
+    }
+  }
+}

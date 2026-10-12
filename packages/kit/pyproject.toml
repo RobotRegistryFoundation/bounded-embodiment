@@ -4,13 +4,13 @@ build-backend = "hatchling.build"
 
 [project]
 name = "bounded-embodiment-kit"
-version = "0.1.0.dev0"
+version = "0.1.0"
 description = "The lab bench for the Bounded Embodiment tests: adapters, instruments, the runner and its watchdog."
 readme = "README.md"
 requires-python = ">=3.10"
 license = "Apache-2.0"
 authors = [{ name = "Craig Merry" }]
-dependencies = ["bounded-embodiment~=0.1.0.dev0", "numpy>=1.24"]
+dependencies = ["bounded-embodiment~=0.1.0", "numpy>=1.24"]
 
 [project.optional-dependencies]
 camera = ["opencv-python-headless>=4.9,<4.14"]

@@ -16,6 +16,7 @@ import io
 import json
 import os
 import random
+import re
 import shutil
 import subprocess
 import sys
@@ -234,6 +235,14 @@ def test_submit_into_the_results_repository_and_its_ci_tools_accept_it(sim, caps
     sup.write_json(repo / "labs" / LAB / "lab.json",
                    {"name": "TEST-ONLY lab", "github_handles": ["test-user"],
                     "affiliation": "independent", "contact": "lab@example.org", "keys": [sim.entry]})
+    # A released core must be in kits.lock (the maintainer adds it when the wheel is published); an
+    # unreleased one is let through by --allow-dev-core, which only test-* labs may use.
+    import bounded_embodiment
+    if re.fullmatch(r"\d+\.\d+\.\d+(?:(?:a|b|rc)\d+)?(?:\.post\d+)?", bounded_embodiment.__version__):
+        lock = json.loads((repo / "kits.lock").read_text())
+        lock.setdefault("bounded-embodiment", {})[bounded_embodiment.__version__] = {
+            "wheel_sha256": "0" * 64, "released": "2026-10-12"}
+        sup.write_json(repo / "kits.lock", lock)
     _git(repo, "init", "-q")
     _git(repo, "checkout", "-q", "-b", "main")
     _git(repo, "add", "-A")

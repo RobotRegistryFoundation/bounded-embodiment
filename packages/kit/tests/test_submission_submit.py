@@ -20,6 +20,11 @@ from bounded_embodiment_kit.submission import submit
 from bounded_embodiment_kit.submission.scrub import Identity
 
 LAB = "test-lab"
+#: The submissions here name an unreleased core whatever core runs the tests, so the dry-run path
+#: (--allow-dev-core under a test-* lab) is tested on a release too; RELEASED is a released core
+#: that differs from the running one.
+DEV_CORE = "0.1.0.dev0"
+RELEASED = "0.0.9"
 
 
 @pytest.fixture(scope="module")
@@ -37,6 +42,7 @@ def made(tmp_path_factory):
     finally:
         Identity.this_machine = saved
     jwk = {k: v for k, v in json.loads(key_path.read_text()).items() if k != "kid"}
+    rebuild(tmp / "submission", jwk, core=DEV_CORE)
     return tmp / "submission", entry, jwk
 
 
@@ -70,16 +76,17 @@ def _refused(args, needle: str) -> list[str]:
 
 
 def rebuild(sub_dir: Path, jwk: dict, mutate=None, add: dict | None = None,
-            core: str | None = None) -> None:
+            core: str | None = DEV_CORE) -> None:
     """Build and sign the submission's report again with core after changing its declared fields
     (``mutate``) or adding files (``add``: path -> bytes). ``core`` names another core version
     in the signed report, as a report built by a released core would (verify then warns
-    CORE_VERSION_DIFFERS, nothing more)."""
+    CORE_VERSION_DIFFERS, nothing more); by default the unreleased DEV_CORE."""
     rep = json.loads((sub_dir / "report.json").read_text())
     declared = {k: v for k, v in rep.items()
                 if k not in core_report.DERIVED_BLOCKS and k != "signature"}
     declared["generator"] = {k: v for k, v in rep["generator"].items()
                              if k not in core_report.GENERATOR_DERIVED}
+    declared["provenance"] = {k: v for k, v in rep["provenance"].items() if k != "core_version"}  # core's
     if mutate:
         mutate(declared)
     for rel, data in (add or {}).items():
@@ -114,13 +121,13 @@ def test_a_consistent_dry_run_is_copied_and_checked_and_nothing_is_committed(mad
 
 
 def test_a_released_core_listed_in_kits_lock_is_accepted_and_pinned(made, sub, tmp_path):
-    rebuild(sub, made[2], core="0.1.0")
+    rebuild(sub, made[2], core=RELEASED)
     repo = sup.fake_results_repo(tmp_path, LAB, [made[1]],
-                                 kits={"0.1.0": {"wheel_sha256": "0" * 64, "released": "2026-10-12"}})
+                                 kits={RELEASED: {"wheel_sha256": "0" * 64, "released": "2026-10-12"}})
     code, logs = _run(_args(sub, repo, dev=False))
     assert code == submit.EXIT_OK, logs
     text = "\n".join(logs)
-    assert "tools/pin_core.py (exit 0)" in text and "CI checks with core 0.1.0" in text
+    assert "tools/pin_core.py (exit 0)" in text and f"CI checks with core {RELEASED}" in text
 
 
 # ----- refusals ------------------------------------------------------------------------------------

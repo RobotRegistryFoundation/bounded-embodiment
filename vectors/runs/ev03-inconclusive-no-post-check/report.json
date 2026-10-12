@@ -139,7 +139,7 @@
     },
     "python": "synthetic",
     "platform": "synthetic",
-    "core_version": "0.1.0.dev0"
+    "core_version": "0.1.0"
   },
   "license": "CC-BY-4.0",
   "rights_affirmed": true,
@@ -472,7 +472,7 @@
     {
       "alg": "Ed25519",
       "kid": "JJdiTUjDxOdGPEUxDG7iofB6pXrYDw9x3jGC_j6-djc",
-      "sig": "4SZKqGTyVNLR3NVeUcc08PsN0bIWU5EKiLuTc4v7xaMR1_gHboXzAZhjwywDt57PMZ8qOIC6zQ0OBYhq6HUXBg"
+      "sig": "-tSlmtjsWqU2M0nv91wOZ9iEXVCDpaQGBydnYT59tyJb40YteLUA7NsX6_E3th7oBf0RdVaO5kDW-jHQ9KvkBg"
     }
   ]
 }

@@ -31,6 +31,16 @@ def test_depthai_v3_is_refused_with_a_clear_message(monkeypatch, version):
     assert "DepthAI v3" in msg and "depthai>=2.24,<3" in msg
 
 
+def test_the_oakd_extra_installs_the_depthai_the_recorder_accepts():
+    """pip install "bounded-embodiment-kit[oakd]" must not bring in DepthAI v3, which the recorder refuses."""
+    from importlib.metadata import requires
+
+    lines = [r for r in requires("bounded-embodiment-kit") or [] if r.startswith("depthai") and "oakd" in r]
+    assert lines, "the oakd extra no longer lists depthai"
+    specifiers = set(lines[0].split(";")[0].replace(" ", "").removeprefix("depthai").split(","))
+    assert {">=2.24", "<3"} <= specifiers, lines[0]  # whole specifiers: "<30" would not do
+
+
 def test_old_depthai_v2_is_refused(monkeypatch):
     monkeypatch.setitem(sys.modules, "depthai", types.SimpleNamespace(__version__="2.21.2.0"))
     with pytest.raises(record.RecordError, match="older than 2.24"):

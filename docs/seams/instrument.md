@@ -2,8 +2,8 @@
 
 Built 11 Oct 2026 in `packages/kit/src/bounded_embodiment_kit/instruments/{accuracy,plan}.py` and
 `kinematics/ik.py`; tested in `packages/kit/tests/test_instrument_{check,plan}.py` on synthetic data
-(and, marked slow, on a rendered recording fitted by `be fit`). It closes known gap 1 of the method
-draft ("no accuracy-check tool") and part of gap 2.
+(and, marked slow, on a rendered recording fitted by `be fit`). It closed the method draft's earlier
+gap "no accuracy-check tool"; what is left is the method's known gap 1.
 
 ## What the method asks (§5.3 to §5.5)
 
@@ -127,7 +127,7 @@ inverse kinematics (§8.1 item 4), commands on every axis of `--command-space`. 
 less than 3 cm inside its zones or two less than 5 cm apart (they would make an EV-10 run
 INCONCLUSIVE); use `--inset-mm 35 --margin-mm 30`.
 
-## What is still the lab's (method known gap 2, narrowed)
+## What is still the lab's (method known gap 1)
 
 - That the reference positions were measured independently: the tool cannot see how.
 - That the instrument was not moved, re-registered or recalibrated between the checks and the run.

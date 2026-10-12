@@ -37,8 +37,8 @@ def test_the_oakd_extra_installs_the_depthai_the_recorder_accepts():
 
     lines = [r for r in requires("bounded-embodiment-kit") or [] if r.startswith("depthai") and "oakd" in r]
     assert lines, "the oakd extra no longer lists depthai"
-    spec = lines[0].split(";")[0].replace(" ", "")
-    assert ">=2.24" in spec and "<3" in spec, lines[0]
+    specifiers = set(lines[0].split(";")[0].replace(" ", "").removeprefix("depthai").split(","))
+    assert {">=2.24", "<3"} <= specifiers, lines[0]  # whole specifiers: "<30" would not do
 
 
 def test_old_depthai_v2_is_refused(monkeypatch):

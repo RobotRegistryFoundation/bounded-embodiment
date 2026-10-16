@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "bounded-embodiment"
-version = "0.1.0"
+version = "0.1.1"
 description = "The Bounded Embodiment test method, executable: canonical JSON, signing, envelopes, the hostile command generator, scoring and report verification."
 readme = "README.md"
 requires-python = ">=3.10"

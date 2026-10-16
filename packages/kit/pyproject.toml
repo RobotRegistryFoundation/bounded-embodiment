@@ -7,7 +7,7 @@ name = "bounded-embodiment-kit"
 version = "0.1.1"
 description = "The lab bench for the Bounded Embodiment tests: adapters, instruments, the runner and its watchdog."
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.12"
 license = "Apache-2.0"
 license-files = ["LICENSES/Apache-2.0.txt"]
 authors = [{ name = "Craig Merry" }]
@@ -30,7 +30,7 @@ classifiers = [
 camera = ["opencv-python-headless>=4.9,<4.14"]
 oakd = ["depthai>=2.24,<3", "opencv-python-headless>=4.9,<4.14"]
 fit = ["opencv-python-headless>=4.9,<4.14", "scipy>=1.10"]
-lerobot = ["lerobot>=0.6.1; python_version >= '3.12'", "pyserial>=3.5"]
+lerobot = ["lerobot>=0.6.1", "pyserial>=3.5"]
 test = ["pytest>=8"]
 
 [project.entry-points."bounded_embodiment.cli"]

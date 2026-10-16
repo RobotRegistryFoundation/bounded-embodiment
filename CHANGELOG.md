@@ -12,6 +12,7 @@ Core and kit:
 - Package metadata: Python version classifiers (core: 3.10 to 3.13; kit: 3.12 and 3.13, the
   versions CI tests), project links (method text, requirements, lab guide, issues, changelog,
   results table), keywords.
+- Kit: requires Python 3.12 or later (was 3.10), matching what CI tests and what LeRobot needs.
 - The wheels carry their licence texts. Core's licence is now declared as
   `Apache-2.0 AND CC-BY-4.0`, because it ships the schemas and profiles, which are CC BY 4.0.
 - The PyPI pages (the package READMEs) say how to install, what each command does, and where the

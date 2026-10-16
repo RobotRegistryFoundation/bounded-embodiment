@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "bounded-embodiment-kit"
-version = "0.1.1"
+version = "0.1.2"
 description = "The lab bench for the Bounded Embodiment tests: adapters, instruments, the runner and its watchdog."
 readme = "README.md"
 requires-python = ">=3.12"

@@ -5,7 +5,7 @@ The method text has its own version and SHA-256 (see `method/README.md`); nothin
 Generators, scorers and profiles are versioned by name (`be-hostile/1`, `ev03-tool-point/1`,
 `ev03-illustrative-0.1`), and no release below changes any of them.
 
-## Unreleased
+## bounded-embodiment 0.1.1 and bounded-embodiment-kit 0.1.2 (2026-10-16)
 
 Core and kit:
 

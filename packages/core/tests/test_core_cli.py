@@ -90,6 +90,17 @@ def test_keygen_rejects_bad_entry_fields_before_writing(
     assert extra[0] in capsys.readouterr().err
 
 
+def test_keygen_explains_a_bad_lab_id_once_without_the_pattern(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    code = cli.main(["keygen", "--out", str(tmp_path / "k.json"), "--lab", "My Lab", "--contact", "nope"])
+    err = capsys.readouterr().err
+    assert code == 2 and not (tmp_path / "k.json").exists()
+    assert err.count("--lab") == 1 and err.count("--contact") == 1
+    assert "lower-case letters, digits and hyphens" in err and "email address" in err
+    assert "^[" not in err
+
+
 def test_keygen_unwritable_directory(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     code = cli.main(["keygen", "--out", str(tmp_path / "missing" / "k.json"), *KEYGEN])
     assert code == 1 and "cannot write" in capsys.readouterr().err
@@ -324,6 +335,23 @@ def test_extensions_cannot_replace_core_commands_or_break_the_cli(
     out, err = capsys.readouterr()
     assert out == "[1]"
     assert err.count("warning: CLI extension") == 3 and "already registered" in err and "numpy" in err
+
+
+@pytest.mark.parametrize("command", sorted(cli.KIT_COMMANDS))
+def test_a_kit_command_without_the_kit_says_how_to_install_it(
+    command: str, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.setattr(cli, "_entry_points", lambda: [])
+    assert cli.main([command, "--help"]) == 2
+    assert "pip install bounded-embodiment-kit" in capsys.readouterr().err
+
+
+def test_a_kit_command_with_the_kit_is_not_intercepted(monkeypatch: pytest.MonkeyPatch) -> None:
+    def register(subparsers) -> None:
+        subparsers.add_parser("run").set_defaults(func=lambda args: 41)
+
+    monkeypatch.setattr(cli, "_entry_points", lambda: [_FakeEntryPoint("kit", lambda: register)])
+    assert cli.main(["run"]) == 41
 
 
 def test_real_entry_point_lookup_works() -> None:

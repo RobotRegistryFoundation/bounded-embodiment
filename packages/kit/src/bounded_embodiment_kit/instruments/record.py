@@ -139,7 +139,8 @@ def import_depthai():
         import depthai as dai  # noqa: PLC0415
     except ImportError as e:
         raise RecordError("DepthAI is not installed in this Python. The recorder needs DepthAI v2:\n"
-                          "  pip install 'depthai>=2.24,<3'") from e
+                          "  pip install 'bounded-embodiment-kit[oakd]'   (or: pip install 'depthai>=2.24,<3')\n"
+                          "Use --no-oak to record the wrist camera only.") from e
     ver = str(getattr(dai, "__version__", "0"))
     major, minor = _version_tuple(ver)[:2]
     if major >= 3:
@@ -2403,22 +2404,23 @@ def add_arguments(p):
     p.add_argument("--first-frame-timeout", type=float, default=15.0)
     sub = p.add_subparsers(dest="record_command", metavar="{check,board,devices,mark,stop}")
     c = sub.add_parser("check", help="summarise a recording; write check/contact_sheet.png")
-    c.add_argument("session")
+    c.add_argument("session", help="the session directory be record wrote")
     c.add_argument("--every", type=int, default=None, help="contact sheet: every Nth colour frame")
     c.add_argument("--max-rows", type=int, default=40)
     c.add_argument("--quick", action="store_true", help="stats and the board check only (for a live session)")
     c.add_argument("--board-json", default=None, help="board.json, if not the default board")
     b = sub.add_parser("board", help="write the printable ChArUco board")
-    b.add_argument("--out", dest="board_out", default="board.png")
-    b.add_argument("--pdf", dest="board_pdf", default=None)
+    b.add_argument("--out", dest="board_out", default="board.png", help="the board image (default board.png)")
+    b.add_argument("--pdf", dest="board_pdf", default=None, help="also write a US Letter PDF (print it at 100 %%)")
     b.add_argument("--json", dest="board_json_out", default=None, help="default: next to --out, board.json")
     d = sub.add_parser("devices", help="list the OAK-D and cameras, and who holds them")
     d.add_argument("--disk", dest="devices_disk", default=None, help="also report free space here")
     m = sub.add_parser("mark", help="log an event in a running recorder through its --events-fifo")
-    m.add_argument("label")
-    m.add_argument("--fifo", dest="mark_fifo", default=os.environ.get("BE_RECORD_FIFO"))
+    m.add_argument("label", help="the event, for example pre:T1, post:T1, jitter, moving, ev03_full")
+    m.add_argument("--fifo", dest="mark_fifo", default=os.environ.get("BE_RECORD_FIFO"),
+                   help="the recorder's --events-fifo (default: $BE_RECORD_FIFO)")
     s = sub.add_parser("stop", help="stop the recorder writing to SESSION (as Ctrl+C would)")
-    s.add_argument("stop_session", metavar="session")
+    s.add_argument("stop_session", metavar="session", help="the session directory being recorded")
     return p
 
 

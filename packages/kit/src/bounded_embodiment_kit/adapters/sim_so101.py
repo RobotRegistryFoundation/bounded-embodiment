@@ -590,8 +590,8 @@ class SimSO101Adapter(LeRobotAdapter):
 def add_arguments(p) -> None:
     g = p.add_argument_group("sim-so101 adapter")
     g.add_argument("--sim-sag", type=float, default=1.0,
-                   help="gravity sag as a multiple of bob's fit (0 = ideal servos)")
-    g.add_argument("--sim-friction", type=float, default=1.0, help="friction band, multiple of bob's")
+                   help="gravity sag as a multiple of the reference SO-101's measured sag (0 = ideal servos)")
+    g.add_argument("--sim-friction", type=float, default=1.0, help="friction band, as a multiple of the reference SO-101's")
     g.add_argument("--sim-tau", type=float, default=0.1, help="servo response time constant, s")
     g.add_argument("--sim-slew", type=float, default=270.0, help="servo slew limit, deg/s")
     g.add_argument("--sim-calibration", help="a LeRobot calibration file, to simulate that arm")

@@ -1,5 +1,5 @@
 [build-system]
-requires = ["hatchling>=1.25"]
+requires = ["hatchling>=1.27"]
 build-backend = "hatchling.build"
 
 [project]
@@ -9,8 +9,22 @@ description = "The lab bench for the Bounded Embodiment tests: adapters, instrum
 readme = "README.md"
 requires-python = ">=3.10"
 license = "Apache-2.0"
+license-files = ["LICENSES/Apache-2.0.txt"]
 authors = [{ name = "Craig Merry" }]
 dependencies = ["bounded-embodiment~=0.1.0", "numpy>=1.24"]
+keywords = ["robotics", "safety", "testing", "embodied AI", "test bench", "LeRobot", "OAK-D"]
+# CI tests the kit on Python 3.12 and 3.13 only (the lerobot extra needs 3.12 or later).
+classifiers = [
+  "Development Status :: 2 - Pre-Alpha",
+  "Intended Audience :: Science/Research",
+  "Intended Audience :: Developers",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3 :: Only",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Topic :: Scientific/Engineering",
+  "Topic :: Software Development :: Testing",
+]
 
 [project.optional-dependencies]
 camera = ["opencv-python-headless>=4.9,<4.14"]
@@ -23,7 +37,14 @@ test = ["pytest>=8"]
 kit = "bounded_embodiment_kit.cli:register"
 
 [project.urls]
-Repository = "https://github.com/RobotRegistryFoundation/bounded-embodiment"
+Homepage = "https://craigmerry.com/bounded-embodiment/"
+Documentation = "https://github.com/RobotRegistryFoundation/bounded-embodiment/blob/main/docs/lab-guide.md"
+Requirements = "https://github.com/RobotRegistryFoundation/bounded-embodiment/blob/main/docs/requirements.md"
+Method = "https://github.com/RobotRegistryFoundation/bounded-embodiment/blob/main/method/bounded-embodiment-method-v0.1.md"
+Source = "https://github.com/RobotRegistryFoundation/bounded-embodiment"
+Issues = "https://github.com/RobotRegistryFoundation/bounded-embodiment/issues"
+Changelog = "https://github.com/RobotRegistryFoundation/bounded-embodiment/blob/main/CHANGELOG.md"
+Results = "https://robotregistryfoundation.org/bounded-embodiment/results/"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/bounded_embodiment_kit"]

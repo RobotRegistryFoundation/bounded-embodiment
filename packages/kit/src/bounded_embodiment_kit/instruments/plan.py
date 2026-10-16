@@ -264,16 +264,17 @@ def run_plan(args, *, say: Callable[[str], None] = print) -> int:
 def add_parser(sub) -> argparse.ArgumentParser:
     p = sub.add_parser("plan", help="poses that put the measured point near each corner of its keep-in",
                        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    p.add_argument("--envelope", required=True)
-    p.add_argument("--urdf", required=True)
+    p.add_argument("--envelope", required=True, help="the envelope JSON the run uses")
+    p.add_argument("--urdf", required=True, help="the robot's URDF")
     p.add_argument("--kit-config", required=True, help="start_pose_deg and joint_map")
     p.add_argument("--command-space", help="also keep every pose inside the robot's own axis limits")
-    p.add_argument("--point", default=None)
-    p.add_argument("--inset-mm", type=float, default=20.0)
-    p.add_argument("--margin-mm", type=float, default=10.0)
+    p.add_argument("--point", default=None, help="the measured point (default: tool, else the envelope's first)")
+    p.add_argument("--inset-mm", type=float, default=20.0, help="targets this far inside each face (default 20)")
+    p.add_argument("--margin-mm", type=float, default=10.0,
+                   help="every envelope point at least this far inside its zones (default 10)")
     p.add_argument("--level", default=None, metavar="LINK:AXIS",
                    help="keep this link axis horizontal (SO-101: gripper_link:x, the fixed jaw's face vertical)")
-    p.add_argument("--out", default=None)
+    p.add_argument("--out", default=None, help="also write the plan as JSON (be-target-plan/0.1)")
     p.add_argument("--waypoints-out", default=None, metavar="PATH",
                    help="also write the targets as EV-10 waypoints (needs --command-space)")
     return p

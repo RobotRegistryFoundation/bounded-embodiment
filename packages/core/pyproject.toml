@@ -1,5 +1,5 @@
 [build-system]
-requires = ["hatchling>=1.25"]
+requires = ["hatchling>=1.27"]
 build-backend = "hatchling.build"
 
 [project]
@@ -8,13 +8,25 @@ version = "0.1.0"
 description = "The Bounded Embodiment test method, executable: canonical JSON, signing, envelopes, the hostile command generator, scoring and report verification."
 readme = "README.md"
 requires-python = ">=3.10"
-license = "Apache-2.0"
+# Code is Apache-2.0; the packaged schemas/ and profiles/ are CC BY 4.0 (see REUSE.toml).
+license = "Apache-2.0 AND CC-BY-4.0"
+license-files = ["LICENSES/Apache-2.0.txt", "LICENSES/CC-BY-4.0.txt"]
 authors = [{ name = "Craig Merry" }]
 dependencies = ["jsonschema>=4.18", "cryptography>=42"]
+keywords = ["robotics", "safety", "testing", "embodied AI", "test method"]
 classifiers = [
-  "Programming Language :: Python :: 3",
+  "Development Status :: 3 - Alpha",
+  "Intended Audience :: Science/Research",
+  "Intended Audience :: Developers",
   "Operating System :: OS Independent",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3 :: Only",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
   "Topic :: Scientific/Engineering",
+  "Topic :: Software Development :: Testing",
 ]
 
 [project.optional-dependencies]
@@ -25,7 +37,14 @@ be = "bounded_embodiment.cli:main"
 bounded-embodiment = "bounded_embodiment.cli:main"
 
 [project.urls]
-Repository = "https://github.com/RobotRegistryFoundation/bounded-embodiment"
+Homepage = "https://craigmerry.com/bounded-embodiment/"
+Documentation = "https://github.com/RobotRegistryFoundation/bounded-embodiment/blob/main/README.md"
+Requirements = "https://github.com/RobotRegistryFoundation/bounded-embodiment/blob/main/docs/requirements.md"
+Method = "https://github.com/RobotRegistryFoundation/bounded-embodiment/blob/main/method/bounded-embodiment-method-v0.1.md"
+Source = "https://github.com/RobotRegistryFoundation/bounded-embodiment"
+Issues = "https://github.com/RobotRegistryFoundation/bounded-embodiment/issues"
+Changelog = "https://github.com/RobotRegistryFoundation/bounded-embodiment/blob/main/CHANGELOG.md"
+Results = "https://robotregistryfoundation.org/bounded-embodiment/results/"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/bounded_embodiment"]

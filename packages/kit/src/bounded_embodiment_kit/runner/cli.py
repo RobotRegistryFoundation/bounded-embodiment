@@ -1,9 +1,9 @@
 # SPDX-FileCopyrightText: 2026 Craig Merry and contributors
 # SPDX-License-Identifier: Apache-2.0
-"""DRAFT — requires line-by-line human review before use on hardware.
+"""DRAFT: requires line-by-line human review before use on hardware.
 
-``be run``, ``be goto-start``, ``be doctor`` and ``be adapter`` (entry-point group
-``bounded_embodiment.cli``, through ``bounded_embodiment_kit.cli``).
+``be run``, ``be goto-start``, ``be doctor`` and ``be adapter``: the runner, its watchdog and the
+adapters. Before anything moves, read the lab guide's safety section (docs/lab-guide.md, step 0).
 
     be doctor [--port P --id ID] [--envelope E --kit-config K --urdf U] [--instrument udp:PORT]
     be goto-start --adapter lerobot --port P --id ID --envelope E --command-space C \\
@@ -135,7 +135,8 @@ def register(subparsers) -> None:
     p.add_argument("--seconds", type=float, help="shorten the run (a short shakedown does not count)")
     p.add_argument("--target", help="control: the far target id")
     p.add_argument("--step-cap", help="control: largest change per command (number, or JSON per axis)")
-    p.add_argument("--i-accept-the-risk", action="store_true")
+    p.add_argument("--i-accept-the-risk", action="store_true",
+                   help="required for every run: the stream is meant to make a weak gate fail")
     p.add_argument("--no-fk-tripwire-i-understand", action="store_true",
                    help="run without the FK tripwire (recorded; tool-unseen limit 0.2 s)")
     p.add_argument("--ledger", help="the shakedown ledger (default: ~/.local/state/bounded-embodiment/)")
@@ -150,13 +151,18 @@ def register(subparsers) -> None:
     _adapter_args(g)
     g.set_defaults(func=_cmd_goto)
 
-    d = subparsers.add_parser("doctor", help="read-only check of this machine and the arm")
-    d.add_argument("--port")
-    d.add_argument("--id", dest="robot_id")
-    d.add_argument("--robot-type", default="so101_follower")
-    d.add_argument("--envelope")
-    d.add_argument("--kit-config")
-    d.add_argument("--urdf")
+    d = subparsers.add_parser("doctor", help="read-only check of this machine and the arm",
+                              description="Read-only check: this computer's Python, packages, serial ports (and "
+                              "who holds them) and LeRobot calibration files; with --port and --id, the "
+                              "arm's servo registers, and with --envelope and --urdf also where its own "
+                              "kinematics put the envelope's points; with --instrument, the instrument "
+                              "feed. Nothing moves. Prints one JSON object; exit 1 if a check failed.")
+    d.add_argument("--port", help="the follower's serial port (lerobot)")
+    d.add_argument("--id", dest="robot_id", help="the LeRobot robot id (its calibration file)")
+    d.add_argument("--robot-type", default="so101_follower", help="LeRobot robot type (default so101_follower)")
+    d.add_argument("--envelope", help="envelope JSON (with --urdf: locate its points on the arm)")
+    d.add_argument("--kit-config", help="kit config JSON: the joint map for --urdf")
+    d.add_argument("--urdf", help="the robot's URDF, for forward kinematics (needs --envelope)")
     d.add_argument("--instrument", help="udp:PORT: listen to the instrument feed")
     d.add_argument("--listen", type=float, default=3.0, help="seconds to listen (default 3)")
     d.set_defaults(func=_cmd_doctor)
@@ -164,7 +170,7 @@ def register(subparsers) -> None:
     a = subparsers.add_parser("adapter", help="write a python adapter template, or list adapters")
     asub = a.add_subparsers(dest="adapter_command", required=True)
     n = asub.add_parser("new", help="write NAME_adapter.py")
-    n.add_argument("name")
-    n.add_argument("--out", default=".")
+    n.add_argument("name", help="the adapter's name; the file is NAME_adapter.py")
+    n.add_argument("--out", default=".", help="directory to write it in (default: the current one)")
     asub.add_parser("list", help="the built-in adapters")
     a.set_defaults(func=_cmd_adapter)

@@ -3,7 +3,8 @@
 **DRAFT. Requires line-by-line human review before any of it drives hardware.** Written to be
 folded into CONTRACT.md. Everything here is implemented in
 `packages/kit/src/bounded_embodiment_kit/{adapters,runner}/` and tested without hardware in
-`packages/kit/tests/test_runner_*.py`. "Proposed" marks what other workstreams still have to adopt.
+`packages/kit/tests/test_runner_*.py`. "Proposed" marked what other workstreams had to adopt; both
+proposals have since been adopted (marked "Adopted").
 
 ## Modules
 
@@ -61,7 +62,7 @@ connected the inner robot's bus itself. It returns anything with `send_action(ac
 `context` is plain data: `mode`, `speed_factor` (0.5 in a shakedown, else `None` = "your default"),
 `envelope_path`, `command_space_path`, `kit_config_path`, `urdf_path`. The adapter never calls the
 wrapper's `connect()`, `configure()` or `disconnect()`, nor the inner robot's `connect()` or
-`disconnect()`. Stops, state reads and the release go to the inner robot's bus. **Proposed** for
+`disconnect()`. Stops, state reads and the release go to the inner robot's bus. **Adopted** in
 `examples/reference-gates/`: factories take `(robot, context)`.
 
 **Safe connect (SO-10x, `connect_safely`).** Calibration file present and matching the servos;
@@ -173,12 +174,13 @@ Gaussian noise `--sim-sigma-m` (0.001), a fixed bias of length `--sim-bias-m` (0
 `--seconds` shortens any run; a shakedown under 60 s is recorded but does not count. With the
 so101 example the 60 s shakedown stream equals core's `so101-seed7-shakedown-60s` vector (tested).
 
-**Control and core's `control_stream`.** `control_stream` walks from the command space's `home`, not
-from where the machine is. With `--step-cap X` the runner refuses unless every capped axis is
-within X of home (the so101 example's start pose is up to 75 deg from home: the first command would
-swing the wrist). `--step-cap none` sends the far target every command and needs the adapter's own
+**Control and core's `control_stream`.** `control_stream` walks from its declared `start`, not
+from where the machine is; with `--step-cap X` the runner declares the kit config's start pose as
+`start` and refuses unless every capped axis is within X of it now (run `be goto-start` first).
+Before `start` existed the stream walked from the command space's `home`, and the so101 example's
+start pose is up to 75 deg from home, so the first command would have swung the wrist. `--step-cap none` sends the far target every command and needs the adapter's own
 per-command limit (`--max-relative-target`, LeRobot's clamp relative to the present position:
-hw.py's control case). **Proposed** for core: a `start=` argument to `control_stream`.
+hw.py's control case). **Adopted** in core: a `start=` argument to `control_stream`.
 
 ## Run directory
 

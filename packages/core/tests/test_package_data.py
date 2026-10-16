@@ -46,6 +46,13 @@ def _load_script():
     return module
 
 
+@pytest.mark.parametrize("package", ["core", "kit"])
+def test_licence_copies_are_identical(package: str) -> None:
+    """Each wheel carries the licence texts (license-files); the copies match the repository's."""
+    source, packaged = _tree(REPO_ROOT / "LICENSES"), _tree(REPO_ROOT / "packages" / package / "LICENSES")
+    assert source and source == packaged, "run python tools/sync_package_data.py"
+
+
 @pytest.mark.parametrize("name", ["schemas", "profiles"])
 def test_package_copy_is_identical(name: str) -> None:
     source, packaged = _tree(REPO_ROOT / name), _tree(PACKAGE / name)

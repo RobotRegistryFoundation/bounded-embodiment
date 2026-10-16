@@ -40,13 +40,16 @@ maintained by the same person; the method does not depend on it.
 | [`schemas/`](schemas/), [`profiles/`](profiles/) | the formats and the illustrative thresholds (shipped inside core) |
 | [`vectors/`](vectors/) | golden streams, scoring cases and signed golden runs |
 | [`examples/`](examples/) | envelopes, command spaces, the SO-101 URDF, reference gates |
-| [`docs/requirements.md`](docs/requirements.md) | the five requirements, the full test plan and the assurance levels (scope draft, informative) |
+| [`docs/requirements.md`](docs/requirements.md) | the five requirements, the full test plan, recovery after a gate decision and the assurance levels (scope draft, informative) |
 | [`docs/lab-guide.md`](docs/lab-guide.md) | a lab's session, from setup to a signed submission |
 | [`docs/accuracy-survey.md`](docs/accuracy-survey.md) | surveying the accuracy check's points with tape, rule and plumb line |
 | [`CONTRACT.md`](CONTRACT.md), [`docs/seams/`](docs/seams/) | the interfaces between the parts |
 
 Results go to [bounded-embodiment-results](https://github.com/RobotRegistryFoundation/bounded-embodiment-results),
-whose CI checks every submission with `be verify`.
+whose CI checks every submission with `be verify`. The merged results are listed in a table at
+<https://robotregistryfoundation.org/bounded-embodiment/results/>. The talk and where the work goes
+next are at <https://craigmerry.com/bounded-embodiment/>. Changes to the packages are in
+[CHANGELOG.md](CHANGELOG.md).
 
 ## Try it in simulation
 

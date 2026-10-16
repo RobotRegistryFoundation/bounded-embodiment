@@ -1,11 +1,14 @@
 #!/usr/bin/env python3
-"""Mirror the repository's schemas/ and profiles/ into the core package.
+"""Mirror the repository's schemas/ and profiles/ into the core package, and LICENSES/ into both packages.
 
 The core package ships its schemas and profiles as package data
-(bounded_embodiment/schemas/, bounded_embodiment/profiles/). The copies in the
-repository root are the ones people edit; this script makes the package copies
-byte-identical to them, removing package files that no longer exist at the
-root. Running it twice changes nothing the second time.
+(bounded_embodiment/schemas/, bounded_embodiment/profiles/). Both packages ship
+the licence texts in their wheels' metadata (packages/*/LICENSES/, named by
+license-files in each pyproject.toml), and a build cannot reach files outside
+the package directory. The copies in the repository root are the ones people
+edit; this script makes the package copies byte-identical to them, removing
+package files that no longer exist at the root. Running it twice changes
+nothing the second time.
 
     python tools/sync_package_data.py           # sync
     python tools/sync_package_data.py --check   # report drift, exit 1 if any
@@ -24,6 +27,8 @@ PACKAGE = ROOT / "packages" / "core" / "src" / "bounded_embodiment"
 PAIRS = (
     (ROOT / "schemas", PACKAGE / "schemas"),
     (ROOT / "profiles", PACKAGE / "profiles"),
+    (ROOT / "LICENSES", ROOT / "packages" / "core" / "LICENSES"),
+    (ROOT / "LICENSES", ROOT / "packages" / "kit" / "LICENSES"),
 )
 
 

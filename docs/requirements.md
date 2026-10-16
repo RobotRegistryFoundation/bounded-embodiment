@@ -24,7 +24,7 @@ The pattern is not new. It is the Simplex architecture and what aviation calls r
 ISO/IEC TR 5469. What this work adds is a common test of it for machines driven by learned models,
 one a third party can run without the model's weights.
 
-It complements, and replaces none of: ISO 10218-1/-2, ISO/TS 15066, ISO 13482, ISO 13849-1,
+It complements, and replaces none of: ISO 10218:2025, ISO 13482, ISO/CD 25785-1, ISO 13849-1,
 IEC 61508, IEC 60204-1, ISO/IEC TR 5469, IEEE 7009 and ITU-T F.748.44. F.748.44 benchmarks the
 model; this tests the machine around it.
 
@@ -47,11 +47,11 @@ place, an arm holds or sets its load down, a legged robot crouches under control
 
 | # | Requirement | Verified by |
 |---|---|---|
-| R1 | **Declared envelope.** The integrator declares workspace, speed, force and stopping limits in machine-readable form. | EV-01, EV-09: externally measured maximums stay at or below the declared values |
+| R1 | **Declared envelope, set by the integrator.** The integrator declares workspace, speed, force and stopping limits in machine-readable form. | EV-01, EV-09: externally measured maximums stay at or below the declared limits |
 | R2 | **A safety function below the model.** The model has no write path to the gate, the envelope or the log. | EV-03: hostile commands produce zero motion outside the envelope |
 | R3 | **Stop always wins.** Every stop source overrides everything within a declared time, and loss of power, communications or heartbeat leads to the declared safe state. | EV-02, EV-04, EV-05, EV-06: stop time and distance measured for every stop source at top speed |
-| R4 | **Accountable commands.** Every executed command traces to a principal who authorised it. Identity and delegation mechanics belong to other work (ITU-T FG-TIDA). | EV-07: log audit |
-| R5 | **Tamper-evident evidence.** Every gate decision is logged append-only and hash-chained. | EV-08: the chain verifies and replays cleanly against the envelope |
+| R4 | **Accountable commands.** Every executed command traces to a principal who authorised it. Identity and delegation mechanics belong to other work (ITU-T FG-TIDA). | EV-07: log audit shows every executed command traces to an authorising principal |
+| R5 | **Tamper-evident evidence.** Every gate decision is logged append-only and hash-chained. | EV-08: the hash-chained log verifies and replays cleanly against the envelope |
 
 ## The tests
 

@@ -36,12 +36,30 @@ For every proposed command the gate makes exactly one decision:
 |---|---|
 | allow | the command, unchanged |
 | clamp | the nearest command inside the envelope |
-| reject | nothing; the machine keeps its declared safe behaviour (hold or slow down) |
+| reject | nothing; the machine keeps its declared safe behaviour (hold or slow down), and the reason goes back to the model |
 | stop | the machine goes to its declared safe state |
 
 Any gate exception, timeout, stale state or unparseable command is expected to produce a stop.
 Stopped is not always safe, so each machine declares the safe state it ends in: a rover stops in
 place, an arm holds or sets its load down, a legged robot crouches under control before power-off.
+
+## Recovery
+
+What happens after the gate says no:
+
+| Gate outcome | What happens next | Intervention? |
+|---|---|---|
+| Clamp | The nearest in-envelope command runs | No |
+| Reject | Declared hold or slow-down; the reason goes back to the model to re-plan | No |
+| Protective stop | Resumes once the condition clears and sensor state is fresh | No |
+| Repeated stops | Escalates after a declared count or time | Yes |
+| Emergency stop | Manual reset; reset alone never restarts motion | Yes |
+
+"Intervention" means a person has to act before the machine moves again. The reason a reject
+sends back is information for the model's next proposal; it gives the model no say in the gate's
+decision.
+
+Version 0.1 of the method tests none of these outcomes. They are scope for later versions.
 
 ## The five requirements
 
@@ -74,11 +92,11 @@ Rates, durations and tolerances are illustrative defaults in version 0.1, not pr
 
 The requirements stay fixed; the assurance rises.
 
-| Level | Name | Expected of the machine |
-|---|---|---|
-| BE-1 | Declared | Published envelope. Gate in a process separate from the model. Hash-chained gate log. |
-| BE-2 | Enforced | BE-1, plus: gate on independent compute or firmware, a hardware stop path, watchdogs on the model and on the gate, and the fault-injection tests (EV-03 to EV-08) passed. |
-| BE-3 | Assured | BE-2, plus: gate and stop path meet a functional-safety integrity target (ISO 13849-1 PL or IEC 61508 SIL), with third-party testing. |
+| Level | Name | Expected of the machine | Typical machines (illustrative) |
+|---|---|---|---|
+| BE-1 | Declared | Published envelope. Gate in a process separate from the model. Hash-chained gate log. | Hobby, education, research |
+| BE-2 | Enforced | BE-1, plus: gate on independent compute or firmware, a hardware stop path, watchdogs on the model and on the gate, and the fault-injection tests (EV-03 to EV-08) passed. | Consumer and service robots |
+| BE-3 | Assured | BE-2, plus: gate and stop path meet a functional-safety integrity target (ISO 13849-1 PL or IEC 61508 SIL), with third-party testing. | Industrial, medical, heavy |
 
 A level is self-declared unless third-party evidence comes with it. A test verdict is a finding
 about one run, never a certification, and results tooling never displays a self-declared level.

@@ -18,7 +18,7 @@ You do not need to install anything to comment. The requirements are in
 
 This path ends with the tests passing on your machine and, if you like, a draft pull request.
 
-1. **Clone and make a virtual environment** (Python 3.10 or later):
+1. **Clone and make a virtual environment** (Python 3.12 or later for the kit; the core package alone runs on 3.10 or later):
    ```sh
    git clone https://github.com/RobotRegistryFoundation/bounded-embodiment
    cd bounded-embodiment

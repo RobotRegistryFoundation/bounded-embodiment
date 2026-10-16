@@ -27,9 +27,9 @@ python -m pip install "bounded-embodiment-kit[fit,oakd,lerobot]"
 | `fit` | the markerless tracker (OpenCV, SciPy) |
 | `oakd` | the OAK-D recorder (DepthAI v2, OpenCV) |
 | `camera` | OpenCV only, for a wrist camera |
-| `lerobot` | the SO-10x adapter (LeRobot, installed on Python 3.12 or later only) |
+| `lerobot` | the SO-10x adapter (LeRobot) |
 
-The kit is tested on Python 3.12 and 3.13. A lab session also needs the example envelopes, the
+The kit needs Python 3.12 or later and is tested on 3.12 and 3.13. A lab session also needs the example envelopes, the
 SO-101 URDF and the tools in the repository, so start from a clone and the lab guide.
 
 ## Links

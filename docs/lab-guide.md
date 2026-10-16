@@ -27,8 +27,7 @@ produce `be-samples-csv/1`.
 ## 1. Install
 
 From a clone of this repository, which holds the example envelopes, the SO-101 URDF and the tools
-the steps below use. The `lerobot` extra installs LeRobot only on Python 3.12 or later; on an older
-Python the SO-101 adapter cannot load.
+the steps below use. The kit needs Python 3.12 or later.
 
 ```sh
 python -m pip install -e packages/core -e "packages/kit[fit,oakd,lerobot]"

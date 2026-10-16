@@ -218,10 +218,13 @@ def test_no_frames_from_the_camera_fails_cleanly(tmp_path):
     assert meta["status"] == "failed" and dai.devices[0].closed
 
 
-def test_stop_command_stops_a_running_recorder(tmp_path, fake_dai):
+def test_stop_command_stops_a_running_recorder(tmp_path, fake_dai, monkeypatch):
     """`record.py stop DIR` sends SIGINT to the pid in recorder.pid; the recorder finishes cleanly."""
     import os
     import signal
+    # The default plan is 20 minutes of recording (about 16 GB with margin); the check must not
+    # depend on how much disk the machine running the tests has free.
+    monkeypatch.setattr(record, "free_bytes", lambda path: 1e12)
     out = tmp_path / "s10"
     args = _args("--out", str(out), "--wrist", "none")
     rec = record.Recorder(args, dai=fake_dai, console_stream=io.StringIO(), install_signals=True)

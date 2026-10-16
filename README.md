@@ -13,6 +13,25 @@ INCONCLUSIVE) anyone can recompute from the raw data with `be verify`.
 finding about one run, never a certification. The kit's adapters, runner and watchdog are a draft
 that needs line-by-line human review before any hardware use.
 
+## Take part
+
+This method was proposed at the ITU Workshop on "Embodied AI for Multimedia Technologies" (Hangzhou,
+China, 16 October 2026), held with the ITU-T Focus Group on Embodied AI. That is a presentation, not an
+endorsement: neither ITU nor any other body has reviewed or adopted it. It asked for three things.
+
+| | One action |
+|---|---|
+| **Feedback** on the five requirements and the tests: what's missing, what's wrong? | Read [docs/requirements.md](docs/requirements.md), then open a [Feedback on a requirement or test](https://github.com/RobotRegistryFoundation/bounded-embodiment/issues/new?template=feedback-requirement.yml) issue |
+| **Collaborators** to shape it into a written contribution to FG-EAI | Start a thread in [Discussions](https://github.com/RobotRegistryFoundation/bounded-embodiment/discussions) under "Standards contribution", or email craig@craigmerry.com |
+| **Testbeds** willing to run the tests on real hardware and show where it breaks | Open an [Offer a testbed](https://github.com/RobotRegistryFoundation/bounded-embodiment/issues/new?template=offer-testbed.yml) issue |
+
+[CONTRIBUTING.md](CONTRIBUTING.md) has a path through the code that fits in 30 minutes, and the terms
+for contributions that may end up in a standards contribution (DCO sign-off, licences, patents).
+
+There is one maintainer and no third-party verification yet. The method is vendor-neutral: running a
+test needs no particular protocol, vendor or model. One open implementation, RCAN (rcan.dev), is
+maintained by the same person; the method does not depend on it.
+
 | | |
 |---|---|
 | [`method/`](method/) | the normative text (CC BY 4.0) and how to cite it |
@@ -21,6 +40,7 @@ that needs line-by-line human review before any hardware use.
 | [`schemas/`](schemas/), [`profiles/`](profiles/) | the formats and the illustrative thresholds (shipped inside core) |
 | [`vectors/`](vectors/) | golden streams, scoring cases and signed golden runs |
 | [`examples/`](examples/) | envelopes, command spaces, the SO-101 URDF, reference gates |
+| [`docs/requirements.md`](docs/requirements.md) | the five requirements, the full test plan and the assurance levels (scope draft, informative) |
 | [`docs/lab-guide.md`](docs/lab-guide.md) | a lab's session, from setup to a signed submission |
 | [`docs/accuracy-survey.md`](docs/accuracy-survey.md) | surveying the accuracy check's points with tape, rule and plumb line |
 | [`CONTRACT.md`](CONTRACT.md), [`docs/seams/`](docs/seams/) | the interfaces between the parts |
@@ -31,9 +51,11 @@ whose CI checks every submission with `be verify`.
 ## Try it in simulation
 
 ```sh
-python -m pip install -e packages/core -e packages/kit
+python3 -m venv .venv && . .venv/bin/activate
+python -m pip install -e "packages/core[test]" -e "packages/kit[fit,test]"
 be --help
-python -m pytest -q packages/core/tests packages/kit/tests -m "not slow"
+python -m pytest -q packages/core/tests
+python -m pytest -q packages/kit/tests -m "not slow"
 ```
 
 The kit's tests run the whole bench against simulated machines, with and without reference gates
@@ -42,5 +64,5 @@ rehearsal: its verdict is INCONCLUSIVE by rule.
 
 ## License
 
-Code: Apache-2.0. The method text, schemas, profiles and vectors: CC BY 4.0. See `REUSE.toml` and
+Code: Apache-2.0. The method text, the requirements page, schemas, profiles and vectors: CC BY 4.0. See `REUSE.toml` and
 `LICENSES/`.

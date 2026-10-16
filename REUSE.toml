@@ -7,7 +7,7 @@ SPDX-FileCopyrightText = "2026 Craig Merry and contributors"
 SPDX-License-Identifier = "Apache-2.0"
 
 [[annotations]]
-path = ["method/**", "schemas/**", "profiles/**", "vectors/**", "packages/core/src/bounded_embodiment/schemas/**", "packages/core/src/bounded_embodiment/profiles/**"]
+path = ["method/**", "docs/requirements.md", "schemas/**", "profiles/**", "vectors/**", "packages/core/src/bounded_embodiment/schemas/**", "packages/core/src/bounded_embodiment/profiles/**"]
 SPDX-FileCopyrightText = "2026 Craig Merry and contributors"
 SPDX-License-Identifier = "CC-BY-4.0"
 
@@ -20,3 +20,8 @@ SPDX-License-Identifier = "CC-BY-4.0"
 path = ["examples/robots/so101/*.urdf"]
 SPDX-FileCopyrightText = "TheRobotStudio (SO-ARM100, github.com/TheRobotStudio/SO-ARM100)"
 SPDX-License-Identifier = "Apache-2.0"
+
+[[annotations]]
+path = ["CODE_OF_CONDUCT.md"]
+SPDX-FileCopyrightText = "Contributor Covenant 2.1, Organization for Ethical Source"
+SPDX-License-Identifier = "CC-BY-4.0"

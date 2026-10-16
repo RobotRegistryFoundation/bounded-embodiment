@@ -1,0 +1,11 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Help shape a standards contribution
+    url: https://github.com/RobotRegistryFoundation/bounded-embodiment/discussions
+    about: Co-develop this into a written contribution to ITU-T FG-EAI or another standards body.
+  - name: Questions
+    url: https://github.com/RobotRegistryFoundation/bounded-embodiment/discussions/categories/q-a
+    about: Ask about the method, the kit or the results.
+  - name: Signed results
+    url: https://github.com/RobotRegistryFoundation/bounded-embodiment-results
+    about: Submit a signed test report by pull request.

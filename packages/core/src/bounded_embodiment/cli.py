@@ -46,6 +46,11 @@ EXIT_OK, EXIT_FAIL, EXIT_USAGE = 0, 1, 2
 # Commands whose arguments belong to another module: name -> (module, hook).
 PASSTHROUGH = {"verify": ("bounded_embodiment.report", "cli_verify")}
 
+# Commands that the lab bench, bounded-embodiment-kit, adds. Only used to say so when it is missing.
+KIT_COMMANDS = frozenset({"record", "fit", "instrument", "run", "goto-start", "doctor", "adapter",
+                          "report", "submit"})
+DOCS_URL = "https://github.com/RobotRegistryFoundation/bounded-embodiment"
+
 
 def _err(message: str) -> None:
     print(f"be: {message}", file=sys.stderr)
@@ -98,6 +103,13 @@ def _write_new(path: Path, text: str, *, mode: int = 0o644, force: bool = False)
 # --------------------------------------------------------------------------- keygen
 
 _ENTRY_FLAGS = {"/lab": "--lab", "/contact": "--contact", "/added": "--added"}
+# What a first-time lab needs to hear instead of the schema's regular expression.
+_ENTRY_HINTS = {
+    "/lab": "a lab id is 1 to 64 lower-case letters, digits and hyphens, starting and ending with a "
+            "letter or digit (for example my-lab)",
+    "/contact": "give an email address, for example lab@example.org",
+    "/added": "give a real date as YYYY-MM-DD",
+}
 
 
 def _cmd_keygen(args: argparse.Namespace) -> int:
@@ -108,8 +120,16 @@ def _cmd_keygen(args: argparse.Namespace) -> int:
     entry = signing.key_entry(public, args.lab, args.contact, added)
     problems = signing.check_key_entry(entry)
     if problems:
+        values = {"/lab": args.lab, "/contact": args.contact, "/added": added}
+        told: set[str] = set()
         for f in problems:
-            _err(f"{_ENTRY_FLAGS.get(f.where, f.where or 'entry')}: {f.detail}")
+            flag = _ENTRY_FLAGS.get(f.where, f.where or "entry")
+            if f.where in _ENTRY_HINTS:
+                if f.where not in told:
+                    told.add(f.where)
+                    _err(f"{flag}: {values[f.where]!r} is not accepted: {_ENTRY_HINTS[f.where]}")
+            else:
+                _err(f"{flag}: {f.detail}")
         return EXIT_USAGE
     path = Path(args.out)
     key_file = {"kid": entry["kid"], **private}
@@ -328,12 +348,17 @@ def _load_extensions(subparsers: Any) -> None:
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="be",
-        description="The Bounded Embodiment test method: canonical JSON, keys, envelopes and report verification.",
+        description="The Bounded Embodiment test method: lab keys, envelopes, and checking a signed "
+        "report against its raw data (be verify). The lab bench, bounded-embodiment-kit, adds the "
+        "commands that record, run, measure and package a test.",
+        epilog=f"Lab guide, method text and source: {DOCS_URL}. Run 'be COMMAND --help' for a command's options.",
     )
     parser.add_argument("--version", action="version", version=f"bounded-embodiment {__version__}")
     sub = parser.add_subparsers(title="commands", metavar="COMMAND")
 
-    p = sub.add_parser("keygen", help="create an Ed25519 signing key for a lab")
+    p = sub.add_parser("keygen", help="create an Ed25519 signing key for a lab",
+                       description="Create a lab's Ed25519 signing key. The private key goes to --out; the "
+                       "public key entry for the results repository's labs/<lab>/lab.json is printed.")
     p.add_argument("--out", required=True,
                    help="where to write the private JWK (created with mode 0600, never overwritten)")
     p.add_argument("--lab", required=True, help="lab identifier, as in labs/<lab>/ of the results repository")
@@ -341,7 +366,9 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--added", help="date the key is added, YYYY-MM-DD (default: today, UTC)")
     p.set_defaults(func=_cmd_keygen)
 
-    p = sub.add_parser("canon", help="print the RFC 8785 canonical form of a JSON file (debugging)")
+    p = sub.add_parser("canon", help="print the RFC 8785 canonical form of a JSON file (debugging)",
+                       description="Print the RFC 8785 (JCS) canonical form of a JSON file, the bytes that "
+                       "hashes and signatures cover.")
     p.add_argument("file", help="JSON file, or - for standard input")
     p.add_argument("--unsigned", action="store_true", help="drop the top-level signature member first")
     p.add_argument("--sha256", action="store_true", help="print sha256:<hex> of the canonical bytes instead")
@@ -351,31 +378,41 @@ def build_parser() -> argparse.ArgumentParser:
     env = p.add_subparsers(title="envelope commands", metavar="ACTION")
     p.set_defaults(func=lambda args, _p=p: (_p.print_help(sys.stderr), EXIT_USAGE)[1])
     q = env.add_parser("validate", help="check an envelope (0.1 or 0.2) and print its hash")
-    q.add_argument("file")
+    q.add_argument("file", help="the envelope JSON file")
     q.add_argument("--json", action="store_true", help="machine-readable output")
     q.set_defaults(func=_cmd_envelope_validate)
     q = env.add_parser("hash", help="print the envelope hash (sha256 of its JCS without signature)")
-    q.add_argument("file")
+    q.add_argument("file", help="the envelope JSON file")
     q.set_defaults(func=_cmd_envelope_hash)
     q = env.add_parser("convert", help="convert another envelope format to envelope 0.2")
     q.add_argument("--from", dest="source_format", required=True, choices=["harness-arm"],
                    help="format of the input file")
     q.add_argument("file", help="the envelope to convert, or - for standard input")
-    q.add_argument("--machine-id", required=True)
+    q.add_argument("--machine-id", required=True, help="machine.id for the new envelope")
     q.add_argument("--stop", required=True, help="the stop block, as inline JSON or a JSON file")
     q.add_argument("--heartbeat", required=True, help="the heartbeat block, as inline JSON or a JSON file")
-    q.add_argument("--frame", default=None)
-    q.add_argument("--class", dest="machine_class", default=None)
-    q.add_argument("--notes", default=None)
+    q.add_argument("--frame", default=None, help="the envelope frame (default base_link)")
+    q.add_argument("--class", dest="machine_class", default=None,
+                   help="machine.class: arm (default), mobile_base, mobile_manipulator, legged or other")
+    q.add_argument("--notes", default=None, help="free text appended to the envelope's notes")
     q.add_argument("--out", help="write the envelope here instead of standard output")
     q.add_argument("--kit-config", help="write the kit configuration (tolerances, start pose, joint map) here")
     q.add_argument("--force", action="store_true", help="replace existing output files")
     q.set_defaults(func=_cmd_envelope_convert)
 
-    sub.add_parser("verify", help="verify a run directory (provided by bounded_embodiment.report)", add_help=False)
+    sub.add_parser("verify", help="check that a signed report agrees with its files and recompute its verdict",
+                   add_help=False)
 
     _load_extensions(sub)
     return parser
+
+
+def _registered(parser: argparse.ArgumentParser) -> set[str]:
+    """The subcommand names the parser knows, extensions included."""
+    for action in parser._actions:  # noqa: SLF001 - argparse has no public accessor for subparsers
+        if isinstance(action, argparse._SubParsersAction):  # noqa: SLF001
+            return set(action.choices)
+    return set()
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -384,6 +421,10 @@ def main(argv: list[str] | None = None) -> int:
         if argv and argv[0] in PASSTHROUGH:
             return _passthrough(argv[0], argv[1:])
         parser = build_parser()
+        if argv and argv[0] in KIT_COMMANDS and argv[0] not in _registered(parser):
+            _err(f"'{argv[0]}' comes with the lab bench, which is not installed here: "
+                 "python -m pip install bounded-embodiment-kit")
+            return EXIT_USAGE
         args = parser.parse_args(argv)
         func = getattr(args, "func", None)
         if func is None:

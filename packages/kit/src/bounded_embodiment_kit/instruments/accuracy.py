@@ -698,7 +698,7 @@ def register(subparsers) -> argparse.ArgumentParser:
     sub = p.add_subparsers(dest="instrument_command", metavar="{check,plan}")
     c = sub.add_parser("check", help="write accuracy.csv from the samples, the surveyed targets and the holds",
                        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    c.add_argument("--envelope", required=True)
+    c.add_argument("--envelope", required=True, help="the envelope JSON the run uses")
     c.add_argument("--targets", required=True, help=f"surveyed points ({TARGETS_FORMAT})")
     src = c.add_mutually_exclusive_group(required=True)
     src.add_argument("--session", help="a be record session: holds from its events.csv")
@@ -711,12 +711,14 @@ def register(subparsers) -> argparse.ArgumentParser:
     c.add_argument("--registration", default=None, help="default SESSION/fit/registration.json")
     c.add_argument("--background", default=None, help="default SESSION/fit/background.npz")
     c.add_argument("--urdf", default=None, help="for fitting (default: the URDF the registration used)")
-    c.add_argument("--out", default=None)
-    c.add_argument("--settle-s", type=float, default=0.5)
-    c.add_argument("--hold-s", type=float, default=3.0)
-    c.add_argument("--jitter-s", type=float, default=15.0)
-    c.add_argument("--still-max-mm", type=float, default=2.0)
-    c.add_argument("--min-frames", type=int, default=5)
+    c.add_argument("--out", default=None,
+                   help="output directory (default RUN_DIR/accuracy with --run, else SESSION/fit/check)")
+    c.add_argument("--settle-s", type=float, default=0.5, help="a hold starts this long after its event (default 0.5)")
+    c.add_argument("--hold-s", type=float, default=3.0, help="longest pre or post hold, seconds (default 3)")
+    c.add_argument("--jitter-s", type=float, default=15.0, help="longest jitter hold, seconds (default 15)")
+    c.add_argument("--still-max-mm", type=float, default=2.0,
+                   help="a hold whose two halves' means differ by more than this moved (default 2)")
+    c.add_argument("--min-frames", type=int, default=5, help="fewest valid samples in a hold (default 5)")
     from .plan import add_parser as add_plan_parser
 
     add_plan_parser(sub)

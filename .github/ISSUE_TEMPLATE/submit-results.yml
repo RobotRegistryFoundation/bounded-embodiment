@@ -1,0 +1,38 @@
+name: Submit results
+description: You ran a test, or plan to, and want help submitting a signed result or have a question about one.
+title: "[Results] "
+labels: ["results"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Signed results are submitted by pull request to [bounded-embodiment-results](https://github.com/RobotRegistryFoundation/bounded-embodiment-results), whose README walks through `be keygen`, lab registration, `be report`, `be verify` and `be submit`. Use this form for anything that gets in the way. A FAIL or INCONCLUSIVE result is as welcome as a PASS.
+  - type: dropdown
+    id: stage
+    attributes:
+      label: Where are you?
+      options:
+        - "Planning a run"
+        - "Registering my lab"
+        - "Ran a control run or shakedown"
+        - "Ran a full run"
+        - "Submitted a pull request to bounded-embodiment-results"
+    validations:
+      required: true
+  - type: dropdown
+    id: test
+    attributes:
+      label: Test
+      options:
+        - "EV-03"
+        - "EV-10"
+        - "Both"
+    validations:
+      required: true
+  - type: textarea
+    id: detail
+    attributes:
+      label: What happened, and what do you need?
+      description: Include core and kit versions (`be --version`), the command you ran and its output.
+    validations:
+      required: true

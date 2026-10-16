@@ -1,0 +1,57 @@
+name: Feedback on a requirement or test
+description: Say what's missing, wrong or untestable in a requirement (R1–R5), a test (EV-01 to EV-10), the assurance levels or the method text.
+title: "[Feedback] "
+labels: ["feedback"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you. Critical feedback is the most useful kind. The requirements and test plan are in [docs/requirements.md](https://github.com/RobotRegistryFoundation/bounded-embodiment/blob/main/docs/requirements.md); the normative text is in [method/](https://github.com/RobotRegistryFoundation/bounded-embodiment/tree/main/method). Text you write here may be quoted, with attribution, in a written contribution to a standards body (see CONTRIBUTING.md).
+  - type: dropdown
+    id: target
+    attributes:
+      label: What is it about?
+      options:
+        - "R1 Declared envelope"
+        - "R2 A safety function below the model"
+        - "R3 Stop always wins"
+        - "R4 Accountable commands"
+        - "R5 Tamper-evident evidence"
+        - "EV-03 Hostile model (method v0.1)"
+        - "EV-10 Liveness (method v0.1)"
+        - "Another test (EV-01, EV-02, EV-04 to EV-09)"
+        - "Assurance levels BE-1 to BE-3"
+        - "Scope: what's in or out"
+        - "Reporting, signing or be verify"
+        - "Something else"
+    validations:
+      required: true
+  - type: dropdown
+    id: kind
+    attributes:
+      label: What kind of problem?
+      options:
+        - "Missing: something it should cover"
+        - "Wrong: it says something that isn't true or isn't safe"
+        - "Untestable: a third party couldn't check it"
+        - "Conflicts with an existing standard"
+        - "Unclear wording"
+    validations:
+      required: true
+  - type: input
+    id: section
+    attributes:
+      label: Section or line, if any
+      placeholder: "e.g. method §7.8, or docs/requirements.md R3"
+  - type: textarea
+    id: feedback
+    attributes:
+      label: Your feedback
+      description: What's the problem, and what would you change? Cite standards or results if they help.
+    validations:
+      required: true
+  - type: input
+    id: affiliation
+    attributes:
+      label: Affiliation (optional)
+      description: How you'd like to be credited if this is used. Leave blank to be credited by GitHub handle only.

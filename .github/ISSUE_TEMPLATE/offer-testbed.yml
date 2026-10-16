@@ -1,0 +1,46 @@
+name: Offer a testbed
+description: You have hardware and would like to run EV-03 or EV-10 on it, or help someone else run it.
+title: "[Testbed] "
+labels: ["testbed"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you. The aim is to find where the method or the kit breaks on real machines, so machines unlike a small arm are especially welcome. Nothing here commits you to publishing a result. Read [docs/lab-guide.md](https://github.com/RobotRegistryFoundation/bounded-embodiment/blob/main/docs/lab-guide.md) for what a session involves.
+  - type: input
+    id: machine
+    attributes:
+      label: Machine
+      placeholder: "e.g. 6-axis arm, wheeled rover, quadruped; make and model if you can share it"
+    validations:
+      required: true
+  - type: textarea
+    id: interface
+    attributes:
+      label: Command interface and gate
+      description: How commands reach the machine (ROS 2 topic, serial, vendor SDK...), and whether there is already a gate or safety-rated monitoring between the model and the motors.
+    validations:
+      required: true
+  - type: textarea
+    id: instrument
+    attributes:
+      label: External instrument
+      description: What could measure the machine from outside (motion capture, depth camera, laser tracker, none yet).
+  - type: dropdown
+    id: help
+    attributes:
+      label: What would help you most?
+      multiple: true
+      options:
+        - "An adapter for my command interface"
+        - "Help with the instrument setup"
+        - "Help declaring an envelope"
+        - "Reviewing the kit's runner and watchdog before hardware use"
+        - "Nothing, I'll run it and report back"
+  - type: checkboxes
+    id: safety
+    attributes:
+      label: Safety
+      options:
+        - label: The machine has a hardware stop that does not depend on any software, and someone will keep it within reach during runs.
+          required: true

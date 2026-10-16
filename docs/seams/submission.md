@@ -222,7 +222,8 @@ findings are printed); and a signed report that `verify` does not find consisten
 - **The results repository's policy lists `raw/state.csv.gz`, `raw/accuracy.csv` and
   `raw/instrument/` as required**; core treats them as optional (no accuracy file gives
   ACCURACY_CHECK_MISSING), and be submit leaves that to core and the reviewer.
-- **`kits.lock` is empty**, so until core 0.1.0 is released every submission is a dry run.
+- **`kits.lock`** has listed core 0.1.0 since its release on 12 Oct 2026. Before that it was empty,
+  and every submission was a dry run.
 - **CI does not clone the results repository**, so the end-to-end test's `be submit` step (the real
   path guard in both modes, identity, claim lint) skips there; set `BE_RESULTS_REPO` to a clone to
   run it. The `be submit` refusal tests use stand-in tools and always run.

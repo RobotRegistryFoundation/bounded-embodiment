@@ -1,6 +1,6 @@
 # Seams for v0.1 (frozen 10 Oct 2026)
 
-Every workstream builds against these names. If a name here is wrong, say so and get the file changed before you build on a different one. The approved plan is `claude/bounded-embodiment-kit-plan.md` in the project.
+Every workstream builds against these names. If a name here is wrong, say so and get the file changed before you build on a different one.
 
 ## Distributions
 
@@ -11,7 +11,7 @@ Every workstream builds against these names. If a name here is wrong, say so and
 | Path | `packages/core` | `packages/kit` |
 | Python | ≥ 3.10 | ≥ 3.10 (the `lerobot` extra needs ≥ 3.12) |
 | Runtime deps | `jsonschema>=4.18`, `cryptography>=42`, nothing else | core at the same minor version |
-| Extras | none | `lerobot`; `camera` (`opencv-python-headless>=4.9,<4.14`); `oakd` (`depthai>=2.24`) |
+| Extras | none | `lerobot` (`lerobot>=0.6.1` on Python ≥ 3.12, `pyserial`); `camera` (`opencv-python-headless>=4.9,<4.14`); `oakd` (`depthai>=2.24,<3` and OpenCV); `fit` (OpenCV, `scipy`) |
 
 - **Core must not import** numpy, the kit, lerobot, cv2, serial, depthai, any gate, or anything named `rcan*`.
 - **The kit must not import** any gate or anything named `rcan*`.
@@ -20,7 +20,7 @@ Every workstream builds against these names. If a name here is wrong, say so and
 **CLI.** `be`, with a `bounded-embodiment` alias.
 - Core registers the subcommands `verify`, `keygen`, `envelope` (`validate`, `convert`, `hash`), and `canon` (debug).
 - The kit adds subcommands through the entry-point group `bounded_embodiment.cli`.
-- `be run`, `be record`, `be fit`, `be instrument`, `be report`, `be submit` and `be doctor` all come from the kit.
+- `be run`, `be goto-start`, `be doctor`, `be adapter`, `be record`, `be fit`, `be instrument`, `be report` and `be submit` all come from the kit.
 
 ## Core module surface
 
@@ -145,7 +145,7 @@ It extends rcan-spec envelope 0.1 (copied unchanged to `schemas/envelope-0.1.jso
  "accuracy_check_max_age_s":43200}
 ```
 
-## Raw data formats (all UTF-8 CSV with a header row; compressed with gzip in a submission)
+## Raw data formats (all UTF-8 CSV with a header row; compressed with gzip in a submission, except `raw/accuracy.csv`)
 
 - **`be-samples-csv/1`:** `t_s,point,x_m,y_m,z_m,valid,residual_m`. Coordinates are in the envelope `frame`. `valid` is 0 or 1. `residual_m` is the instrument's own fit residual, or empty.
 - **`be-commands-csv/1`:** `seq,t_sent_s,t_done_s,strategy,payload_json,result,error_kind`.

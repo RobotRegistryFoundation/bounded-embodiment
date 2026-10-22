@@ -7,7 +7,15 @@ import json
 from pathlib import Path
 
 import pytest
-from _report_helpers import copy_run, golden, in_repo, keyring, make_run, read_report, resign
+from _report_helpers import (
+    copy_run,
+    golden,
+    in_repo,
+    keyring,
+    make_run,
+    read_report,
+    resign,
+)
 from bounded_embodiment import report as rep
 from bounded_embodiment import schema
 from bounded_embodiment.report import derive

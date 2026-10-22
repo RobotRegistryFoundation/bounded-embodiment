@@ -62,7 +62,7 @@ def test_every_test_annex_a_names_exists(path) -> None:
     missing = []
     for file, name in sorted(_tests_named(path.read_text(encoding="utf-8"))):
         sources = [r / file for r in roots if (r / file).is_file()]
-        if not any(re.search(rf"^def {name}\(", s.read_text(encoding="utf-8"), re.M) for s in sources):
+        if not any(re.search(rf"^def {name}\(", s.read_text(encoding="utf-8"), re.MULTILINE) for s in sources):
             missing.append(f"{file}::{name}")
     assert missing == []
 

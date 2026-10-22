@@ -19,9 +19,9 @@ from _scoring_synth import (
     ev02_input,
     ev02_profile,
 )
-from bounded_embodiment.scoring import stops as stops_mod
 from bounded_embodiment.rawdata import Command
 from bounded_embodiment.scoring import ScoringError, ev02, score
+from bounded_embodiment.scoring import stops as stops_mod
 
 
 def result(out: dict) -> tuple[str, list[str]]:
@@ -122,8 +122,8 @@ def test_the_commands_must_be_able_to_show_a_dead_stop() -> None:
         return t["notes"]
 
     late = notes(stop_delay_s=0.1)  # a stop recorded 0.1 s after the walk (or issued late)
-    assert late == ["the stop came 0.120 s after the last drive command (at most 0.040 s: one "
-                    "command spacing and 0.02 s)"]
+    assert late == [("the stop came 0.120 s after the last drive command (at most 0.040 s: one "
+                     "command spacing and 0.02 s)")]
     short = notes(after_s=2.0, segment_s=3.0)
     assert any(n.startswith("the commands after the stop end 2.000 s after it") for n in short)
     assert any(n.startswith("the next trial began 2.200 s after the stop") for n in short)
@@ -179,7 +179,7 @@ def test_the_late_chord_sees_a_point_that_had_already_slowed() -> None:
             return 0.0625 + 0.25 * b - 0.5 * 5.0 * b * b
         return 0.06875
 
-    pts = [(i / 100.0, (x(i / 100.0), 0.0, 0.0)) for i in range(0, 60)]
+    pts = [(i / 100.0, (x(i / 100.0), 0.0, 0.0)) for i in range(60)]
     meas = stops_mod.Measurements.of(pts)
     rules = stops_mod.StopRules(clock_uncertainty_s=0.0, speed_window_s=0.2, gap_threshold_s=0.1,
                                 gap_max_s=1.0, still_radius_m=0.005, still_window_s=0.1, hold_s=0.1,

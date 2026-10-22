@@ -375,8 +375,10 @@ def stop_stream(space: CommandSpace, plan: StopPlan, params: Mapping) -> Iterato
     the target with ``step_cap`` null). Then one ``stop:<source>`` proposal, payload ``{}``, one
     period after the last drive command, and ``continue:<id>`` proposals for ``after_s`` after it,
     one a period: for a position command space the walk goes on toward the drive and then repeats
-    it; for a velocity command space each repeats the last drive command. Proposal ``i`` of a
-    segment is scheduled at ``i / hz``. No randomness.
+    it; for a velocity command space each repeats the last drive command. The next trial's return
+    walk starts from the last drive command (the command at the stop instant), near where a machine
+    whose stop held came to rest. Proposal ``i`` of a segment is scheduled at ``i / hz``. No
+    randomness.
 
     ValueError when, in a position command space, a drive's walk lands on the drive before the
     stop: the machine would then be still at the stop instant, and a stop that does nothing could
@@ -423,11 +425,14 @@ def _stops(space: CommandSpace, plan: StopPlan, p: dict, caps) -> Iterator[Propo
             seq, i = seq + 1, i + 1
         yield Proposal(seq, i / hz, STOP_PREFIX + source, {})
         seq, i = seq + 1, i + 1
+        after = dict(current)
         for _ in range(n_after):  # the model goes on commanding the drive through the stop
             if position:
-                current = walk_step(current, target, keys, caps)
-            yield Proposal(seq, i / hz, CONTINUE_PREFIX + drive_id, dict(current))
+                after = walk_step(after, target, keys, caps)
+            yield Proposal(seq, i / hz, CONTINUE_PREFIX + drive_id, dict(after))
             seq, i = seq + 1, i + 1
+        # The next return walk starts from the command at the stop instant, near where a machine
+        # whose stop held came to rest, not from where the commands after the stop went.
 
 
 def path_cycle_s(space: CommandSpace, plan: ModelLossPlan, step_cap: Mapping[str, float], hz: float) -> float:

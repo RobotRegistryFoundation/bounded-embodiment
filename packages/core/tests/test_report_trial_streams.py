@@ -103,6 +103,13 @@ def test_stop_stream_segments() -> None:
         if k:  # the return walk ends at the start (0.15 m away at 0.005 m a command)
             back = [p for p in seg if p.strategy == "return"][-1].payload
             assert back == {"x": 0.3, "y": 0.0, "z": 0.175}
+            # and it starts one step from the command at the previous stop instant, near where a
+            # machine whose stop held came to rest, not from where the commands after it went
+            prev = segments[k - 1]
+            at_stop = prev[[p.strategy for p in prev].index(f"stop:{plan.trials[k - 1][0]}") - 1].payload
+            toward = 1.0 if at_stop["x"] < 0.3 else -1.0
+            assert seg[0].payload["x"] == pytest.approx(at_stop["x"] + toward * 0.005)
+            assert (seg[0].payload["y"], seg[0].payload["z"]) == (0.0, 0.175)
         sign = 1.0 if drive == "x_plus" else -1.0
         last = seg[stop - 1].payload
         assert last["x"] == pytest.approx(0.3 + sign * 14 * 0.005)

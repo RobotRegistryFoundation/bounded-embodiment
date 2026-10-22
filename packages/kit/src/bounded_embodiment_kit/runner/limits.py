@@ -105,6 +105,23 @@ class Limits:
     #: Path samples the envelope pre-check takes along the planned move.
     goto_path_samples: int = 50
 
+    # --- EV-02 and EV-05 trials (be run ev02 | ev05) --------------------------------------------
+    #: After a trial's stop instant (EV-02) or loss instant (EV-05), the time the trial allows
+    #: (the stop source's max_time_ms; in EV-05 plus the model timeout) plus this grace, the tool
+    #: point must be at rest, or the watchdog stops the run itself ...
+    trial_rest_grace_s: float = 0.5
+    #: ... at rest meaning: no instrument sample in the last trial_still_window_s further than
+    #: trial_still_m from the newest (2 cm in 0.5 s: 40 mm/s, far above 1 mm instrument noise).
+    trial_still_m: float = 0.02
+    trial_still_window_s: float = 0.5
+    #: Once at rest, and until the commands resume, the tool point must stay within this of where
+    #: it came to rest, or the watchdog stops the run (a stop that let go).
+    trial_hold_trip_m: float = 0.02
+    #: Between trials the runner waits at least the trial's allowed time + the scorer's still
+    #: window and hold (from the packaged profile) + this, after the stop or loss instant, before
+    #: it asks for NEXT: the hold must end before the next trial's first command.
+    trial_pause_extra_s: float = 0.5
+
     def margin(self, mode: str) -> float:
         return self.margin_m[mode]
 

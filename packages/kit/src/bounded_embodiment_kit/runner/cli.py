@@ -12,6 +12,10 @@ adapters. Before anything moves, read the lab guide's safety section (docs/lab-g
                 --envelope E --command-space C --kit-config K --urdf U --instrument udp:5005 \\
                 --out runs/bob-shakedown --i-accept-the-risk --hardware-stop "..." [--estop-cmd CMD]
     be run ev10 --mode full --waypoints ev10-waypoints.json [--cycles N --commands-per-visit K --hz H] ...
+    be run ev02 --mode full --plan ev02-stop-plan.json --step-cap 1.0 [--drive-s S --return-s S --hz H]
+                --estop-cmd CMD ...      (CMD issues the plan's hardwired_stop or power_loss)
+    be run ev05 --mode full --plan ev05-model-loss-plan.json --step-cap 1.0 [--trials N
+                --motion-s 1.0,2.0 --silence-s S --restart-s S --hz H] ...
     be run ev03 ... --instrument none --no-live-instrument-i-understand    # offline instrument (be fit)
     be adapter new NAME          write NAME_adapter.py, a python adapter template
     be adapter list
@@ -117,13 +121,14 @@ def _cmd_adapter(args) -> int:
 def register(subparsers) -> None:
     p = subparsers.add_parser("run", help="run a test against a machine through an adapter",
                               description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    p.add_argument("test", choices=["ev03", "ev10"])
+    p.add_argument("test", choices=["ev03", "ev10", "ev02", "ev05"])
     p.add_argument("--mode", required=True, choices=[m for m in MODES if m != "goto-start"],
-                   help="ev10 takes full")
+                   help="ev10, ev02 and ev05 take full")
     p.add_argument("--instrument", required=True,
                    help="udp:PORT, udp:HOST:PORT, sim, or none (with --no-live-instrument-i-understand)")
     p.add_argument("--out", required=True, help="the run directory (must not exist, or be empty)")
-    p.add_argument("--seed", type=int, default=None, help="default 7 (ev03), 0 (ev10: the tour has no randomness)")
+    p.add_argument("--seed", type=int, default=None,
+                   help="default 7 (ev03, ev05), 0 (ev10, ev02: their streams have no randomness)")
     p.add_argument("--no-live-instrument-i-understand", action="store_true",
                    help="--instrument none: the instrument records for offline scoring and the FK tripwire "
                         "is the only live supervision (recorded in declared.json and the report's notes)")
@@ -131,10 +136,22 @@ def register(subparsers) -> None:
     t.add_argument("--waypoints", help="the lab's ev10-waypoints.json (waypoints 0.1)")
     t.add_argument("--cycles", type=int, help="rounds of the tour (default: enough for 60 s)")
     t.add_argument("--commands-per-visit", type=int, help="commands held at each waypoint (default 4 s worth)")
-    t.add_argument("--hz", type=float, help="tour command rate (default 50)")
+    t.add_argument("--hz", type=float, help="command rate of the ev10 tour or the ev02/ev05 trials (default 50)")
+    s = p.add_argument_group("EV-02 and EV-05 (be-stops/1, be-model-loss/1): one trial at a time, NEXT between")
+    s.add_argument("--plan", help="the lab's ev02-stop-plan.json (stop plan 0.1) or ev05-model-loss-plan.json")
+    s.add_argument("--drive-s", type=float, help="ev02: how long each drive walks before the stop (default 1.0)")
+    s.add_argument("--return-s", type=float, help="ev02: how long the walk back to the start lasts (default 2.0)")
+    s.add_argument("--trials", type=int, help="ev05: how many losses (default 3)")
+    s.add_argument("--motion-s", help="ev05: SHORTEST,LONGEST motion before each loss, seeded (default 1.0,2.0)")
+    s.add_argument("--silence-s", type=float,
+                   help="ev05: how long no command comes (default and least: the model timeout + stop time + "
+                        "the scorer's still window and hold + 0.5 s)")
+    s.add_argument("--restart-s", type=float,
+                   help="ev05: how long the commands come back for (default: the restart check + 0.5 s)")
     p.add_argument("--seconds", type=float, help="shorten the run (a short shakedown does not count)")
     p.add_argument("--target", help="control: the far target id")
-    p.add_argument("--step-cap", help="control: largest change per command (number, or JSON per axis)")
+    p.add_argument("--step-cap", help="control, ev02, ev05: largest change per command (number, or JSON per axis; "
+                                      "none for no cap, refused by ev05)")
     p.add_argument("--i-accept-the-risk", action="store_true",
                    help="required for every run: the stream is meant to make a weak gate fail")
     p.add_argument("--no-fk-tripwire-i-understand", action="store_true",

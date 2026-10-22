@@ -25,6 +25,13 @@ Tripwires, checked every watchdog tick (limits.py has the numbers):
 The two share no data: either one alone stops the run. Every check is a pure function of its
 inputs (below the ``Watchdog`` class's helpers), so tests drive them without threads.
 
+3. EV-02 and EV-05 trials (``be run ev02|ev05``): after a trial's stop or loss instant the command
+   thread tells the watchdog what the trial allows (``watch_trial``). Once that time plus 0.5 s
+   has passed, the tool must be at rest (no sample of the last 0.5 s more than 2 cm from the
+   newest), and it must then stay within 2 cm of where it came to rest until the commands resume
+   (``end_trial_watch``). Otherwise the latch trips like any other tripwire. This only adds trips:
+   tripwires 1 and 2 run unchanged throughout.
+
 What the watchdog does not do: score, judge the system under test, or touch the bus.
 """
 from __future__ import annotations
@@ -48,6 +55,7 @@ __all__ = [
     "StateSnapshot",
     "StopLatch",
     "StopOutcome",
+    "TrialWatch",
     "TripwireConfig",
     "Watchdog",
     "clearance",
@@ -55,6 +63,7 @@ __all__ = [
     "inside_and_still",
     "instrument_trip",
     "stop_speed",
+    "trial_trip",
     "window_speed",
 ]
 
@@ -292,6 +301,49 @@ def inside_and_still(histories: Mapping[str, Sequence[tuple[float, tuple]]], env
     return True, f"inside, and {tool_point!r} within {worst * 1000:.1f} mm for {window_s:.0f} s"
 
 
+# ----- EV-02 and EV-05 trials --------------------------------------------------------------------
+@dataclass
+class TrialWatch:
+    """What a trial allows after its stop instant (EV-02) or loss instant (EV-05), on the run's
+    timebase: plain data, set by the command thread through ``Watchdog.watch_trial``.
+    ``rested_at`` is where the tool point came to rest, once the watchdog has seen it at rest."""
+
+    label: str
+    t_event: float
+    allowed_s: float
+    rested_at: tuple | None = None
+
+
+def trial_trip(samples: Sequence[tuple[float, tuple]], now: float, watch: TrialWatch,
+               limits: Limits = DEFAULT) -> tuple[str | None, tuple | None]:
+    """The trial tripwire, a pure function: (the reason to trip or None, where the tool rested).
+
+    Before ``t_event + allowed_s + trial_rest_grace_s`` it never trips. After that, until the tool
+    has been seen at rest: trip when a sample of the last ``trial_still_window_s`` (the samples
+    spanning at least half of it) lies more than ``trial_still_m`` from the newest, and otherwise
+    the newest sample is where it rested. Once it has rested: trip when the newest sample lies more
+    than ``trial_hold_trip_m`` from there. Silence is not judged here: tripwires 1 and 2 cover a
+    feed that stops or a state that goes stale."""
+    if now < watch.t_event + watch.allowed_s + limits.trial_rest_grace_s or not samples:
+        return None, watch.rested_at
+    t_n, p_n = samples[-1]
+    if watch.rested_at is None:
+        recent = [(t, p) for t, p in samples if t >= t_n - limits.trial_still_window_s]
+        if t_n - recent[0][0] < 0.5 * limits.trial_still_window_s:
+            return None, None  # too few samples yet to judge
+        worst = max(_dist(p, p_n) for _, p in recent)
+        if worst > limits.trial_still_m:
+            return (f"the tool point is not at rest {now - watch.t_event:.2f} s after {watch.label} "
+                    f"(the trial allows {watch.allowed_s:.2f} s, plus {limits.trial_rest_grace_s} s): "
+                    f"it moved {worst * 100:.1f} cm in the last {limits.trial_still_window_s} s"), None
+        return None, tuple(p_n)
+    d = _dist(p_n, watch.rested_at)
+    if d > limits.trial_hold_trip_m:
+        return (f"the tool point moved {d * 100:.1f} cm from where it came to rest after {watch.label}, "
+                f"before the commands resumed (limit {limits.trial_hold_trip_m * 100:.0f} cm)"), watch.rested_at
+    return None, watch.rested_at
+
+
 # ----- escalation ------------------------------------------------------------------------------
 class Alarm:
     """The CUT POWER alarm: a banner and the terminal bell on stderr, repeated until ``stop()``."""
@@ -381,6 +433,7 @@ class Watchdog(threading.Thread):
         self._hist: dict[str, deque] = {}
         self._quit = threading.Event()
         self.ticks = 0
+        self._trial: TrialWatch | None = None  # EV-02 / EV-05: set by the command thread
 
     # The history of valid instrument samples, per point, from successive snapshots.
     def _absorb(self, snap: FeedSnapshot) -> None:
@@ -414,6 +467,34 @@ class Watchdog(threading.Thread):
         return inside_and_still(hist, self.envelope, self.cfg.tool_point, self.clock(),
                                 lim.still_window_s, lim.still_m, lim.feed_silent_s)
 
+    def watch_trial(self, label: str, t_event: float, allowed_s: float) -> None:
+        """Command thread, EV-02 / EV-05: a trial's stop or loss instant has passed; from
+        ``t_event + allowed_s`` (plus the grace) the tool must be at rest and stay there."""
+        with self._lock:
+            self._trial = TrialWatch(label, float(t_event), float(allowed_s))
+
+    def end_trial_watch(self) -> None:
+        """Command thread: the commands resume, so the tool may move again."""
+        with self._lock:
+            self._trial = None
+
+    def trial_watch(self) -> TrialWatch | None:
+        with self._lock:
+            return self._trial
+
+    def _trial_tick(self, now: float, states: list[StateSnapshot]) -> str | None:
+        with self._lock:
+            watch = self._trial
+        if watch is None:
+            return None
+        samples, _ = self._stop_samples(states)
+        reason, rested = trial_trip(samples, now, watch, self.limits)
+        if rested is not None and watch.rested_at is None:
+            with self._lock:
+                if self._trial is watch:
+                    watch.rested_at = rested
+        return reason
+
     def run(self) -> None:
         while not self._quit.is_set():
             try:
@@ -436,6 +517,8 @@ class Watchdog(threading.Thread):
                                          self.envelope)
             if reason is None and self.cfg.fk:
                 reason = fk_trip(states, now, self.cfg, self.envelope)
+            if reason is None:
+                reason = self._trial_tick(now, states)
             if reason is not None and self.latch.trip("tripwire", reason):
                 self.log(f"*** TRIP: {reason}")
         if self.latch.tripped and not self.outcome.decided:

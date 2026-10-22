@@ -5,7 +5,8 @@
     be report RUN_DIR --lab-config LAB.json --key KEY.json --out SUBMISSION_DIR
         [--samples PATH ...] [--clock monotonic|wall|run] [--clock-csv PATH]
         [--wall-clock-agreement-s S] [--accuracy PATH] [--instrument-file PATH ...]
-        [--notes NOTES.md] [--photo JPG ...] [--test EV-03|EV-10] [--role test|control|rehearsal]
+        [--notes NOTES.md] [--photo JPG ...] [--test EV-03|EV-10|EV-02|EV-05]
+        [--role test|control|rehearsal]
         [--reproduces RESULT] [--control-run RUN] [--redact TEXT ...]
 
 Everything is packaged first, into a staging directory beside SUBMISSION_DIR: the instrument's
@@ -15,6 +16,11 @@ of their metadata. Then core hashes and derives: ``report.build`` (every derived
 verdict among them; the kit never writes one), ``report.sign_report`` with the key, report.json,
 and ``report.verify`` against the key's public half. Only a consistent submission is moved to
 SUBMISSION_DIR; a refusal leaves nothing behind. docs/seams/submission.md has the details.
+
+EV-02 and EV-05 runs (method v0.2) carry their plan file (``ev02-stop-plan.json``,
+``ev05-model-loss-plan.json``) byte for byte, checked against the digest the runner recorded; the
+lab config's method must be version 0.2, the first that defines them; core makes their report a
+test report 0.2.
 
 Exit status: 0 written and consistent; 1 refused (the message says why); 2 usage error.
 """
@@ -123,6 +129,13 @@ def _signing_key(path: str) -> tuple[dict, str]:
     return jwk, kid
 
 
+#: The runner's test names, and the report's.
+TESTS = {"ev03": "EV-03", "ev10": "EV-10", "ev02": "EV-02", "ev05": "EV-05"}
+#: The plan file an EV-02 or EV-05 run carries, and the method version that defines the test.
+PLAN_FILES = {"EV-02": core_report.STOP_PLAN_FILE, "EV-05": core_report.MODEL_LOSS_PLAN_FILE}
+TRIAL_METHOD_VERSION = "0.2"
+
+
 @dataclass
 class Run:
     """The runner's run directory, as `be run` left it."""
@@ -147,9 +160,10 @@ class Run:
         if not end.get("started"):
             raise Refused(f"the run never started ({end.get('status')}: {end.get('why')}); "
                           "nothing was sent, so there is nothing to report")
-        test = {"ev03": "EV-03", "ev10": "EV-10"}.get(str(declared.get("test")).lower())
+        test = TESTS.get(str(declared.get("test")).lower())
         if test is None:
-            raise Refused(f"declared.json names test {declared.get('test')!r}; be report knows ev03 and ev10")
+            raise Refused(f"declared.json names test {declared.get('test')!r}; be report knows "
+                          f"{', '.join(TESTS)}")
         return cls(root, declared, test, bool(declared.get("simulation")),
                    str(declared.get("run_mode", "")))
 
@@ -168,7 +182,8 @@ def generator_block(gen: object) -> dict:
             raise Refused(f"declared.json's control generator has no {e.args[0]}") from None
         return {"name": core_report.CONTROL, "version": "1", "seed": int(gen.get("seed", 0)),
                 "params": params}
-    if name in (core_report.HOSTILE, core_report.CONTROL, core_report.WAYPOINTS):
+    if name in (core_report.HOSTILE, core_report.CONTROL, core_report.WAYPOINTS, core_report.STOPS,
+                core_report.MODEL_LOSS):
         if "seed" not in gen or "params" not in gen:
             raise Refused(f"declared.json's {name} generator has no seed or params")
         return {"name": name, "version": str(gen.get("version", "1")), "seed": gen["seed"],
@@ -301,8 +316,9 @@ class Package:
         self.written[rel] = len(data)
 
     def copy_identity_file(self, rel: str, data: bytes) -> None:
-        """envelope.json, command-space.json, ev10-waypoints.json: their hash identifies the setup
-        the run used, so they go in byte for byte; what the scrubber would replace is reported."""
+        """envelope.json, command-space.json, ev10-waypoints.json and the EV-02 / EV-05 plans: their
+        hash identifies the setup the run used, so they go in byte for byte; what the scrubber would
+        replace is reported."""
         found = self.scrubber.finds(data.decode("utf-8", "replace"))
         if found:
             what = ", ".join(f"{n} {k.replace('_', ' ')}" for k, n in sorted(found.items()))
@@ -525,6 +541,9 @@ def _inputs(args) -> Inputs:
     except LabConfigError as e:
         raise Refused("the lab config is not usable:\n  " + "\n  ".join(e.problems)) from None
     jwk, kid = _signing_key(args.key)
+    if run.test in PLAN_FILES and lab["method"].get("version") != TRIAL_METHOD_VERSION:
+        raise Refused(f"{run.test} is defined by method version {TRIAL_METHOD_VERSION}; the lab config "
+                      f"cites version {lab['method'].get('version')!r} (its method block)")
     role = _role(args, run, generator_block(run.declared.get("generator")))
     try:
         reproduces = ids.reproduces_id(args.reproduces) if args.reproduces else None
@@ -564,6 +583,20 @@ def _setup_files(inp: Inputs, pkg: Package) -> str:
         if not waypoints.is_file():
             raise Refused("an EV-10 run needs ev10-waypoints.json in the run directory")
         pkg.copy_identity_file("ev10-waypoints.json", _read(waypoints, "the run's"))
+    if inp.test in PLAN_FILES:
+        name = PLAN_FILES[inp.test]
+        if not (run.path / name).is_file():
+            raise Refused(f"an {inp.test} run needs {name} in the run directory")
+        data = _read(run.path / name, "the run's")
+        loader = core_report.load_stop_plan if inp.test == "EV-02" else core_report.load_model_loss_plan
+        try:
+            plan = loader(data)
+        except core_report.PlanError as e:
+            raise Refused(f"the run's {name} does not load: {e}") from None
+        recorded = (run.declared.get("generator") or {}).get("plan_digest")
+        if recorded != plan.digest:
+            raise Refused(f"{name} is not the plan the run used (its digest differs from declared.json's)")
+        pkg.copy_identity_file(name, data)
     return space.digest
 
 

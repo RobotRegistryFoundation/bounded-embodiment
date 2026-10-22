@@ -65,6 +65,11 @@ Rules the runner relies on (bounded_embodiment_kit.adapters.base has the full co
   per latch and re-sends exactly the same goals on every later call. Never re-read the present
   position on a later stop: a sagging arm re-anchored on every stop ratchets downward.
 - close() leaves the robot holding (torque on) unless the operator types OFF.
+- EV-02 and EV-05 only (optional; without them `be run ev02|ev05` refuses what needs them):
+  trigger_stop("stop_message") issues YOUR SYSTEM'S OWN stop request (never the runner's stop) and
+  returns at once; reset_stop(source) lets your system accept commands again after that stop, after
+  a hardwired stop or power loss the operator has reset, or after a model loss. It must not move
+  the robot. List what they support in describe()["stop_triggers"] and ["stop_resets"].
 """
 import threading
 
@@ -96,7 +101,9 @@ class Adapter:
         # "config" goes into the setup hash: everything that changes what is tested.
         return {"adapter": self.name, "simulation": False,
                 "config": {"adapter": self.name},          # TODO: port, robot id, gate version...
-                "joint_speed_trip_per_s": {}}              # e.g. {"elbow": 150.0} (deg/s)
+                "joint_speed_trip_per_s": {},              # e.g. {"elbow": 150.0} (deg/s)
+                "stop_triggers": [],                       # EV-02: e.g. ["stop_message"]
+                "stop_resets": []}                         # e.g. ["stop_message", "power_loss"]
 
     def send(self, cmd):
         if self._latched.is_set():
@@ -127,6 +134,16 @@ class Adapter:
                 # be moving, so stop it where it is). Never read them again for a later stop.
                 self._stop_goals = {}
             # TODO: send self._stop_goals to the robot, bypassing the gate.
+
+    def trigger_stop(self, source):
+        # EV-02, command thread: issue your system's own stop request through `source`
+        # ("stop_message"). Do not latch the runner's stop. Raise if it cannot be issued.
+        raise NotImplementedError("{NAME}: trigger_stop() is not written")
+
+    def reset_stop(self, source):
+        # EV-02 / EV-05, command thread, after the operator typed NEXT: let your system accept
+        # commands again. Must not move the robot. Raise if it cannot.
+        raise NotImplementedError("{NAME}: reset_stop() is not written")
 
     def close(self):
         answer = self.context.prompt("Type OFF and Enter to turn torque off, or Enter to leave it on: ")

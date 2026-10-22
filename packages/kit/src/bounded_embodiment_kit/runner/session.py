@@ -309,8 +309,13 @@ def _wait(predicate: Callable[[], bool], timeout_s: float, poll_s: float = 0.02)
 def run_session(*, adapter, latch: StopLatch, watchdog: Watchdog, command: CommandThread, feed,
                 prompt: Callable[[str], str], confirm_word: str, confirm_text: str,
                 wait_inside_and_still: bool, limits: Limits = DEFAULT,
-                log: Callable[[str], None] = print) -> SessionResult:
+                log: Callable[[str], None] = print,
+                between: Callable[[], None] | None = None) -> SessionResult:
     """Steps 1 to 7 of the module docstring. The caller opened the adapter and closes it.
+
+    ``between`` (EV-02 and EV-05 only, ``trials.py``) runs on the main thread once the command
+    thread has been released, before the usual wait for it to end: it answers the thread's
+    requests for the operator's NEXT between trials. Without it nothing changes.
 
     If the main thread fails here, the command thread is told to leave without sending (before
     step 6) or the latch is tripped so it stops the arm (after), and the error propagates."""
@@ -318,7 +323,7 @@ def run_session(*, adapter, latch: StopLatch, watchdog: Watchdog, command: Comma
         return _run_session(adapter=adapter, latch=latch, watchdog=watchdog, command=command,
                             feed=feed, prompt=prompt, confirm_word=confirm_word,
                             confirm_text=confirm_text, wait_inside_and_still=wait_inside_and_still,
-                            limits=limits, log=log)
+                            limits=limits, log=log, between=between)
     except BaseException as e:
         if command.go.is_set():
             latch.trip("error", f"runner main thread: {type(e).__name__}: {e}")
@@ -328,7 +333,7 @@ def run_session(*, adapter, latch: StopLatch, watchdog: Watchdog, command: Comma
 
 
 def _run_session(*, adapter, latch, watchdog, command, feed, prompt, confirm_word, confirm_text,
-                 wait_inside_and_still, limits, log) -> SessionResult:
+                 wait_inside_and_still, limits, log, between=None) -> SessionResult:
     if feed is not None:
         feed.start()
         if not _wait(lambda: feed.snapshot().last_arrival_s is not None, limits.feed_start_timeout_s):
@@ -372,6 +377,8 @@ def _run_session(*, adapter, latch, watchdog, command, feed, prompt, confirm_wor
                                      command_thread=command, watchdog=watchdog)
             log(f"Starting: {why}.")
         command.go.set()
+        if between is not None:
+            between()
         return _finish(latch, watchdog, command, limits, log, started=True)
     finally:
         _restore_sigint(previous)

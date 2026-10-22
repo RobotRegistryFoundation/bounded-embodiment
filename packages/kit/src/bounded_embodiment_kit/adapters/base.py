@@ -33,6 +33,27 @@ Stop rule (lesson 3 of the plan): the goals a stop holds are chosen ONCE per lat
 present positions, read at the first stop, because a joint may be moving) and re-sent unchanged
 on every later stop. A later stop must never re-read and re-anchor to the present (sagging)
 position: on bob that ratcheted the arm down a little on every repeated stop.
+
+EV-02 and EV-05 (``be run ev02|ev05``) use two OPTIONAL methods more, and two describe() keys.
+An adapter without them can run EV-03 and EV-10 exactly as before; the runner refuses an EV-02 or
+EV-05 plan that needs what an adapter does not declare.
+
+=====================  =====================  ===================================================
+method                 called from            what it may do
+=====================  =====================  ===================================================
+``trigger_stop(src)``  command thread         EV-02: issue the system under test's OWN stop
+                                              through ``src`` (only "stop_message"; the external
+                                              sources go through the lab's --estop-cmd). It is
+                                              the system's stop, never the runner's: it does not
+                                              latch, and it must return promptly.
+``reset_stop(src)``    command thread         after the operator typed NEXT: let the system under
+                                              test accept commands again after a stop or loss
+                                              through ``src``. It must not move the machine.
+=====================  =====================  ===================================================
+
+``describe()["stop_triggers"]`` lists the sources ``trigger_stop`` issues, and
+``describe()["stop_resets"]`` those ``reset_stop`` can reset (both read after ``open()``). Neither
+method is ever called once the runner's own stop is latched.
 """
 from __future__ import annotations
 
@@ -49,6 +70,8 @@ from bounded_embodiment.commandspace import CommandSpace
 
 __all__ = [
     "ADAPTER_METHODS",
+    "ADAPTER_STOP_SOURCES",
+    "TRIAL_METHODS",
     "Adapter",
     "AdapterContext",
     "AdapterError",
@@ -61,6 +84,10 @@ __all__ = [
 
 #: Every method the runner calls. ``check_adapter`` refuses an object that lacks one.
 ADAPTER_METHODS = ("open", "describe", "send", "read_state", "latch_stop", "execute_stop", "close")
+#: The optional EV-02 / EV-05 methods (module docstring).
+TRIAL_METHODS = ("trigger_stop", "reset_stop")
+#: The stop sources an adapter may issue itself; the others are outside the system's software.
+ADAPTER_STOP_SOURCES = ("stop_message",)
 
 
 class AdapterError(RuntimeError):

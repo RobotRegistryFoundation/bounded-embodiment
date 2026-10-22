@@ -9,8 +9,8 @@ the stop source and the resume rule).
 
 Finding codes (errors): PLAN_PARSE_ERROR, PLAN_NOT_OBJECT, PLAN_VERSION_UNSUPPORTED,
 PLAN_DUPLICATE_ID, PLAN_DUPLICATE_SOURCE, PLAN_UNKNOWN_DRIVE, PLAN_UNKNOWN_SOURCE,
-PLAN_COMMAND_UNKNOWN_AXIS, PLAN_COMMAND_MISSING_AXIS, PLAN_COMMAND_OUTSIDE_LIMITS; schema
-violations keep SCHEMA_INVALID.
+PLAN_COMMAND_UNKNOWN_AXIS, PLAN_COMMAND_MISSING_AXIS, PLAN_COMMAND_OUTSIDE_LIMITS,
+PLAN_RESUME_UNCHECKED; schema violations keep SCHEMA_INVALID.
 """
 
 from __future__ import annotations
@@ -43,6 +43,7 @@ VERSION = "0.1"
 STOP_SCHEMA = "stop-plan-0.1"
 MODEL_LOSS_SCHEMA = "model-loss-plan-0.1"
 DEFAULT_LOSS_SOURCE = "heartbeat_loss"
+POSITION_KINDS = ("joint_position", "cartesian_position")
 
 
 class PlanError(ValueError):
@@ -96,9 +97,17 @@ class StopPlan:
         out += [(f"/drives/{i}/command", d.command) for i, d in enumerate(self.drives)]
         return out
 
-    def for_scoring(self) -> dict:
-        """The scorer's ``plan`` input: ``{"point", "sources"}``."""
-        return {"point": self.point, "sources": list(self.sources)}
+    def for_scoring(self, space: CommandSpace | None = None) -> dict:
+        """The scorer's ``plan`` input: ``{"point", "sources", "drives", "position"}``. ``drives``
+        maps each drive id to the digest of its command (drives with the same command are one
+        drive); ``position`` is whether the command space holds positions (its commands walk
+        toward a drive) rather than velocities (True when no space is given)."""
+        return {
+            "point": self.point,
+            "sources": list(self.sources),
+            "drives": {d.id: canonical.sha256_jcs(dict(d.command)) for d in self.drives},
+            "position": space is None or space.kind in POSITION_KINDS,
+        }
 
 
 @dataclass(frozen=True, eq=False)
@@ -119,7 +128,7 @@ class ModelLossPlan:
         out += [(f"/path/{i}", c) for i, c in enumerate(self.path)]
         return out
 
-    def for_scoring(self) -> dict:
+    def for_scoring(self, space: CommandSpace | None = None) -> dict:
         """The scorer's ``plan`` input: ``{"point", "source", "resume"}``."""
         return {"point": self.point, "source": self.source, "resume": dict(self.resume)}
 
@@ -236,8 +245,24 @@ def load_model_loss_plan(src: bytes | str | dict) -> ModelLossPlan:
 def check_plan_commands(plan: StopPlan | ModelLossPlan, space: CommandSpace, file: str) -> list[Finding]:
     """Every command of the plan must name every axis of the command space and nothing else,
     each value within the axis's limits: a stop or model-loss test only asks for what the machine
-    may do."""
+    may do. And a model-loss plan for a position command space must not resume on commands at
+    once (``after_ms`` 0): such a machine settles on its last goal whatever it does about the
+    loss, so only the restart check tells, and with ``after_ms`` 0 there is none (PLAN_RESUME_UNCHECKED)."""
     findings = []
+    if (
+        isinstance(plan, ModelLossPlan)
+        and plan.resume.get("rule") == "commands"
+        and plan.resume.get("after_ms") == 0
+        and space.kind in POSITION_KINDS
+    ):
+        findings.append(
+            _err(
+                "PLAN_RESUME_UNCHECKED",
+                "a position command space with the resume rule commands after 0 ms: the machine "
+                "settles on its last goal whatever it does about the loss, and nothing is left to check",
+                f"{file} /resume",
+            )
+        )
     keys = space.keys
     for pointer, command in plan.commands():
         where = f"{file} {pointer}"

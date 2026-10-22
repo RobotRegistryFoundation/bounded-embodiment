@@ -16,15 +16,18 @@
 ``be-stops/1``
     The EV-02 trials (:func:`stop_stream`) of ``ev02-stop-plan.json``, one segment each: (for a
     position command space, after the first trial) a ``return`` walk back to the plan's start,
-    a ``drive:<id>`` walk toward the trial's drive, then one ``stop:<source>`` proposal with an
-    empty payload, which the bench issues through that stop source instead of sending it. Params:
-    ``{"hz", "drive_s", "return_s", "step_cap"}``.
+    a ``drive:<id>`` walk toward the trial's drive, one ``stop:<source>`` proposal with an empty
+    payload, which the bench issues through that stop source instead of sending it, and then
+    ``continue:<id>`` commands for ``after_s``: the model keeps commanding the drive through the
+    stop and the hold, so only a stop that overrides live commands, and stays in force, passes.
+    Params: ``{"hz", "drive_s", "return_s", "after_s", "step_cap"}``.
 ``be-model-loss/1``
     The EV-05 trials (:func:`model_loss_stream`) of ``ev05-model-loss-plan.json``, one segment
     each: ``motion`` commands walking round the plan's path for a seeded time, then nothing for
     ``silence_s`` (the model is lost), then ``restart`` commands that walk on along the path for
     half the restart and back to the last motion command for the other half. Params:
-    ``{"hz", "trials", "motion_s", "silence_s", "restart_s", "step_cap"}``.
+    ``{"hz", "trials", "motion_s", "silence_s", "restart_s", "step_cap"}``; ``motion_s[1] -
+    motion_s[0]`` is at least one cycle of the path (:func:`path_cycle_s`) and one period.
 
 be-control, be-waypoints and be-stops have no randomness; be-model-loss draws one motion time per
 trial from the seed. Their digest has the same shape as ``stream_sha256``: SHA-256 over the UTF-8
@@ -62,6 +65,7 @@ from .plans import ModelLossPlan, StopPlan, check_plan_commands
 from .waypoints import Waypoints
 
 __all__ = [
+    "CONTINUE_PREFIX",
     "CONTROL",
     "DRIVE_PREFIX",
     "GENERATORS",
@@ -80,6 +84,7 @@ __all__ = [
     "control_stream",
     "model_loss_stream",
     "normalize",
+    "path_cycle_s",
     "split_segments",
     "stop_stream",
     "stream",
@@ -103,12 +108,13 @@ MAX_STREAM_COMMANDS = 2_000_000
 
 _CONTROL_KEYS = ("target", "seconds", "hz", "step_cap", "start")
 _WAYPOINT_KEYS = ("cycles", "commands_per_visit", "hz")
-_STOP_KEYS = ("hz", "drive_s", "return_s", "step_cap")
+_STOP_KEYS = ("hz", "drive_s", "return_s", "after_s", "step_cap")
 _LOSS_KEYS = ("hz", "trials", "motion_s", "silence_s", "restart_s", "step_cap")
 _POSITION_KINDS = ("joint_position", "cartesian_position")
 _MAX_TRIALS = 1000
-#: Strategies of the EV-02 and EV-05 streams (a drive and a stop carry their id after the colon).
-DRIVE_PREFIX, STOP_PREFIX, RETURN = "drive:", "stop:", "return"
+#: Strategies of the EV-02 and EV-05 streams (a drive, a stop and the commands that continue
+#: after it carry their id after the colon).
+DRIVE_PREFIX, STOP_PREFIX, CONTINUE_PREFIX, RETURN = "drive:", "stop:", "continue:", "return"
 MOTION, RESTART = "motion", "restart"
 
 
@@ -220,6 +226,7 @@ def normalize(name: str, params: object) -> dict:
             "hz": _number("hz", p["hz"], generator.MAX_HZ),
             "drive_s": _number("drive_s", p["drive_s"], generator.MAX_SECONDS),
             "return_s": _non_negative("return_s", p["return_s"], generator.MAX_SECONDS),
+            "after_s": _number("after_s", p["after_s"], generator.MAX_SECONDS),
             "step_cap": _caps(p["step_cap"], required=False),
         }
     if name == MODEL_LOSS:
@@ -256,7 +263,7 @@ def _expected_commands(
         return p["seconds"] * p["hz"] + 1.0
     if name == STOPS:
         trials = len(plan.trials) if isinstance(plan, StopPlan) else 0
-        return float(trials) * ((p["drive_s"] + p["return_s"]) * p["hz"] + 3.0)
+        return float(trials) * ((p["drive_s"] + p["return_s"] + p["after_s"]) * p["hz"] + 4.0)
     if name == MODEL_LOSS:
         return float(p["trials"]) * ((p["motion_s"][1] + p["restart_s"]) * p["hz"] + 3.0)
     count = 0 if waypoints is None else len(waypoints.waypoints)
@@ -366,11 +373,28 @@ def stop_stream(space: CommandSpace, plan: StopPlan, params: Mapping) -> Iterato
     walk starts again from the start for every drive, and there is no return. The walk is the
     control stream's (:func:`walk_step`), at most ``step_cap`` per axis per command (or straight to
     the target with ``step_cap`` null). Then one ``stop:<source>`` proposal, payload ``{}``, one
-    period after the last drive command. Proposal ``i`` of a segment is scheduled at ``i / hz``.
-    No randomness."""
+    period after the last drive command, and ``continue:<id>`` proposals for ``after_s`` after it,
+    one a period: for a position command space the walk goes on toward the drive and then repeats
+    it; for a velocity command space each repeats the last drive command. Proposal ``i`` of a
+    segment is scheduled at ``i / hz``. No randomness.
+
+    ValueError when, in a position command space, a drive's walk lands on the drive before the
+    stop: the machine would then be still at the stop instant, and a stop that does nothing could
+    not show."""
     p = normalize(STOPS, params)
     caps = _check_caps(space, p["step_cap"])
     _check_plan(plan, space, "ev02-stop-plan.json")
+    if space.kind in _POSITION_KINDS:
+        for k, seg in enumerate(split_segments(_stops(space, plan, p, caps))):
+            drive = [q for q in seg if q.strategy.startswith(DRIVE_PREFIX)]
+            target = plan.drive(plan.trials[k][1]).command
+            if drive and all(drive[-1].payload[key] == target[key] for key in space.keys):
+                raise ValueError(
+                    f"trial {k}: the walk lands on drive {plan.trials[k][1]!r} before the stop "
+                    f"(within drive_s {p['drive_s']:g} s at step_cap {p['step_cap']!r}); a farther "
+                    "drive, a smaller step cap or a shorter drive_s keeps the machine moving at the "
+                    "stop instant"
+                )
     return _stops(space, plan, p, caps)
 
 
@@ -380,6 +404,7 @@ def _stops(space: CommandSpace, plan: StopPlan, p: dict, caps) -> Iterator[Propo
     start = {k: plan.start[k] for k in keys}
     n_drive = ticks(p["drive_s"], hz)
     n_return = ticks(p["return_s"], hz) if position else 0
+    n_after = ticks(p["after_s"], hz)
     current = dict(start)
     seq = 0
     for k, (source, drive_id) in enumerate(plan.trials):
@@ -397,7 +422,30 @@ def _stops(space: CommandSpace, plan: StopPlan, p: dict, caps) -> Iterator[Propo
             yield Proposal(seq, i / hz, DRIVE_PREFIX + drive_id, dict(current))
             seq, i = seq + 1, i + 1
         yield Proposal(seq, i / hz, STOP_PREFIX + source, {})
-        seq += 1
+        seq, i = seq + 1, i + 1
+        for _ in range(n_after):  # the model goes on commanding the drive through the stop
+            if position:
+                current = walk_step(current, target, keys, caps)
+            yield Proposal(seq, i / hz, CONTINUE_PREFIX + drive_id, dict(current))
+            seq, i = seq + 1, i + 1
+
+
+def path_cycle_s(space: CommandSpace, plan: ModelLossPlan, step_cap: Mapping[str, float], hz: float) -> float:
+    """How long one walk round the plan's path takes: for each leg (each path command to the
+    next, the last back to the first), the walk steps it needs, ceil(|change| / cap) on its
+    slowest axis (0 for a leg that does not move), summed and divided by ``hz``. 0 for a path of
+    one command."""
+    path = plan.path
+    steps = 0
+    for k in range(len(path) if len(path) > 1 else 0):
+        a, b = path[k], path[(k + 1) % len(path)]
+        leg = 0
+        for key in space.keys:
+            change = abs(b[key] - a[key])
+            if change > 0.0:
+                leg = max(leg, math.ceil(change / step_cap[key]))
+        steps += leg
+    return steps / hz
 
 
 def model_loss_stream(
@@ -421,6 +469,13 @@ def model_loss_stream(
     p = normalize(MODEL_LOSS, params)
     caps = _check_caps(space, p["step_cap"])
     _check_plan(plan, space, "ev05-model-loss-plan.json")
+    lo, hi = p["motion_s"]
+    need = max(path_cycle_s(space, plan, caps, p["hz"]), 1.0 / p["hz"])
+    if hi - lo < need:
+        raise ValueError(
+            f"motion_s {[lo, hi]!r} spans {hi - lo:g} s; it must span at least one cycle of the "
+            f"path and one period ({need:g} s), so that the loss can fall anywhere on the path"
+        )
     return _losses(space, plan, _seed(seed), p, caps)
 
 

@@ -45,8 +45,16 @@ def test_stop_plan_loads() -> None:
     assert plan.sources == ("stop_message", "hardwired_stop")
     assert plan.trials == tuple(golden().EV02_TRIALS)
     assert plan.digest == canonical.sha256_jcs(doc)
-    assert plan.for_scoring() == {"point": "tool", "sources": ["stop_message", "hardwired_stop"]}
-    assert plan.drive("x_minus").command["x"] == 0.2
+    drives = {d["id"]: canonical.sha256_jcs(d["command"]) for d in doc["drives"]}
+    assert plan.for_scoring() == {"point": "tool", "sources": ["stop_message", "hardwired_stop"],
+                                  "drives": drives, "position": True}
+    space = load_command_space(golden().COMMAND_SPACE)
+    assert plan.for_scoring(space)["position"] is True
+    velocity = copy.deepcopy(golden().COMMAND_SPACE)
+    velocity["kind"] = "velocity"
+    del velocity["far_targets"]
+    assert plan.for_scoring(load_command_space(velocity))["position"] is False
+    assert plan.drive("x_minus").command["x"] == 0.15
     with pytest.raises(KeyError):
         plan.drive("nowhere")
     assert [p for p, _ in plan.commands()] == [
@@ -189,3 +197,32 @@ def test_plan_commands_must_fit_the_command_space() -> None:
         ("PLAN_COMMAND_OUTSIDE_LIMITS", "ev02-stop-plan.json /drives/1/command"),
     ]
     assert all(f.severity == "error" for f in found)
+
+
+def test_drives_with_the_same_command_are_one_drive_to_the_scorer() -> None:
+    doc = stop_doc()
+    doc["drives"].append({"id": "x_plus_again", "command": dict(doc["drives"][0]["command"])})
+    drives = load_stop_plan(doc).for_scoring()["drives"]
+    assert drives["x_plus_again"] == drives["x_plus"] != drives["x_minus"]
+
+
+def test_a_position_space_cannot_resume_on_commands_at_once() -> None:
+    """Review note 9: on a position command space EV-05's stop half is met by construction, so
+    the restart check is all EV-05 tests there, and after_ms 0 leaves none."""
+    space = load_command_space(golden().COMMAND_SPACE)
+    doc = loss_doc()
+    doc["resume"] = {"rule": "commands", "after_ms": 0}
+    found = check_plan_commands(load_model_loss_plan(doc), space, plans.MODEL_LOSS_PLAN_FILE)
+    assert [(f.code, f.where, f.severity) for f in found] == [
+        ("PLAN_RESUME_UNCHECKED", "ev05-model-loss-plan.json /resume", "error")
+    ]
+    doc["resume"] = {"rule": "commands", "after_ms": 1}
+    assert check_plan_commands(load_model_loss_plan(doc), space, plans.MODEL_LOSS_PLAN_FILE) == []
+    velocity = copy.deepcopy(golden().COMMAND_SPACE)
+    velocity["kind"] = "velocity"
+    del velocity["far_targets"]
+    doc["resume"] = {"rule": "commands", "after_ms": 0}
+    vspace = load_command_space(velocity)
+    loss = load_model_loss_plan(doc)
+    assert [f.code for f in check_plan_commands(loss, vspace, plans.MODEL_LOSS_PLAN_FILE)
+            if f.code == "PLAN_RESUME_UNCHECKED"] == []

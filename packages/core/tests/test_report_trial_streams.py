@@ -90,29 +90,48 @@ def test_stop_stream_segments() -> None:
     segments = streams.split_segments(proposals)
     assert len(segments) == len(plan.trials) == 6
     assert [p.seq for p in proposals] == list(range(len(proposals)))
-    n_drive, n_return = streams.ticks(0.3, 50.0), streams.ticks(0.5, 50.0)
-    assert (n_drive, n_return) == (15, 25)
+    n_drive, n_return, n_after = (streams.ticks(s, 50.0) for s in (0.28, 0.7, 3.0))
+    assert (n_drive, n_return, n_after) == (14, 35, 150)
     for k, (seg, (source, drive)) in enumerate(zip(segments, plan.trials)):
         kinds = [p.strategy for p in seg]
-        want = ["return"] * (n_return if k else 0) + [f"drive:{drive}"] * n_drive + [f"stop:{source}"]
+        want = (["return"] * (n_return if k else 0) + [f"drive:{drive}"] * n_drive + [f"stop:{source}"]
+                + [f"continue:{drive}"] * n_after)
         assert kinds == want
         assert [p.t_s for p in seg] == [i / 50.0 for i in range(len(seg))]
-        assert seg[-1].payload == {}
-        if k:  # the return walk ends at the start (0.075 m away at 0.005 m a command)
+        stop = kinds.index(f"stop:{source}")
+        assert seg[stop].payload == {}
+        if k:  # the return walk ends at the start (0.15 m away at 0.005 m a command)
             back = [p for p in seg if p.strategy == "return"][-1].payload
             assert back == {"x": 0.3, "y": 0.0, "z": 0.175}
-        last = [p for p in seg if p.strategy.startswith("drive:")][-1].payload
         sign = 1.0 if drive == "x_plus" else -1.0
-        assert last["x"] == pytest.approx(0.3 + sign * 15 * 0.005)
+        last = seg[stop - 1].payload
+        assert last["x"] == pytest.approx(0.3 + sign * 14 * 0.005)
         assert (last["y"], last["z"]) == (0.0, 0.175)
+        # D1: the model goes on commanding the drive through the stop: the walk carries on to
+        # the drive (16 more commands, 0.08 m) and then repeats it
+        after = [p.payload for p in seg[stop + 1:]]
+        assert after[0]["x"] == pytest.approx(0.3 + sign * 15 * 0.005)
+        target = {"x": 0.45 if sign > 0 else 0.15, "y": 0.0, "z": 0.175}
+        assert after[15] == target and after[14] != target
+        assert all(a == target for a in after[15:])
 
 
-def test_stop_stream_without_a_cap_jumps_and_velocity_spaces_restart() -> None:
+def test_stop_stream_refuses_a_walk_that_lands_before_the_stop() -> None:
+    """In a position command space the machine must still be moving at the stop instant: a walk
+    that has already landed on its drive leaves nothing for a dead stop to get wrong."""
     g = golden()
-    params = {**g.STOP_PARAMS, "step_cap": None}
-    seg = streams.split_segments(streams.stop_stream(space(), stop_plan(), params))[1]
-    assert seg[0].payload == {"x": 0.3, "y": 0.0, "z": 0.175}  # back in one step
-    assert seg[25].payload == {"x": 0.2, "y": 0.0, "z": 0.175}  # at the drive in one step
+    for change in ({"step_cap": None}, {"drive_s": 0.7}, {"step_cap": {"x": 0.02, "y": 0.02, "z": 0.02}}):
+        with pytest.raises(ValueError, match="lands on drive"):
+            streams.stop_stream(space(), stop_plan(), {**g.STOP_PARAMS, **change})
+    rows = rows_of(streams.stop_stream(space(), stop_plan(), g.STOP_PARAMS))
+    found = streams.check("be-stops", "1", space(), 0, {**g.STOP_PARAMS, "step_cap": None}, rows,
+                          plan=stop_plan())
+    assert [f.code for f in found.findings] == ["STREAM_PARAMS_INVALID"]
+    assert "lands on drive" in found.findings[0].detail
+
+
+def test_velocity_spaces_restart_every_drive_and_repeat_it_after_the_stop() -> None:
+    g = golden()
     doc = g.stop_plan_doc(list(g.EV02_TRIALS))
     doc["start"] = {"x": 0.0, "y": 0.0, "z": 0.0}
     doc["drives"] = [
@@ -125,7 +144,13 @@ def test_stop_stream_without_a_cap_jumps_and_velocity_spaces_restart() -> None:
     for seg in segs:
         assert not any(p.strategy == "return" for p in seg)
         assert seg[0].payload["x"] in (0.05, -0.05)  # every drive ramps up from the start
-        assert seg[3].payload["x"] in (0.2, -0.2)
+        assert seg[3].payload["x"] in (0.2, -0.2)  # landing on a velocity is what a drive is for
+        drive = [p for p in seg if p.strategy.startswith("drive:")]
+        after = [p for p in seg if p.strategy.startswith("continue:")]
+        assert len(after) == 150 and all(p.payload == drive[-1].payload for p in after)
+    # without a cap a velocity drive is a step to the drive velocity: allowed
+    assert streams.split_segments(
+        streams.stop_stream(velocity_space(), vplan, {**g.STOP_PARAMS, "step_cap": None}))
 
 
 def test_stop_stream_refuses_what_it_cannot_make() -> None:
@@ -146,12 +171,14 @@ def test_stop_stream_refuses_what_it_cannot_make() -> None:
 @pytest.mark.parametrize(
     "params",
     [
-        {"hz": 50.0, "drive_s": 0.3, "return_s": 0.5},
-        {"hz": 50.0, "drive_s": 0.0, "return_s": 0.5, "step_cap": None},
-        {"hz": 50.0, "drive_s": 0.3, "return_s": -1.0, "step_cap": None},
-        {"hz": 50.0, "drive_s": 0.3, "return_s": 0.5, "step_cap": {}},
-        {"hz": 50.0, "drive_s": 0.3, "return_s": 0.5, "step_cap": {"x": 0.0}},
-        {"hz": 50.0, "drive_s": 0.3, "return_s": 0.5, "step_cap": None, "seconds": 1.0},
+        {"hz": 50.0, "drive_s": 0.3, "return_s": 0.5, "after_s": 3.0},
+        {"hz": 50.0, "drive_s": 0.3, "return_s": 0.5, "step_cap": None},
+        {"hz": 50.0, "drive_s": 0.0, "return_s": 0.5, "after_s": 3.0, "step_cap": None},
+        {"hz": 50.0, "drive_s": 0.3, "return_s": -1.0, "after_s": 3.0, "step_cap": None},
+        {"hz": 50.0, "drive_s": 0.3, "return_s": 0.5, "after_s": 0.0, "step_cap": None},
+        {"hz": 50.0, "drive_s": 0.3, "return_s": 0.5, "after_s": 3.0, "step_cap": {}},
+        {"hz": 50.0, "drive_s": 0.3, "return_s": 0.5, "after_s": 3.0, "step_cap": {"x": 0.0}},
+        {"hz": 50.0, "drive_s": 0.3, "return_s": 0.5, "after_s": 3.0, "step_cap": None, "seconds": 1.0},
     ],
 )
 def test_stop_params_are_exact(params: dict) -> None:
@@ -160,8 +187,10 @@ def test_stop_params_are_exact(params: dict) -> None:
 
 
 def test_stop_params_normalize() -> None:
-    p = streams.normalize(streams.STOPS, {"hz": 50, "drive_s": 1, "return_s": 0, "step_cap": None})
-    assert p == {"hz": 50.0, "drive_s": 1.0, "return_s": 0.0, "step_cap": None}
+    p = streams.normalize(
+        streams.STOPS, {"hz": 50, "drive_s": 1, "return_s": 0, "after_s": 3, "step_cap": None}
+    )
+    assert p == {"hz": 50.0, "drive_s": 1.0, "return_s": 0.0, "after_s": 3.0, "step_cap": None}
     assert all(type(v) is float for k, v in p.items() if k != "step_cap")
     assert streams.normalize(streams.STOPS, p) == p
 
@@ -201,6 +230,33 @@ def test_model_loss_stream_is_seeded() -> None:
     b = rows_of(streams.model_loss_stream(space(), loss_plan(), 5, g.LOSS_PARAMS))
     c = rows_of(streams.model_loss_stream(space(), loss_plan(), 6, g.LOSS_PARAMS))
     assert a == b and a != c
+
+
+def test_path_cycle() -> None:
+    g = golden()
+    # 0.2 m each way at 0.005 m a command: 40 + 40 commands at 50 Hz
+    assert streams.path_cycle_s(space(), loss_plan(), g.STOP_CAP, 50.0) == 1.6
+    doc = g.loss_plan_doc()
+    doc["path"] = doc["path"][:1]
+    assert streams.path_cycle_s(space(), load_model_loss_plan(doc), g.STOP_CAP, 50.0) == 0.0
+
+
+@pytest.mark.parametrize("motion_s", [[1.0, 1.0], [1.0, 1.4], [1.0, 2.59]])
+def test_model_loss_refuses_a_loss_that_cannot_fall_anywhere_on_the_path(motion_s) -> None:
+    """motion_s must span a whole cycle of the path (and a period), or every loss could land at
+    the same place on it, a reversal for example (review note 10; a = b included)."""
+    g = golden()
+    params = {**g.LOSS_PARAMS, "motion_s": motion_s}
+    with pytest.raises(ValueError, match="at least one cycle of the path"):
+        streams.model_loss_stream(space(), loss_plan(), 5, params)
+    found = streams.check("be-model-loss", "1", space(), 5, params, [], plan=loss_plan())
+    assert [f.code for f in found.findings] == ["STREAM_PARAMS_INVALID"]
+    doc = g.loss_plan_doc()
+    doc["path"] = doc["path"][:1]  # one command: the cycle is 0, a period is still needed
+    one = load_model_loss_plan(doc)
+    with pytest.raises(ValueError, match="at least one cycle of the path"):
+        streams.model_loss_stream(space(), one, 5, {**g.LOSS_PARAMS, "motion_s": [1.0, 1.0]})
+    assert list(streams.model_loss_stream(space(), one, 5, {**g.LOSS_PARAMS, "motion_s": [1.0, 1.02]}))
 
 
 @pytest.mark.parametrize(

@@ -669,7 +669,7 @@ def derive(view: View, files: RunFiles) -> Derivation:
         and (view.accuracy_age_s is None or view.accuracy_age_s >= 0)
     )
     if ready:
-        _score(view, envelope, rows, waypoints, d, plan)
+        _score(view, envelope, rows, waypoints, d, plan, space)
     return d
 
 
@@ -838,6 +838,7 @@ def _score(
     waypoints: Waypoints | None,
     d: Derivation,
     plan: StopPlan | ModelLossPlan | None = None,
+    space: CommandSpace | None = None,
 ) -> None:
     declared = Declared(
         primary_instrument_kind=str(view.primary["kind"]),
@@ -858,7 +859,7 @@ def _score(
         fk_samples=rows["state"],
         waypoints=None if waypoints is None else waypoints.for_scoring(),
         liveness_point=None if waypoints is None else waypoints.point,
-        plan=None if plan is None else plan.for_scoring(),
+        plan=None if plan is None else plan.for_scoring(space),
     )
     try:
         out = scoring.score(view.scorer, inp)

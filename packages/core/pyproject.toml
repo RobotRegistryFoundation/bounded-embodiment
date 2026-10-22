@@ -37,7 +37,7 @@ be = "bounded_embodiment.cli:main"
 bounded-embodiment = "bounded_embodiment.cli:main"
 
 [project.urls]
-Homepage = "https://craigmerry.com/bounded-embodiment/"
+Homepage = "https://robotregistryfoundation.org/bounded-embodiment/"
 Documentation = "https://github.com/RobotRegistryFoundation/bounded-embodiment/blob/main/README.md"
 Requirements = "https://github.com/RobotRegistryFoundation/bounded-embodiment/blob/main/docs/requirements.md"
 Method = "https://github.com/RobotRegistryFoundation/bounded-embodiment/blob/main/method/bounded-embodiment-method-v0.1.md"

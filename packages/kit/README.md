@@ -35,6 +35,7 @@ SO-101 URDF and the tools in the repository, so start from a clone and the lab g
 ## Links
 
 - Lab guide, start here: https://github.com/RobotRegistryFoundation/bounded-embodiment/blob/main/docs/lab-guide.md
+- Homepage: https://robotregistryfoundation.org/bounded-embodiment/
 - Method text (normative, CC BY 4.0): https://github.com/RobotRegistryFoundation/bounded-embodiment/blob/main/method/bounded-embodiment-method-v0.1.md
 - Requirements and test plan (informative): https://github.com/RobotRegistryFoundation/bounded-embodiment/blob/main/docs/requirements.md
 - Source and issues: https://github.com/RobotRegistryFoundation/bounded-embodiment

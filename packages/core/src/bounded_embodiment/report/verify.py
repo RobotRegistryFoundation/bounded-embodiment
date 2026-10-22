@@ -3,7 +3,7 @@
 ``verify(run_dir, keyring)`` never raises. It checks, in this order:
 
 1. the run directory: no symbolic links (refused, never followed), only regular files, sizes;
-2. report.json: strict JSON (duplicate keys refused), ``report_version`` 0.1, the schema;
+2. report.json: strict JSON (duplicate keys refused), ``report_version`` 0.1 or 0.2, its schema;
 3. keys: no key carried in the report is used; every signature entry against the keyring only
    (kid = the RFC 7638 thumbprint of the keyring key, recomputed), at least one valid Ed25519
    signature, and ``signer.kid`` the kid of a valid one;
@@ -31,7 +31,7 @@ from dataclasses import dataclass, field
 from .. import __version__, canonical, schema, signing
 from ..findings import Finding
 from . import derive as _derive
-from .build import REPORT_VERSION, SCHEMA_NAME
+from .build import REPORT_VERSIONS, SCHEMA_NAMES
 from .files import REPORT_FILE, RunFiles, raw_data_entries, scan, show
 
 __all__ = ["CODES", "VerifyResult", "verify"]
@@ -56,7 +56,7 @@ CODES: dict[str, tuple[str, str]] = {
     ),
     "REQUIRED_FILE_MISSING": (
         "error",
-        "envelope.json, command-space.json, samples, commands, or (EV-10) ev10-waypoints.json is absent",
+        "envelope.json, command-space.json, samples, commands, or the test's declared file (EV-10 ev10-waypoints.json, EV-02 ev02-stop-plan.json, EV-05 ev05-model-loss-plan.json) is absent",
     ),
     "FILE_MISSING": ("error", "a file raw_data lists is absent"),
     "FILE_HASH_MISMATCH": ("error", "a file's sha256 or size differs from raw_data"),
@@ -72,10 +72,10 @@ CODES: dict[str, tuple[str, str]] = {
     ),
     "JSON_DUPLICATE_KEY": ("error", "report.json repeats a member name"),
     "REPORT_NOT_OBJECT": ("error", "report.json is not a JSON object"),
-    "REPORT_VERSION_UNSUPPORTED": ("error", "report_version is not 0.1"),
+    "REPORT_VERSION_UNSUPPORTED": ("error", "report_version is not 0.1 or 0.2"),
     "SCHEMA_INVALID": (
         "error",
-        "the report (or ev10-waypoints.json, envelope.json, command-space.json) breaks its schema",
+        "the report (or ev10-waypoints.json, a plan, envelope.json, command-space.json) breaks its schema",
     ),
     "DECLARED_INVALID": ("error", "declared fields derivation needs are unusable"),
     # keys and signatures
@@ -107,7 +107,7 @@ CODES: dict[str, tuple[str, str]] = {
     ),
     "GENERATOR_TEST_MISMATCH": (
         "error",
-        "the generator does not belong to the test (EV-03: be-hostile, be-control; EV-10: be-waypoints)",
+        "the generator does not belong to the test (EV-03: be-hostile, be-control; EV-10: be-waypoints; EV-02: be-stops; EV-05: be-model-loss)",
     ),
     "GENERATOR_ROLE_MISMATCH": ("error", "be-control on a run whose role is test"),
     "COMMAND_SPACE_DIGEST_MISMATCH": (
@@ -471,11 +471,12 @@ def _verify(run_dir: str | os.PathLike, keyring: Mapping, shown: str) -> VerifyR
         findings.append(_err("REPORT_NOT_OBJECT", "report.json is not a JSON object", REPORT_FILE))
         return _result(shown, findings, report_sha256=sha, verdict=None)
 
-    if report.get("report_version") != REPORT_VERSION:
+    version = report.get("report_version")
+    if version not in REPORT_VERSIONS:
         findings.append(
             _err(
                 "REPORT_VERSION_UNSUPPORTED",
-                f"report_version is {_short(report.get('report_version', _MISSING))}; this core reads {REPORT_VERSION}",
+                f"report_version is {_short(report.get('report_version', _MISSING))}; this core reads {' and '.join(REPORT_VERSIONS)}",
                 "/report_version",
             )
         )
@@ -484,7 +485,7 @@ def _verify(run_dir: str | os.PathLike, keyring: Mapping, shown: str) -> VerifyR
         return _result(shown, findings, report_sha256=sha, verdict=None, report=report)
 
     try:
-        schema_findings = schema.validate(report, SCHEMA_NAME)
+        schema_findings = schema.validate(report, SCHEMA_NAMES[version])
     except RecursionError:
         schema_findings = [_err("SCHEMA_INVALID", "the report is nested too deeply to validate")]
     findings += schema_findings

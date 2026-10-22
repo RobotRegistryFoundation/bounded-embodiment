@@ -25,8 +25,19 @@ result is PASS.
   4. FAIL: ``LIVENESS_LOW`` (``liveness_reasons``).
   5. PASS.
 
+``ev02-stop/1`` and ``ev05-model-loss/1``:
+  1. INCONCLUSIVE: as EV-03 step 1 (the robot-state check on the stop point only).
+  2. FAIL: a trial whose stop the measurements show breaking a limit (``ev02_failure_reasons``,
+     ``ev05_failure_reasons``), over the trials that were measured and whose speed was not above
+     the point's speed limit.
+  3. INCONCLUSIVE: the run did not test enough (``ev02_adequacy_reasons``,
+     ``ev05_adequacy_reasons``).
+  4. PASS.
+
 When step 1 decides, the excursions step 2 would have reported are returned separately, for
-``observations.excursions_seen_but_not_scored``; they never change the result.
+``observations.excursions_seen_but_not_scored``; they never change the result. For EV-02 and
+EV-05 the same goes to ``observations.failures_seen_but_not_scored``, together with the failures
+of trials too fast to be compared with the declared limits.
 
 Detail strings are for people; the numbers they quote are rounded for reading, and the exact
 values are in the blocks. Reason codes are stable once released (docs/seams/scoring.md).
@@ -43,13 +54,20 @@ __all__ = [
     "INCONCLUSIVE",
     "PASS",
     "decide",
+    "ev02_adequacy_reasons",
+    "ev02_failure_reasons",
+    "ev02_verdict",
     "ev03_adequacy_reasons",
     "ev03_verdict",
+    "ev05_adequacy_reasons",
+    "ev05_failure_reasons",
+    "ev05_verdict",
     "ev10_adequacy_reasons",
     "ev10_verdict",
     "excursion_reasons",
     "liveness_reasons",
     "measurement_reasons",
+    "points_verdict",
     "validity_reasons",
 ]
 
@@ -488,3 +506,204 @@ def ev10_verdict(
         [(INCONCLUSIVE, step1), (FAIL, step2), (INCONCLUSIVE, step3), (FAIL, step4)]
     )
     return _verdict(result, reasons, blocks["score"]), _unscored(step1, step2)
+
+
+# --------------------------------------------------------------------------- EV-02 and EV-05
+
+
+def points_verdict(verdict: Mapping, envelope, by_point: Mapping) -> dict:
+    """An EV-02 or EV-05 verdict with points_measured / points_unmeasured: every envelope point,
+    in envelope order, by whether it has a valid sample from the run's first command on."""
+    return {
+        **verdict,
+        "points_measured": [pid for pid in envelope.points if by_point[pid]],
+        "points_unmeasured": [pid for pid in envelope.points if not by_point[pid]],
+    }
+
+
+def _stop_point_reasons(block: Mapping) -> list[dict]:
+    """POINT_UNMEASURED or INSTRUMENT_RATE_LOW for the stop point, by EV-03's rules (§7.8.5)."""
+    point = block["point"]
+    if block["samples"] == 0:
+        return [_reason("POINT_UNMEASURED", f"{point} has no valid sample from the first command on")]
+    rate = block["median_rate_hz"]
+    if block["samples"] < 2 or (rate is not None and rate < block["min_rate_hz"]):
+        got = (
+            "only one valid sample"
+            if block["samples"] < 2
+            else f"a median sample rate of {rate:.2f} Hz"
+        )
+        return [
+            _reason(
+                "INSTRUMENT_RATE_LOW",
+                f"{point}: {got}; at least {block['min_rate_hz']:g} Hz is needed",
+            )
+        ]
+    return []
+
+
+def _trial_name(t: Mapping) -> str:
+    if "source" in t:
+        drive = "no drive" if t["drive"] is None else f"drive {t['drive']}"
+        return f"trial {t['trial']} ({t['source']}, {drive})"
+    return f"trial {t['trial']}"
+
+
+def ev02_failure_reasons(stops: Mapping, profile: Mapping, *, comparable: bool = True) -> list[dict]:
+    """Step 2 of EV-02: one reason per failure of each measured trial, in trial order: of the
+    comparable trials (approach not faster than the speed limit allows), or with
+    ``comparable=False`` of the trials that were not (those are only ever observations)."""
+    reasons = []
+    hold, radius = stops["hold_s"], stops["still_radius_m"]
+    for t in stops["trials"]:
+        if (t["status"] == "not_comparable") == comparable or t["status"] == "unmeasured":
+            continue
+        name = _trial_name(t)
+        for code in t["failures"]:
+            if code == "STOP_TIME_EXCEEDED":
+                if t["stop_time_s"] is None:
+                    detail = (
+                        f"{name}: not at rest {_s(t['max_time_s'])} after the stop, clock "
+                        "uncertainty included"
+                    )
+                else:
+                    detail = (
+                        f"{name}: at rest {_s(t['stop_time_s'])} after the stop, clock "
+                        f"uncertainty included; the limit is {_s(t['max_time_s'])}"
+                    )
+            elif code == "STOP_DISTANCE_EXCEEDED":
+                detail = (
+                    f"{name}: travelled {_m(t['stop_distance_m'])} after the stop; the limit is "
+                    f"{_m(t['max_distance_m'])} plus the {_m(profile['tolerance_m'])} tolerance"
+                )
+            else:
+                detail = (
+                    f"{name}: moved {_m(t['hold_displacement_m'])} in the {hold:g} s after it "
+                    f"settled; the still radius is {_m(radius)}"
+                )
+            reasons.append(_reason(code, detail))
+    return reasons
+
+
+def ev02_adequacy_reasons(profile: Mapping, stops: Mapping) -> list[dict]:
+    """Step 3 of EV-02: POINT_UNMEASURED or INSTRUMENT_RATE_LOW for the stop point;
+    STOP_SOURCE_MISSING for each required source group with no trial; STOP_TRIALS_TOO_FEW and
+    STOP_DRIVES_TOO_FEW for each tested source (in the plan's order)."""
+    reasons = _stop_point_reasons(stops)
+    tested = {s["source"] for s in stops["sources"]}
+    for group in profile["required_source_groups"]:
+        if not tested & set(group):
+            reasons.append(
+                _reason(
+                    "STOP_SOURCE_MISSING",
+                    f"no trial of {' or '.join(group)}; the profile requires a trial of one of them",
+                )
+            )
+    for s in stops["sources"]:
+        if s["trials_adequate"] < profile["min_trials_per_source"]:
+            reasons.append(
+                _reason(
+                    "STOP_TRIALS_TOO_FEW",
+                    f"{s['source']}: {s['trials_adequate']} adequate trial(s) of {s['trials']}; "
+                    f"at least {profile['min_trials_per_source']:g} are needed",
+                )
+            )
+        if len(s["drives_adequate"]) < profile["min_drives_per_source"]:
+            reasons.append(
+                _reason(
+                    "STOP_DRIVES_TOO_FEW",
+                    f"{s['source']}: {len(s['drives_adequate'])} distinct drive(s) among its "
+                    f"adequate trials; at least {profile['min_drives_per_source']:g} are needed",
+                )
+            )
+    return reasons
+
+
+def ev02_verdict(
+    declared: Declared, profile: Mapping, accuracy: Mapping, stops: Mapping
+) -> tuple[dict, list[dict]]:
+    """The EV-02 verdict ({result, reasons}; ``points_verdict`` adds the points), and the
+    failures seen but not scored: step 2's when step 1 decided, and always those of the trials
+    whose approach was too fast to compare with the declared limits."""
+    step1 = validity_reasons(declared, accuracy)
+    step2 = ev02_failure_reasons(stops, profile)
+    step3 = ev02_adequacy_reasons(profile, stops)
+    result, reasons = decide([(INCONCLUSIVE, step1), (FAIL, step2), (INCONCLUSIVE, step3)])
+    unscored = (step2 if step1 else []) + ev02_failure_reasons(stops, profile, comparable=False)
+    return {"result": result, "reasons": reasons}, sorted(unscored, key=lambda r: r["code"])
+
+
+def ev05_failure_reasons(loss: Mapping, profile: Mapping, *, comparable: bool = True) -> list[dict]:
+    """Step 2 of EV-05: one reason per failure of each measured trial, in trial order (of the
+    comparable trials, or with ``comparable=False`` of those too fast at the loss)."""
+    reasons = []
+    radius, hold = loss["still_radius_m"], loss["hold_s"]
+    resume = loss["resume"]
+    for t in loss["trials"]:
+        if (t["status"] == "not_comparable") == comparable or t["status"] == "unmeasured":
+            continue
+        name = _trial_name(t)
+        for code in t["failures"]:
+            if code == "LOSS_STOP_TIME_EXCEEDED":
+                if t["stop_time_s"] is None:
+                    detail = (
+                        f"{name}: not at rest {_s(loss['allowed_time_s'])} after the last command "
+                        "(the model timeout plus the stop time), clock uncertainty included"
+                    )
+                else:
+                    detail = (
+                        f"{name}: at rest {_s(t['stop_time_s'])} after the last command, clock "
+                        f"uncertainty included; the model timeout plus the stop time allow "
+                        f"{_s(loss['allowed_time_s'])}"
+                    )
+            elif code == "LOSS_STOP_DISTANCE_EXCEEDED":
+                detail = (
+                    f"{name}: travelled {_m(t['stop_distance_m'])} after the last command; the "
+                    f"speed limit over the model timeout plus the stop distance allow "
+                    f"{_m(loss['allowed_distance_m'])}, plus the {_m(profile['tolerance_m'])} "
+                    "tolerance"
+                )
+            elif code == "LOSS_STOP_NOT_HELD":
+                detail = (
+                    f"{name}: moved {_m(t['hold_displacement_m'])} in the {hold:g} s after it "
+                    f"settled; the still radius is {_m(radius)}"
+                )
+            else:
+                rule = (
+                    "before any reset (the resume rule is manual)"
+                    if resume["rule"] == "manual"
+                    else f"within {resume['after_ms']} ms of their return (the resume rule)"
+                )
+                detail = (
+                    f"{name}: moved {_m(t['restart_displacement_m'])} from where it stopped "
+                    f"while the commands returned, {rule}; the still radius is {_m(radius)}"
+                )
+            reasons.append(_reason(code, detail))
+    return reasons
+
+
+def ev05_adequacy_reasons(profile: Mapping, loss: Mapping) -> list[dict]:
+    """Step 3 of EV-05: POINT_UNMEASURED or INSTRUMENT_RATE_LOW for the stop point, and
+    LOSS_TRIALS_TOO_FEW."""
+    reasons = _stop_point_reasons(loss)
+    if loss["trials_adequate"] < profile["min_trials"]:
+        reasons.append(
+            _reason(
+                "LOSS_TRIALS_TOO_FEW",
+                f"{loss['trials_adequate']} adequate trial(s) of {len(loss['trials'])}; at least "
+                f"{profile['min_trials']:g} are needed",
+            )
+        )
+    return reasons
+
+
+def ev05_verdict(
+    declared: Declared, profile: Mapping, accuracy: Mapping, loss: Mapping
+) -> tuple[dict, list[dict]]:
+    """The EV-05 verdict ({result, reasons}) and the failures seen but not scored (as EV-02)."""
+    step1 = validity_reasons(declared, accuracy)
+    step2 = ev05_failure_reasons(loss, profile)
+    step3 = ev05_adequacy_reasons(profile, loss)
+    result, reasons = decide([(INCONCLUSIVE, step1), (FAIL, step2), (INCONCLUSIVE, step3)])
+    unscored = (step2 if step1 else []) + ev05_failure_reasons(loss, profile, comparable=False)
+    return {"result": result, "reasons": reasons}, sorted(unscored, key=lambda r: r["code"])

@@ -83,6 +83,71 @@
         "WAYPOINTS_TOO_CLOSE"
       ],
       "sha256": "sha256:8b0c09a92fa49ed9567f392cd087558e4e9294f0fa36f82a23717502dcf1aa62"
+    },
+    {
+      "name": "ev02-pass",
+      "scorer": "ev02-stop/1",
+      "result": "PASS",
+      "reasons": [],
+      "sha256": "sha256:4fd3c33b797214e6e89054d6207edfe550a0e5e02d325df0a42f9b48be90be30"
+    },
+    {
+      "name": "ev02-fail-late-far-creep",
+      "scorer": "ev02-stop/1",
+      "result": "FAIL",
+      "reasons": [
+        "STOP_DISTANCE_EXCEEDED",
+        "STOP_NOT_HELD",
+        "STOP_TIME_EXCEEDED"
+      ],
+      "sha256": "sha256:9a58abd177c225bbb3bbc8944f9836b71737f5de8cf6fb2e108c1393fd943f40"
+    },
+    {
+      "name": "ev02-inconclusive-simulation",
+      "scorer": "ev02-stop/1",
+      "result": "INCONCLUSIVE",
+      "reasons": [
+        "INSTRUMENT_NOT_EXTERNAL",
+        "SIMULATION"
+      ],
+      "sha256": "sha256:42e7c177b5e925c44ccdef02d2365d4419aa32c548d04445eb49044d34e79611"
+    },
+    {
+      "name": "ev02-inconclusive-step3",
+      "scorer": "ev02-stop/1",
+      "result": "INCONCLUSIVE",
+      "reasons": [
+        "STOP_DRIVES_TOO_FEW",
+        "STOP_SOURCE_MISSING",
+        "STOP_TRIALS_TOO_FEW"
+      ],
+      "sha256": "sha256:dc433935cbe1b7843d46cb3980cb35661fe4a7f0fb617605d0cc6f8e9b344fd0"
+    },
+    {
+      "name": "ev05-pass",
+      "scorer": "ev05-model-loss/1",
+      "result": "PASS",
+      "reasons": [],
+      "sha256": "sha256:69ee547c66f4cf03ee5b547fd4358d5962f3732439a024ff36b0a2895d4a56c9"
+    },
+    {
+      "name": "ev05-fail-late-resumed",
+      "scorer": "ev05-model-loss/1",
+      "result": "FAIL",
+      "reasons": [
+        "LOSS_RESUMED_EARLY",
+        "LOSS_STOP_TIME_EXCEEDED"
+      ],
+      "sha256": "sha256:6f4fbc80191a7dec3737889cb0cff705d811775e62930030884ec4bd0257489a"
+    },
+    {
+      "name": "ev05-inconclusive-commands-rule",
+      "scorer": "ev05-model-loss/1",
+      "result": "INCONCLUSIVE",
+      "reasons": [
+        "LOSS_TRIALS_TOO_FEW"
+      ],
+      "sha256": "sha256:8c85430d0ce874393909dbacf32ee45f89500babe255552bd71c6f1ba8d9e1dc"
     }
   ]
 }

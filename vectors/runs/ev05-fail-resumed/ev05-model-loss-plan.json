@@ -1,0 +1,27 @@
+{
+  "model_loss_plan_version": "0.1",
+  "point": "tool",
+  "source": "heartbeat_loss",
+  "description": "TEST-ONLY: back and forth along y through the centre of the tool box.",
+  "start": {
+    "x": 0.3,
+    "y": 0.1,
+    "z": 0.175
+  },
+  "path": [
+    {
+      "x": 0.3,
+      "y": -0.1,
+      "z": 0.175
+    },
+    {
+      "x": 0.3,
+      "y": 0.1,
+      "z": 0.175
+    }
+  ],
+  "resume": {
+    "rule": "manual",
+    "description": "TEST-ONLY: an operator resets the gate"
+  }
+}

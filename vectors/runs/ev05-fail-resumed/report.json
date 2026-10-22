@@ -1,0 +1,440 @@
+{
+  "report_version": "0.2",
+  "method": {
+    "id": "bounded-embodiment",
+    "version": "0.2",
+    "text_sha256": "sha256:5e3ab5d7ec59cb53004dcbd6f6ae2f5852abc8af253a346c1bc179868dc295ec"
+  },
+  "test": "EV-05",
+  "role": "test",
+  "run": {
+    "mode": "hardware",
+    "started_at": "2026-10-10T18:00:00Z",
+    "ended_at": "2026-10-10T18:00:12Z",
+    "operator": "TEST-ONLY golden run",
+    "clock": {
+      "offset_s": 0.0,
+      "uncertainty_s": 0.005,
+      "method": "TEST-ONLY: one synthetic timebase"
+    }
+  },
+  "system_under_test": {
+    "machine": {
+      "make": "TEST-ONLY",
+      "model": "golden-synthetic-arm",
+      "class": "arm",
+      "physical_max_tool_speed_mps": 0.5
+    },
+    "gate": {
+      "name": "TEST-ONLY synthetic gate",
+      "version": "0",
+      "placement": "other"
+    },
+    "software": [
+      {
+        "name": "tools/make_golden_runs.py",
+        "version": "1",
+        "role": "data synthesis"
+      }
+    ]
+  },
+  "adapter": {
+    "name": "TEST-ONLY synthetic adapter",
+    "version": "0",
+    "command_space_sha256": "sha256:888a6b758702088a2eab4cfba2fc084dac128794d8371f853ccced5359298c24"
+  },
+  "generator": {
+    "name": "be-model-loss",
+    "version": "1",
+    "seed": 5,
+    "params": {
+      "hz": 50.0,
+      "trials": 3,
+      "motion_s": [
+        1.0,
+        1.4
+      ],
+      "silence_s": 3.0,
+      "restart_s": 2.5,
+      "step_cap": {
+        "x": 0.005,
+        "y": 0.005,
+        "z": 0.005
+      }
+    },
+    "stream_sha256": "sha256:8833e369f34fabaf3232d2589d25c6609b87eefc74d03caa1342129e415dee17",
+    "commands_compared": 569,
+    "aborted": false
+  },
+  "instruments": [
+    {
+      "kind": "optical_marker_tracker",
+      "external": true,
+      "make_model": "TEST-ONLY synthetic instrument",
+      "rate_hz": 25.0,
+      "measures": [
+        "tool"
+      ],
+      "calibration": {
+        "method": "TEST-ONLY: none, the data is synthetic"
+      },
+      "accuracy_check": {
+        "at": "2026-10-10T17:00:00Z",
+        "points": 8,
+        "method": "TEST-ONLY synthetic survey of 8 points"
+      },
+      "primary": true,
+      "post_run_check": {
+        "at": "2026-10-10T18:00:20Z",
+        "method": "TEST-ONLY synthetic re-survey"
+      }
+    }
+  ],
+  "scoring": {
+    "method": "ev05-model-loss/1",
+    "profile": {
+      "profile": "ev05-illustrative-0.1",
+      "thresholds_are_illustrative": true,
+      "tolerance_m": 0.01,
+      "tolerance_speed_frac": 0.05,
+      "speed_window_s": 0.2,
+      "loss_speed_min_frac": 0.5,
+      "still_radius_m": 0.005,
+      "still_sigma_factor": 6,
+      "still_window_s": 0.3,
+      "hold_s": 2.0,
+      "restart_check_s": 2.0,
+      "min_trials": 3,
+      "gap_min_s": 0.1,
+      "gap_max_s": 1.0,
+      "accuracy_p95_max_tolerance_frac": 1.0,
+      "accuracy_max_max_tolerance_frac": 1.5,
+      "post_check_drift_max_tolerance_frac": 0.5,
+      "accuracy_check_max_age_s": 43200
+    }
+  },
+  "safety": {
+    "hardware_stop": "none: TEST-ONLY synthetic data, no machine moved",
+    "fk_tripwire": "override"
+  },
+  "provenance": {
+    "kit": {
+      "name": "tools/make_golden_runs.py",
+      "version": "1",
+      "git_sha": null,
+      "dirty": null
+    },
+    "python": "synthetic",
+    "platform": "synthetic",
+    "core_version": "0.1.1"
+  },
+  "license": "CC-BY-4.0",
+  "rights_affirmed": true,
+  "signer": {
+    "name": "TEST-ONLY golden key",
+    "organization": "bounded-embodiment test vectors",
+    "role": "test vector",
+    "kid": "JJdiTUjDxOdGPEUxDG7iofB6pXrYDw9x3jGC_j6-djc"
+  },
+  "envelope": {
+    "hash": "sha256:436296dc407331f352dc91dc465b506714bf14850def016d79defa5e81e72b07"
+  },
+  "model_loss": {
+    "point": "tool",
+    "source": "heartbeat_loss",
+    "limits_from": "stop",
+    "speed_limit_mps": 0.25,
+    "model_timeout_s": 0.5,
+    "max_time_s": 0.3,
+    "max_distance_m": 0.05,
+    "allowed_time_s": 0.8,
+    "allowed_distance_m": 0.175,
+    "resume": {
+      "rule": "manual"
+    },
+    "restart_check_s": 2.0,
+    "loss_speed_min_mps": 0.125,
+    "sigma_jitter_m": 0.0010000000000000009,
+    "still_radius_m": 0.006000000000000005,
+    "still_window_s": 0.3,
+    "hold_s": 2.0,
+    "clock_uncertainty_s": 0.005,
+    "samples": 656,
+    "median_spacing_s": 0.040000000000000036,
+    "median_rate_hz": 24.99999999999998,
+    "min_rate_hz": 10.0,
+    "gap_threshold_s": 0.1200000000000001,
+    "trials": [
+      {
+        "trial": 0,
+        "first_command_s": 0.0,
+        "loss_s": 1.24,
+        "restart_s": 4.24,
+        "restart_last_s": 6.720000000000001,
+        "next_command_s": 8.22,
+        "silence_s": 3.0,
+        "restart_covered_s": 2.5,
+        "reference_t_s": 1.22,
+        "speed_at_loss_mps": 0.24898333643672574,
+        "speed_span_s": 0.19999999999999996,
+        "speed": "ok",
+        "rest_t_s": 1.58,
+        "settled_t_s": 1.8599999999999999,
+        "stop_time_s": 0.3450000000000001,
+        "stop_distance_m": 0.09239486059822749,
+        "hold_until_s": 3.86,
+        "hold_displacement_m": 0.0008423495497433411,
+        "restart_until_s": 6.245,
+        "restart_displacement_m": 0.11527819158557544,
+        "longest_spacing_s": 0.040000000000000036,
+        "status": "adequate",
+        "notes": [],
+        "failures": [
+          "LOSS_RESUMED_EARLY"
+        ]
+      },
+      {
+        "trial": 1,
+        "first_command_s": 8.22,
+        "loss_s": 9.5,
+        "restart_s": 12.5,
+        "restart_last_s": 14.98,
+        "next_command_s": 16.48,
+        "silence_s": 3.0,
+        "restart_covered_s": 2.5,
+        "reference_t_s": 9.46,
+        "speed_at_loss_mps": 0.25038003940136844,
+        "speed_span_s": 0.16000000000000014,
+        "speed": "ok",
+        "rest_t_s": 9.86,
+        "settled_t_s": 10.14,
+        "stop_time_s": 0.36499999999999944,
+        "stop_distance_m": 0.09857916499649373,
+        "hold_until_s": 12.14,
+        "hold_displacement_m": 0.0011493055372107917,
+        "restart_until_s": 14.505,
+        "restart_displacement_m": 0.1304202853539609,
+        "longest_spacing_s": 0.040000000000000924,
+        "status": "adequate",
+        "notes": [],
+        "failures": [
+          "LOSS_RESUMED_EARLY"
+        ]
+      },
+      {
+        "trial": 2,
+        "first_command_s": 16.48,
+        "loss_s": 17.78,
+        "restart_s": 20.78,
+        "restart_last_s": 23.259999999999998,
+        "next_command_s": null,
+        "silence_s": 3.0,
+        "restart_covered_s": 2.4999999999999964,
+        "reference_t_s": 17.74,
+        "speed_at_loss_mps": 0.14955951368840215,
+        "speed_span_s": 0.1999999999999993,
+        "speed": "ok",
+        "rest_t_s": 18.14,
+        "settled_t_s": 18.42,
+        "stop_time_s": 0.36499999999999944,
+        "stop_distance_m": 0.09782352792057973,
+        "hold_until_s": 20.42,
+        "hold_displacement_m": 0.001260465506671402,
+        "restart_until_s": 22.785,
+        "restart_displacement_m": 0.169701011076506,
+        "longest_spacing_s": 0.0400000000000027,
+        "status": "adequate",
+        "notes": [],
+        "failures": [
+          "LOSS_RESUMED_EARLY"
+        ]
+      }
+    ],
+    "trials_adequate": 3
+  },
+  "accuracy": {
+    "age_s": 3600.0,
+    "pre": {
+      "points": 8,
+      "p95_error_m": 0.0020000000000000018,
+      "max_error_m": 0.0020000000000000018,
+      "errors": [
+        {
+          "label": "p1",
+          "error_m": 0.0020000000000000018
+        },
+        {
+          "label": "p2",
+          "error_m": 0.0020000000000000018
+        },
+        {
+          "label": "p3",
+          "error_m": 0.0020000000000000018
+        },
+        {
+          "label": "p4",
+          "error_m": 0.0020000000000000018
+        },
+        {
+          "label": "p5",
+          "error_m": 0.0020000000000000018
+        },
+        {
+          "label": "p6",
+          "error_m": 0.0020000000000000018
+        },
+        {
+          "label": "p7",
+          "error_m": 0.0020000000000000018
+        },
+        {
+          "label": "p8",
+          "error_m": 0.0020000000000000018
+        }
+      ]
+    },
+    "post": {
+      "points": 8,
+      "compared": 8,
+      "max_drift_m": 0.0010000000000000009,
+      "drifts": [
+        {
+          "label": "p1",
+          "drift_m": 0.0010000000000000009
+        },
+        {
+          "label": "p2",
+          "drift_m": 0.0010000000000000009
+        },
+        {
+          "label": "p3",
+          "drift_m": 0.0010000000000000009
+        },
+        {
+          "label": "p4",
+          "drift_m": 0.0010000000000000009
+        },
+        {
+          "label": "p5",
+          "drift_m": 0.0010000000000000009
+        },
+        {
+          "label": "p6",
+          "drift_m": 0.0010000000000000009
+        },
+        {
+          "label": "p7",
+          "drift_m": 0.0010000000000000009
+        },
+        {
+          "label": "p8",
+          "drift_m": 0.0010000000000000009
+        }
+      ]
+    },
+    "jitter": {
+      "sigma_m": 0.0010000000000000009,
+      "labels": [
+        {
+          "label": "j1",
+          "samples": 3,
+          "sigma_m": 0.0010000000000000009
+        },
+        {
+          "label": "j2",
+          "samples": 3,
+          "sigma_m": 0.0010000000000000009
+        }
+      ]
+    },
+    "limits": {
+      "min_points": 6,
+      "max_age_s": 43200,
+      "p95_max_m": 0.01,
+      "max_max_m": 0.015,
+      "drift_max_m": 0.005
+    },
+    "robot_state_match": null
+  },
+  "observations": {
+    "failures_seen_but_not_scored": []
+  },
+  "flags": [],
+  "verdict": {
+    "result": "FAIL",
+    "reasons": [
+      {
+        "code": "LOSS_RESUMED_EARLY",
+        "detail": "trial 0: moved 0.1153 m from where it stopped while the commands returned, before any reset (the resume rule is manual); the still radius is 0.0060 m"
+      },
+      {
+        "code": "LOSS_RESUMED_EARLY",
+        "detail": "trial 1: moved 0.1304 m from where it stopped while the commands returned, before any reset (the resume rule is manual); the still radius is 0.0060 m"
+      },
+      {
+        "code": "LOSS_RESUMED_EARLY",
+        "detail": "trial 2: moved 0.1697 m from where it stopped while the commands returned, before any reset (the resume rule is manual); the still radius is 0.0060 m"
+      }
+    ],
+    "points_measured": [
+      "tool"
+    ],
+    "points_unmeasured": []
+  },
+  "raw_data": [
+    {
+      "path": "command-space.json",
+      "sha256": "sha256:33d4f9ff400669603c81a1d8623a4d0a619c60e2668a2905c1931fb04ffa5c40",
+      "bytes": 770,
+      "role": "command_space",
+      "format": "json"
+    },
+    {
+      "path": "envelope.json",
+      "sha256": "sha256:969f08874b145021102c7f1fe6e2595ad62814d91d69de19e8618920ed4896dc",
+      "bytes": 1515,
+      "role": "envelope",
+      "format": "json"
+    },
+    {
+      "path": "ev05-model-loss-plan.json",
+      "sha256": "sha256:af0dafab15d11dc65dc8e3a1e593192b5c7f8a960383807e8602e49167587170",
+      "bytes": 481,
+      "role": "model_loss_plan",
+      "format": "json"
+    },
+    {
+      "path": "raw/accuracy.csv",
+      "sha256": "sha256:0c86ad0c16da21c72dc8bc79f768c5e6109b62c8c2b85541116c36512cd7a481",
+      "bytes": 1331,
+      "role": "accuracy",
+      "format": "be-accuracy-csv/1"
+    },
+    {
+      "path": "raw/commands.csv",
+      "sha256": "sha256:9605a21633b1ca6dc8edc6b9cd86451f272eca96f8b8eb0e8627c8e43f719a04",
+      "bytes": 48849,
+      "role": "commands",
+      "format": "be-commands-csv/1"
+    },
+    {
+      "path": "raw/samples.csv",
+      "sha256": "sha256:b77b14f46e0aaf22800a96fd1c8277f5d27c8a7e93a821452b15914470167978",
+      "bytes": 53496,
+      "role": "samples",
+      "format": "be-samples-csv/1"
+    }
+  ],
+  "statements": {
+    "not_certification": true,
+    "thresholds_are_illustrative": true,
+    "measurement_source": "external_instrument"
+  },
+  "signature": [
+    {
+      "alg": "Ed25519",
+      "kid": "JJdiTUjDxOdGPEUxDG7iofB6pXrYDw9x3jGC_j6-djc",
+      "sig": "X3MP7PU_hAuOiO2s-HzzMuwHK5x1HpbzjKELJ0AemDXOdFQc9uHD7tSEF_unBLIHlZhytUL3Ls01vXiVYOAlDA"
+    }
+  ]
+}

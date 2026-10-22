@@ -9,7 +9,8 @@ its present position as the goal; the rover's drive: zero velocity) and refuses 
 (a simulation is always INCONCLUSIVE). ``broken`` accepts the stop request and ignores it.
 
 Factories, as the kit's ``--wrapper module:factory`` calls them: ``stoppable``, ``heartbeat``,
-``broken``.
+``broken``, and ``lurching`` (stops, but its ``resume()`` moves the arm's shoulder pan 8 degrees,
+the move a careless reset makes: review S1).
 """
 from __future__ import annotations
 
@@ -20,7 +21,9 @@ HEARTBEAT_S = 0.3
 
 
 class TrialGate:
-    def __init__(self, robot, context, *, heartbeat_s: float | None = None, stop_works: bool = True):
+    def __init__(self, robot, context, *, heartbeat_s: float | None = None, stop_works: bool = True,
+                 lurch_deg: float = 0.0):
+        self.lurch_deg = lurch_deg
         self.robot = robot
         self.context = dict(context)
         self.heartbeat_s = heartbeat_s
@@ -57,6 +60,11 @@ class TrialGate:
             self.events.append("resume")
             self.held = False
             self._last = None  # the heartbeat arms again with the next command
+            if self.lurch_deg and hasattr(self.robot, "bus"):  # a careless reset moves the arm
+                present = self.robot.bus.sync_read("Present_Position")
+                goal = {f"{m}.pos": v for m, v in present.items()}
+                goal["shoulder_pan.pos"] += self.lurch_deg
+                self.robot.send_action(goal)
 
     # ----- inside -------------------------------------------------------------------------------
     def _hold(self, why: str) -> None:
@@ -87,3 +95,7 @@ def heartbeat(robot, context):
 
 def broken(robot, context):
     return TrialGate(robot, context, stop_works=False)
+
+
+def lurching(robot, context):
+    return TrialGate(robot, context, lurch_deg=8.0)

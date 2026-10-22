@@ -121,6 +121,10 @@ class Limits:
     #: window and hold (from the packaged profile) + this, after the stop or loss instant, before
     #: it asks for NEXT: the hold must end before the next trial's first command.
     trial_pause_extra_s: float = 0.5
+    #: Before a trial after the first (position command spaces with robot state), every capped axis
+    #: must be within this many step caps of the trial's first command: a stop that did not hold
+    #: leaves the machine where the walk does not begin, and the walk would begin with a jump.
+    trial_catch_up_steps: float = 4.0
 
     def margin(self, mode: str) -> float:
         return self.margin_m[mode]

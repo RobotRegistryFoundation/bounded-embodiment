@@ -7,7 +7,7 @@ says what is asserted.
 
 One case runs in a process of its own (it patches module globals):
 
-    python packages/kit/tests/_trials_sim.py CASE OUT_DIR
+    python packages/kit/tests/_trials_sim.py CASE OUT_DIR [--real-time]
 
 writes the run directory to OUT_DIR/CASE/run/ and a JSON summary, scores included, to
 OUT_DIR/CASE/summary.json.
@@ -34,6 +34,7 @@ if str(HERE) not in sys.path:
 from _b6 import SO101, accuracy_rows, declared_for
 from bounded_embodiment import envelope as envelope_mod
 from bounded_embodiment import rawdata
+from bounded_embodiment.commandspace import load_command_space
 from bounded_embodiment.profiles import load_profile
 from bounded_embodiment.report import load_model_loss_plan, load_stop_plan
 from bounded_embodiment.scoring import ScoringInput, score
@@ -62,9 +63,9 @@ ROVER_ENVELOPE = {
     "points": [{"id": "base", "description": "The rover's centre, on the floor."}],
     "workspace": {"zones": [
         {"id": "bay", "kind": "keep_in", "applies_to": ["*"],
-         "prism": {"polygon_m": [[0.0, 0.0], [6.0, 0.0], [6.0, 4.0], [0.0, 4.0]]}},
+         "prism": {"polygon_m": [[0.0, 0.0], [12.0, 0.0], [12.0, 8.0], [0.0, 8.0]]}},
         {"id": "stairwell", "kind": "keep_out", "applies_to": ["*"],
-         "prism": {"polygon_m": [[2.0, 1.0], [3.0, 1.0], [3.0, 2.0], [2.0, 2.0]]}}]},
+         "prism": {"polygon_m": [[6.0, 1.0], [7.0, 1.0], [7.0, 2.0], [6.0, 2.0]]}}]},
     "motion": {"max_speed_mps": 0.5},
     "stop": {"category": 1, "max_time_ms": 800, "max_distance_m": 0.3,
              "sources": [{"source": "stop_message", "category": 1, "max_time_ms": 800, "max_distance_m": 0.3},
@@ -85,12 +86,31 @@ PLANS = {
     },
     "so101-ev02": {
         "stop_plan_version": "0.1", "point": "tool",
-        "description": "TEST-ONLY: the shoulder pans toward +-40 deg from the start pose, 1.5 deg a command.",
+        "description": "TEST-ONLY: the shoulder pans toward +-60 deg from the start pose, 1.5 deg a command; "
+                       "the stop comes 30 deg along, so the commands that go on after it would carry a "
+                       "stop that does nothing 30 deg further.",
         "start": _pan(0.0),
-        "drives": [{"id": "pan_plus", "command": _pan(40.0)}, {"id": "pan_minus", "command": _pan(-40.0)}],
+        "drives": [{"id": "pan_plus", "command": _pan(60.0)}, {"id": "pan_minus", "command": _pan(-60.0)}],
         "sources": [{"source": "stop_message"}, {"source": "power_loss"}],
         "trials": [{"source": s, "drive": d} for s in ("stop_message", "power_loss")
                    for d in ("pan_plus", "pan_minus", "pan_plus")],
+    },
+    "so101-ev02-power": {
+        "stop_plan_version": "0.1", "point": "tool",
+        "description": "TEST-ONLY: a power_loss trial whose command hangs, then a stop message (so that "
+                       "the run is still going when the command times out).",
+        "start": _pan(0.0),
+        "drives": [{"id": "pan_plus", "command": _pan(60.0)}, {"id": "pan_minus", "command": _pan(-60.0)}],
+        "sources": [{"source": "power_loss"}, {"source": "stop_message"}],
+        "trials": [{"source": "power_loss", "drive": "pan_plus"}, {"source": "stop_message", "drive": "pan_minus"}],
+    },
+    "rover-ev02-power": {
+        "stop_plan_version": "0.1", "point": "base",
+        "description": "TEST-ONLY: one power_loss trial, for a power-loss command that hangs.",
+        "start": {"linear": 0.0, "angular": 0.0},
+        "drives": [{"id": "forward", "command": {"linear": 0.5, "angular": 0.0}}],
+        "sources": [{"source": "power_loss"}],
+        "trials": [{"source": "power_loss", "drive": "forward"}],
     },
     "rover-ev05": {
         "model_loss_plan_version": "0.1", "point": "base", "source": "heartbeat_loss",
@@ -116,16 +136,23 @@ class Case:
     test: str               # "ev02" | "ev05"
     wrapper: str | None     # module:factory, or None for the bare machine
     trials: int = 3         # ev05
+    plan: str | None = None  # a PLANS key other than "<machine>-<test>"
+    power_loss_cmd: str | None = None  # instead of touching the simulated e-stop file
 
 
 CASES = {c.id: c for c in (
     Case("rover-ev02-stoppable", "rover", "ev02", "_trial_gates:stoppable"),
     Case("rover-ev02-broken", "rover", "ev02", "_trial_gates:broken"),
     Case("so101-ev02-stoppable", "so101", "ev02", "_trial_gates:stoppable"),
+    Case("so101-ev02-broken", "so101", "ev02", "_trial_gates:broken"),
+    Case("so101-ev02-lurching", "so101", "ev02", "_trial_gates:lurching"),
+    Case("rover-ev02-hung", "rover", "ev02", None, plan="rover-ev02-power", power_loss_cmd="sleep 10"),
+    Case("so101-ev02-hung", "so101", "ev02", "_trial_gates:stoppable", plan="so101-ev02-power",
+         power_loss_cmd="sleep 10"),
     Case("rover-ev05-bare", "rover", "ev05", None),
     Case("rover-ev05-heartbeat", "rover", "ev05", "_trial_gates:heartbeat"),
     Case("so101-ev05-bare", "so101", "ev05", None),
-    Case("so101-ev05-heartbeat", "so101", "ev05", "_trial_gates:heartbeat", trials=4),
+    Case("so101-ev05-heartbeat", "so101", "ev05", "_trial_gates:heartbeat", trials=6),
 )}
 
 
@@ -134,11 +161,13 @@ def be_args(case: Case, root: Path) -> tuple[argparse.Namespace, Path]:
     from bounded_embodiment_kit import cli
 
     plan = root / ("ev02-stop-plan.input.json" if case.test == "ev02" else "ev05-model-loss-plan.input.json")
-    plan.write_text(json.dumps(PLANS[f"{case.machine}-{case.test}"], indent=2) + "\n", encoding="utf-8")
+    plan.write_text(json.dumps(PLANS[case.plan or f"{case.machine}-{case.test}"], indent=2) + "\n",
+                    encoding="utf-8")
     estop = root / "estop"
+    # D2: the power_loss trials' own command; --estop-cmd is the CUT POWER escalation only
     argv = ["run", case.test, "--mode", "full", "--instrument", "sim", "--out", str(root / "run"),
             "--plan", str(plan), "--i-accept-the-risk", "--hardware-stop", "none (simulation)",
-            "--ledger", str(root / "ledger.jsonl"), "--estop-cmd", f"touch {estop}",
+            "--ledger", str(root / "ledger.jsonl"), "--estop-cmd", f"touch {root / 'escalated'}",
             "--sim-estop-file", str(estop),
             "--sim-sigma-m", repr(FEED["sigma_m"]), "--sim-bias-m", repr(FEED["bias_m"]),
             "--sim-dropout", repr(FEED["dropout"]), "--sim-lag-s", repr(FEED["lag_s"]),
@@ -148,7 +177,7 @@ def be_args(case: Case, root: Path) -> tuple[argparse.Namespace, Path]:
     if case.machine == "rover":
         env = root / "rover-trials.envelope.json"
         env.write_text(json.dumps(ROVER_ENVELOPE, indent=2) + "\n", encoding="utf-8")
-        start = "3.0,3.0,0.0" if case.test == "ev02" else "0.5,3.0,0.0"
+        start = "3.0,3.0,0.0" if case.test == "ev02" else "2.0,4.0,0.0"
         argv += ["--adapter", "sim-rover", "--envelope", str(env), "--command-space", str(ROVER_SPACE),
                  "--no-fk-tripwire-i-understand", "--sim-rover-start", start, "--step-cap", "0.05"]
     else:
@@ -157,9 +186,10 @@ def be_args(case: Case, root: Path) -> tuple[argparse.Namespace, Path]:
                  "--urdf", str(SO101["urdf"]), "--step-cap", "1.5"]
     if case.test == "ev02":
         argv += (["--drive-s", "1.0", "--return-s", "0.5"] if case.machine == "rover"
-                 else ["--drive-s", "0.5", "--return-s", "1.0"])
-    else:
-        argv += ["--trials", str(case.trials), "--motion-s", "1.0,2.0"]
+                 else ["--drive-s", "0.4", "--return-s", "1.2"])
+        argv += ["--power-loss-cmd", case.power_loss_cmd or f"touch {estop}"]
+    else:  # motion_s: the kit's default, which spans a whole cycle of the path
+        argv += ["--trials", str(case.trials)]
     p = argparse.ArgumentParser(prog="be")
     cli.register(p.add_subparsers(dest="command"))
     return p.parse_args(argv), estop
@@ -174,8 +204,9 @@ def clock_modules() -> tuple[list, list]:
     return [session, watchdog, feeds, runmod, trials, sim_so101, sim_rover, _trial_gates], [session.CommandThread]
 
 
-def run_case(case_id: str, out_dir: str | Path) -> dict:
-    """Run one case on the virtual clock, score it, write ``<out>/<case>/summary.json``."""
+def run_case(case_id: str, out_dir: str | Path, real_time: bool = False) -> dict:
+    """Run one case on the virtual clock (or, with ``real_time``, on the real one), score it,
+    write ``<out>/<case>/summary.json``."""
     from _b6 import plant_shakedown
     from _virtual_time import VirtualClock, virtual_time
     from bounded_embodiment_kit.runner import run as runmod
@@ -202,13 +233,17 @@ def run_case(case_id: str, out_dir: str | Path) -> dict:
     modules, joins = clock_modules()
     clock = VirtualClock()
     t0 = time.time()
-    with virtual_time(clock, modules, joins):
+    if real_time:
         code = runmod.execute_run(args, prompt=prompt, log=logs.append)
+    else:
+        with virtual_time(clock, modules, joins):
+            code = runmod.execute_run(args, prompt=prompt, log=logs.append)
     run_dir = root / "run"
     declared = json.loads((run_dir / "declared.json").read_text(encoding="utf-8"))
     summary = {"case": asdict(case), "exit_code": code, "end": declared["end"],
                "generator": declared["generator"], "real_s": round(time.time() - t0, 2),
-               "virtual_s": round(clock.monotonic() - clock.start, 3), "asked": asked,
+               "virtual_s": None if real_time else round(clock.monotonic() - clock.start, 3),
+               "real_time": real_time, "asked": asked,
                "log_tail": logs[-12:], "run_dir": str(run_dir), "scored": score_run(run_dir, case)}
     (root / "summary.json").write_text(json.dumps(summary, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     return summary
@@ -228,12 +263,13 @@ def score_run(run_dir: Path, case: Case) -> dict:
         plan = load_model_loss_plan((run_dir / "ev05-model-loss-plan.json").read_bytes())
         scorer, profile = "ev05-model-loss/1", load_profile("ev05-illustrative-0.1")
     point = plan.point or next(iter(envelope.points))
+    space = load_command_space(run_dir / "command-space.json")
     state = run_dir / "raw" / "state.csv"
     fk = rawdata.fk_samples_from_state(rawdata.read_state(state)) if state.exists() else []
     inp = ScoringInput(envelope=envelope, samples=rawdata.read_samples(run_dir / "raw" / "samples.csv"),
                        commands=rawdata.read_commands(run_dir / "raw" / "commands.csv"),
                        accuracy=accuracy_rows(envelope, point, feed), declared=declared_for(),
-                       profile=profile, fk_samples=fk or None, plan=plan.for_scoring())
+                       profile=profile, fk_samples=fk or None, plan=plan.for_scoring(space))
     result = score(scorer, inp)
     if case.test == "ev02":
         step2 = rules.ev02_failure_reasons(result["stops"], profile)
@@ -255,8 +291,8 @@ def score_run(run_dir: Path, case: Case) -> dict:
                        for t in trials]}
 
 
-if __name__ == "__main__":  # python _trials_sim.py CASE OUT_DIR
-    s = run_case(sys.argv[1], sys.argv[2])
+if __name__ == "__main__":  # python _trials_sim.py CASE OUT_DIR [--real-time]
+    s = run_case(sys.argv[1], sys.argv[2], real_time="--real-time" in sys.argv[3:])
     print(json.dumps({k: s[k] for k in ("exit_code", "real_s", "virtual_s")}))
     print(json.dumps({k: s["scored"][k] for k in ("verdict", "reasons", "seen_but_not_scored",
                                                     "internal", "internal_reasons")}))

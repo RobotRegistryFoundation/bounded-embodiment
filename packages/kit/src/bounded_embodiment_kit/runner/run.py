@@ -53,7 +53,7 @@ import platform
 import shutil
 import sys
 import time
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
 
 from bounded_embodiment import __version__ as core_version
@@ -82,12 +82,19 @@ from .interlocks import (
     default_ledger_path,
     file_sha256,
     require_run_flags,
+    require_terminal,
     setup_hash,
+    typed_word,
 )
 from .kin import ArmFK, FKError
 from .limits import DEFAULT, Limits
 from .session import CommandThread, RawFiles, SessionResult, make_clock, run_session
-from .trials import TrialCommandThread, TrialSegment, run_trial_session
+from .trials import (
+    EXTERNAL_SOURCES,
+    TrialCommandThread,
+    TrialSegment,
+    run_trial_session,
+)
 from .watchdog import (
     Alarm,
     Escalation,
@@ -295,8 +302,11 @@ class _Live:
 
     def __init__(self, *, adapter, envelope, fk, fk_tripwire: bool, feed, mode: str, tool_point: str,
                  proposals, files, clock, estop_cmd: str | None, limits: Limits, log,
-                 segments: list[TrialSegment] | None = None):
+                 segments: list[TrialSegment] | None = None,
+                 source_cmds: Mapping[str, str | None] | None = None, ask=None, space=None,
+                 caps: Mapping[str, float] | None = None):
         desc = adapter.describe()
+        self.envelope, self.fk, self.ask, self.space, self.caps = envelope, fk, ask, space, caps
         self.adapter, self.feed, self.files, self.log = adapter, feed, files, log
         self.latch = StopLatch(clock)
         self.latch.on_trip(adapter.latch_stop)  # a flag in the adapter: no bus
@@ -319,17 +329,54 @@ class _Live:
             self.command = TrialCommandThread(
                 adapter=adapter, latch=self.latch, state_box=self.state_box, fk=fk, files=files,
                 segments=segments, clock=clock, stop_decided=self.watchdog.decided, limits=limits,
-                log=log, watchdog=self.watchdog, external_cmd=estop_cmd,
-                adapter_sources=[s for s in desc.get("stop_triggers") or [] if s in ADAPTER_STOP_SOURCES])
+                log=log, watchdog=self.watchdog, external_cmds=source_cmds or {},
+                adapter_sources=[s for s in desc.get("stop_triggers") or [] if s in ADAPTER_STOP_SOURCES],
+                clearance=self.room, check_next=self.near)
         self.watchdog.stop_executed_at = lambda: self.command.first_stop_t
         self.limits = limits
+
+    def near(self, seg: TrialSegment) -> str | None:
+        """Position command spaces with robot state: why the machine is too far from the trial's
+        first command to begin it (more than ``trial_catch_up_steps`` step caps on an axis), or
+        None. After a stop that held, the machine is near the command at the stop instant, where
+        the next walk begins."""
+        space, caps = self.space, self.caps
+        if space is None or space.kind not in POSITION_KINDS or not caps:
+            return None
+        first = next((q.payload for q in seg.proposals if q.payload), None)
+        recent = [s for s in self.state_box.recent() if s.joints]
+        if first is None or not recent:
+            return None
+        present = state_to_command(space, recent[-1])
+        steps = self.limits.trial_catch_up_steps
+        far = {k: round(present[k] - first[k], 4) for k in caps
+               if k in present and k in first and abs(present[k] - first[k]) > steps * caps[k]}
+        if not far:
+            return None
+        return (f"the machine is more than {steps:g} step caps from where the trial's walk begins "
+                f"(present minus first command: {far}); a stop that did not hold leaves it so. "
+                "Run goto-start, or move the machine, before another run")
+
+    def room(self, point: str | None) -> tuple[float, str] | None:
+        """The stop point's room now: its clearance to its nearest zone boundary, from the newest
+        instrument sample (or, without an instrument, the robot's FK). None without a sample."""
+        point = point or self.cfg.tool_point
+        if self.feed is not None:
+            hist = self.watchdog.history(point)
+            xyz = hist[-1][1] if hist else None
+        else:
+            recent = self.state_box.recent()
+            xyz = (recent[-1].fk or {}).get(point) if recent else None
+        if xyz is None:
+            return None
+        return self.envelope.clearance(point, xyz), f"its nearest zone boundary ({point})"
 
     def run(self, prompt, word: str, text: str, wait_still: bool) -> SessionResult:
         try:
             if self.segments is not None:
                 return run_trial_session(adapter=self.adapter, latch=self.latch, watchdog=self.watchdog,
                                          command=self.command, feed=self.feed, prompt=prompt,
-                                         limits=self.limits, log=self.log)
+                                         limits=self.limits, log=self.log, ask=self.ask)
             return run_session(adapter=self.adapter, latch=self.latch, watchdog=self.watchdog,
                                command=self.command, feed=self.feed, prompt=prompt,
                                confirm_word=word, confirm_text=text,
@@ -385,7 +432,8 @@ def _end_block(result: SessionResult | None, live: _Live, closed: str) -> dict:
             "stream_finished": c.stream_finished, "first_command_t_s": c.first_t,
             "last_command_t_s": c.last_t, "stop_calls": c.stop_calls,
             "stop_errors": list(c.stop_errors), "adapter_close": closed,
-            **({"trials": [dict(t) for t in c.trials]} if isinstance(c, TrialCommandThread) else {})}
+            **({"trials": [dict(t) for t in c.trials], "first_stop_t_s": c.first_stop_t}
+               if isinstance(c, TrialCommandThread) else {})}
 
 
 # ----- be run ev03 -----------------------------------------------------------------------------
@@ -427,7 +475,6 @@ def waypoint_proposals(space, args):
 # ----- be run ev02 | ev05 ------------------------------------------------------------------------
 TRIAL_TESTS = ("ev02", "ev05")
 PLAN_FILES = {"ev02": core_report.STOP_PLAN_FILE, "ev05": core_report.MODEL_LOSS_PLAN_FILE}
-EXTERNAL_SOURCES = ("hardwired_stop", "power_loss")
 
 
 def load_trial_plan(test: str, space, path) -> tuple[object, bytes]:
@@ -484,17 +531,40 @@ def _float_pair(text: str, flag: str) -> list[float]:
     return [lo, hi]
 
 
+POSITION_KINDS = ("joint_position", "cartesian_position")
+#: The command line flag that gives each external stop source's command (D2).
+SOURCE_FLAGS = {"hardwired_stop": "--hardwired-stop-cmd", "power_loss": "--power-loss-cmd"}
+
+
+def source_cmds(args) -> dict[str, str | None]:
+    """The lab's command for each external stop source (D2; never --estop-cmd)."""
+    return {"hardwired_stop": getattr(args, "hardwired_stop_cmd", None),
+            "power_loss": getattr(args, "power_loss_cmd", None)}
+
+
+def _stop_point(plan, envelope) -> str:
+    return plan.point if plan.point is not None else next(iter(envelope.points))
+
+
 def trial_params(test: str, space, args, envelope, plan) -> dict:
     """The be-stops/1 or be-model-loss/1 params from the command line, normalized by core."""
     if args.step_cap is None:
-        raise RunError(f"{test} needs --step-cap: the largest change per command (a number, JSON per "
-                       "axis, or none to jump straight to each drive)")
+        raise RunError(f"{test} needs --step-cap: the largest change per command (a number, or JSON per "
+                       "axis; none only in a velocity command space)")
     caps = parse_step_cap(args.step_cap, space)
+    if caps is None and space.kind in POSITION_KINDS:
+        raise RunError(f"--step-cap none in a position command space: every walk would be one jump to "
+                       f"its target at whatever speed the machine moves; {test} walks at most --step-cap "
+                       "per command")
     hz = float(args.hz or 50.0)
     if test == "ev02":
+        profile = load_profile("ev02-illustrative-0.1")
+        longest = max(stop_limits(envelope, s)[0] for s in plan.sources)
+        # D1: the model goes on commanding the drive until the hold can have ended, and a little more
+        after = longest + profile["still_window_s"] + profile["hold_s"] + DEFAULT.trial_pause_extra_s
         params = {"hz": hz, "drive_s": float(args.drive_s or 1.0),
                   "return_s": float(args.return_s if args.return_s is not None else 2.0),
-                  "step_cap": caps}
+                  "after_s": math.ceil(after * 10) / 10, "step_cap": caps}
         return core_report.streams.normalize(core_report.STOPS, params)
     if caps is None:
         raise RunError("ev05 walks round the plan's path at most --step-cap per command; none is refused")
@@ -512,52 +582,127 @@ def trial_params(test: str, space, args, envelope, plan) -> dict:
     if restart < check:
         raise RunError(f"--restart-s {restart:g} is shorter than the restart check ({check:g} s): "
                        "no trial could be adequate")
-    params = {"hz": hz, "trials": int(args.trials or 3),
-              "motion_s": _float_pair(args.motion_s or "1.0,2.0", "--motion-s"),
+    if args.motion_s:
+        motion = _float_pair(args.motion_s, "--motion-s")
+    else:  # the loss must be able to land anywhere on the path: span a whole cycle of it
+        cycle = core_report.streams.path_cycle_s(space, plan, caps, hz)
+        motion = [1.0, 1.0 + max(1.0, math.ceil(cycle * 10) / 10)]
+    params = {"hz": hz, "trials": int(args.trials or 3), "motion_s": motion,
               "silence_s": silence, "restart_s": restart, "step_cap": caps}
     return core_report.streams.normalize(core_report.MODEL_LOSS, params)
 
 
 def trial_segments(test: str, space, plan, params: dict, seed: int, envelope, desc: Mapping,
-                   estop_cmd: str | None, limits: Limits) -> tuple[list[TrialSegment], float]:
+                   source_cmds: Mapping[str, str | None], limits: Limits,
+                   adapter=None) -> tuple[list[TrialSegment], float]:
     """The stream cut into its trials, with what each allows and needs; refuses a source the
     bench cannot issue or the adapter cannot reset after. Returns (segments, planned seconds)."""
     triggers = set(desc.get("stop_triggers") or [])
     resets = set(desc.get("stop_resets") or [])
+    point = _stop_point(plan, envelope)
+    v_max = envelope.speed_limit_mps(point)
+    velocity = space.kind not in POSITION_KINDS
+    margin = limits.margin("full")
+    if adapter is not None and triggers & set(ADAPTER_STOP_SOURCES) and not callable(
+            getattr(adapter, "trigger_stop", None)):
+        raise RunError(f"the adapter lists stop_triggers {sorted(triggers)} but has no trigger_stop method")
     if test == "ev02":
-        profile = load_profile("ev02-illustrative-0.1")
         for source in plan.sources:
             if source in ADAPTER_STOP_SOURCES and source not in triggers:
                 raise RunError(f"the plan tests {source}, which this adapter cannot issue "
                                f"(describe()['stop_triggers'] = {sorted(triggers)})")
-            if source in EXTERNAL_SOURCES and not estop_cmd:
-                raise RunError(f"the plan tests {source}: the bench issues it with the lab's --estop-cmd")
+            if source in EXTERNAL_SOURCES and not source_cmds.get(source):
+                raise RunError(f"the plan tests {source}: give the command that issues it with "
+                               f"{SOURCE_FLAGS[source]} (it must latch and never restore power itself: "
+                               "restoring is the reset, done by the operator at NEXT; --estop-cmd is "
+                               "the CUT POWER escalation only)")
             if source in EXTERNAL_SOURCES and source not in resets:
                 raise RunError(f"the plan tests {source}, and this adapter cannot resume after it "
                                f"(describe()['stop_resets'] = {sorted(resets)})")
         proposals = list(core_report.stop_stream(space, plan, params))
     else:
-        profile = load_profile("ev05-illustrative-0.1")
         proposals = list(core_report.model_loss_stream(space, plan, seed, params))
+    needs_reset = test == "ev02" or plan.resume["rule"] == "manual"
+    if adapter is not None and needs_reset and resets and not callable(getattr(adapter, "reset_stop", None)):
+        raise RunError(f"the adapter lists stop_resets {sorted(resets)} but has no reset_stop method")
     segments, planned = [], 0.0
     for k, seg in enumerate(core_report.split_segments(proposals)):
         if test == "ev02":
             source, drive = plan.trials[k]
-            allowed = stop_limits(envelope, source)[0]
-            pause = allowed + profile["still_window_s"] + profile["hold_s"] + limits.trial_pause_extra_s
+            allowed, distance, _ = stop_limits(envelope, source)
+            travel = v_max * params["drive_s"] + distance + margin if velocity else None
             segments.append(TrialSegment(tuple(seg), f"trial {k + 1} ({source}, drive {drive})", "stop",
-                                         source, allowed, pause,
+                                         source, allowed, limits.trial_pause_extra_s,
                                          source in EXTERNAL_SOURCES or source in resets,
-                                         operator_reset=source in EXTERNAL_SOURCES))
+                                         operator_reset=source in EXTERNAL_SOURCES, point=point,
+                                         travel_m=travel))
         else:
             source = plan.source
-            allowed = envelope.heartbeat["model_timeout_ms"] / 1000.0 + stop_limits(envelope, source)[0]
+            timeout = envelope.heartbeat["model_timeout_ms"] / 1000.0
+            allowed, distance, _ = stop_limits(envelope, source)
+            allowed += timeout
             manual = plan.resume["rule"] == "manual"
+            travel = (v_max * (params["motion_s"][1] + timeout) + distance + margin) if velocity else None
             segments.append(TrialSegment(tuple(seg), f"trial {k + 1} ({source})", "loss", source,
                                          allowed, limits.trial_pause_extra_s, manual and source in resets,
-                                         operator_reset=manual and source not in resets))
+                                         operator_reset=manual and source not in resets, point=point,
+                                         release_after_s=None if manual else plan.resume["after_ms"] / 1000.0,
+                                         travel_m=travel))
         planned += seg[-1].t_s + segments[-1].pause_s
     return segments, planned
+
+
+def check_trial_proposals(fk: ArmFK, envelope, space, plan, segments: Sequence[TrialSegment],
+                          test: str, hz: float) -> None:
+    """Joint-position spaces with FK, before RUN (review S2, B2): at every command the stream will
+    send (every walk included, not only the plan's own commands) every zoned point must be inside
+    its zones; the stop point may not be commanded faster than its speed limit allows; and in EV-02
+    the commands that go on after each stop must carry the stop point clearly further than the
+    source's stop distance (with the profile's tolerance and margin), so that a stop that does
+    nothing fails rather than passes."""
+    if space.kind != "joint_position":
+        return
+    point = _stop_point(plan, envelope)
+    v_max = envelope.speed_limit_mps(point)
+    units = {a.key.removesuffix(".pos"): a.unit for a in space.axes}
+    profile = load_profile("ev02-illustrative-0.1" if test == "ev02" else "ev05-illustrative-0.1")
+    fastest = v_max * (1.0 + profile["tolerance_speed_frac"])
+
+    def at(command: Mapping[str, float]) -> dict:
+        return fk.points({k.removesuffix(".pos"): float(v) for k, v in command.items()}, units)
+
+    for seg in segments:
+        previous = None
+        for prop in seg.proposals:
+            if not prop.payload:
+                continue  # a stop row
+            pts = at(prop.payload)
+            for name, xyz in pts.items():
+                c = envelope.clearance(name, xyz)
+                if c < 0:
+                    raise RunError(f"{seg.label}: command {prop.seq} ({prop.strategy}) puts {name} "
+                                   f"{-c * 100:.1f} cm outside its zones")
+            if previous is not None and point in pts:
+                v = math.dist(pts[point], previous) * hz
+                if v > fastest:
+                    raise RunError(f"{seg.label}: command {prop.seq} moves {point} at {v:.3f} m/s, faster "
+                                   f"than its speed limit allows ({v_max:g} m/s plus "
+                                   f"{profile['tolerance_speed_frac'] * 100:g} %): a smaller --step-cap")
+            previous = pts.get(point)
+        if test == "ev02":
+            stop = next(i for i, q in enumerate(seg.proposals) if not q.payload)
+            last = at(seg.proposals[stop - 1].payload).get(point) if stop else None
+            target = at(plan.drive(plan.trials[segments.index(seg)][1]).command).get(point)
+            if last is None or target is None:
+                continue
+            _, distance, _ = stop_limits(envelope, seg.source)
+            need = (distance + profile["tolerance_m"]) * (1.0 + profile["dead_stop_margin_frac"])
+            left = math.dist(last, target)
+            if left < need:
+                raise RunError(f"{seg.label}: after the stop the commands carry {point} only {left:.3f} m "
+                               f"further, to the drive; a stop that does nothing must travel clearly "
+                               f"more than the allowed {distance + profile['tolerance_m']:.3f} m "
+                               f"({need:.3f} m): a farther drive or a shorter --drive-s")
 
 
 def execute_run(args, *, prompt: Callable[[str], str] = _ask, log: Callable[[str], None] = _stderr,
@@ -594,6 +739,10 @@ def execute_run(args, *, prompt: Callable[[str], str] = _ask, log: Callable[[str
             raise RunError("--trials, --motion-s, --silence-s and --restart-s are for ev05")
         if test == "ev05" and any(getattr(args, a, None) is not None for a in ("drive_s", "return_s")):
             raise RunError("--drive-s and --return-s are for ev02")
+        cmds = [f for f, a in (("--hardwired-stop-cmd", "hardwired_stop_cmd"), ("--power-loss-cmd", "power_loss_cmd"))
+                if getattr(args, a, None)]
+        if cmds and test != "ev02":
+            raise RunError(f"{', '.join(cmds)}: for be run ev02 (they issue its external stop sources)")
         out = Path(args.out)
         if out.exists() and any(out.iterdir()):
             raise RunError(f"{out} exists and is not empty; a run directory is written once")
@@ -612,6 +761,8 @@ def execute_run(args, *, prompt: Callable[[str], str] = _ask, log: Callable[[str
         desc = adapter.describe()
         if kind == "sim" and not desc.get("simulation"):
             raise RunError("--instrument sim is for simulation adapters only")
+        if trial and not desc.get("simulation"):  # NEXT asserts a reset: from a terminal only (S3)
+            require_terminal()
         fk = ArmFK.build(args.urdf, kit_config.get("joint_map"), envelope) if args.urdf else None
         override = bool(args.no_fk_tripwire_i_understand)
         if fk is None and not override:
@@ -669,8 +820,10 @@ def execute_run(args, *, prompt: Callable[[str], str] = _ask, log: Callable[[str
         segments = None
         if trial:
             segments, planned_s = trial_segments(test, space, plan, trial_args, int(args.seed), envelope,
-                                                 adapter.describe(), args.estop_cmd, limits)
+                                                 adapter.describe(), source_cmds(args), limits, adapter)
             check_trial_start(space, trial_args["step_cap"], present, plan.start)
+            if fk is not None:
+                check_trial_proposals(fk, envelope, space, plan, segments, test, trial_args["hz"])
             proposals = [p for seg in segments for p in seg.proposals]
             generator = {"name": core_report.STOPS if test == "ev02" else core_report.MODEL_LOSS,
                          "version": "1", "seed": int(args.seed), "params": trial_args,
@@ -702,7 +855,10 @@ def execute_run(args, *, prompt: Callable[[str], str] = _ask, log: Callable[[str
         tool = tool_point_of(envelope)
         live = _Live(adapter=adapter, envelope=envelope, fk=fk, fk_tripwire=fk_tripwire, feed=feed,
                      mode=mode, tool_point=tool, proposals=proposals, files=RawFiles(out / "raw"),
-                     clock=clock, estop_cmd=args.estop_cmd, limits=limits, log=log, segments=segments)
+                     clock=clock, estop_cmd=args.estop_cmd, limits=limits, log=log, segments=segments,
+                     source_cmds=source_cmds(args) if trial else None,
+                     ask=typed_word if trial and not desc.get("simulation") else None,
+                     space=space if trial else None, caps=trial_args["step_cap"] if trial else None)
         if kind == "none":
             feed_block = {"kind": "none", "live_supervision": "robot_state_only",
                           "why": "--no-live-instrument-i-understand: the instrument records and is scored "
@@ -722,6 +878,7 @@ def execute_run(args, *, prompt: Callable[[str], str] = _ask, log: Callable[[str
             "safety": {"hardware_stop": args.hardware_stop.strip(),
                        "fk_tripwire": "on" if fk_tripwire else "override",
                        "estop_cmd": args.estop_cmd, "tool_point": tool,
+                       **({"source_cmds": source_cmds(args)} if trial else {}),
                        "tripwires": {"margin_m": live.cfg.margin_m,
                                      "tool_speed_trip_mps": live.cfg.tool_speed_trip_mps,
                                      "tool_unseen_s": live.cfg.tool_unseen_s,

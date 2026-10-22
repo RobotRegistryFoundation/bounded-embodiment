@@ -1155,7 +1155,7 @@ Module names are relative to the core package `bounded_embodiment` unless they s
 | Test report 0.2 | 9.3 | `report.build.report_version_for`, `report.verify.verify` | `test_report_trials.py::test_ev02_and_ev05_reports_are_0_2`, `test_report_trials.py::test_an_ev02_report_cannot_be_0_1` |
 | Plan files in the run directory | 9.1 | `report.derive.layout_checks` | `test_report_trials.py::test_an_ev02_run_needs_its_plan`, `test_report_trials.py::test_a_plan_belongs_to_its_own_test` |
 | Trial supervision | 6 | `bounded_embodiment_kit.runner.watchdog.trial_trip`, `bounded_embodiment_kit.runner.watchdog.Watchdog.watch_trial` | kit `test_runner_trials.py::test_a_machine_still_moving_after_the_allowed_time_trips_it`, kit `test_runner_trials_sim.py::test_a_stop_that_does_not_stop_is_stopped_by_the_watchdog` |
-| Issuing stops and losses, NEXT between trials | 6, 12.5, 13.5 | `bounded_embodiment_kit.runner.trials.TrialCommandThread`, `bounded_embodiment_kit.runner.run.trial_segments` | kit `test_runner_trials_sim.py::test_both_ev02_sources_are_tested_through_their_own_paths`, kit `test_runner_trials.py::test_an_external_stop_needs_the_estop_command_and_a_reset` |
+| Issuing stops and losses, NEXT between trials | 6, 12.5, 13.5 | `bounded_embodiment_kit.runner.trials.TrialCommandThread`, `bounded_embodiment_kit.runner.run.trial_segments` | kit `test_runner_trials_sim.py::test_both_ev02_sources_are_tested_through_their_own_paths`, kit `test_runner_trials.py::test_an_external_stop_needs_its_own_command_and_a_reset` |
 
 ## Annex B (informative): findings that motivated specific rules
 

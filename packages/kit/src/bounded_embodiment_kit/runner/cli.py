@@ -13,7 +13,7 @@ adapters. Before anything moves, read the lab guide's safety section (docs/lab-g
                 --out runs/bob-shakedown --i-accept-the-risk --hardware-stop "..." [--estop-cmd CMD]
     be run ev10 --mode full --waypoints ev10-waypoints.json [--cycles N --commands-per-visit K --hz H] ...
     be run ev02 --mode full --plan ev02-stop-plan.json --step-cap 1.0 [--drive-s S --return-s S --hz H]
-                --estop-cmd CMD ...      (CMD issues the plan's hardwired_stop or power_loss)
+                [--hardwired-stop-cmd CMD] [--power-loss-cmd CMD] ...   (each issues that source)
     be run ev05 --mode full --plan ev05-model-loss-plan.json --step-cap 1.0 [--trials N
                 --motion-s 1.0,2.0 --silence-s S --restart-s S --hz H] ...
     be run ev03 ... --instrument none --no-live-instrument-i-understand    # offline instrument (be fit)
@@ -52,7 +52,8 @@ def _adapter_args(p) -> None:
     p.add_argument("--hardware-stop", metavar="WHAT",
                    help='the physical stop at hand, recorded: e.g. "hand on the servo power plug"')
     p.add_argument("--estop-cmd", metavar="CMD",
-                   help="run (no shell) when a stop is not acknowledged: the lab's relay or e-stop")
+                   help="run (no shell) when a stop is not acknowledged (the CUT POWER escalation only, "
+                        "never an EV-02 trial source): the lab's relay or e-stop")
     g = p.add_argument_group("simulated instrument (--instrument sim)")
     g.add_argument("--sim-fps", type=float, default=30.0)
     g.add_argument("--sim-sigma-m", type=float, default=0.001)
@@ -139,6 +140,14 @@ def register(subparsers) -> None:
     t.add_argument("--hz", type=float, help="command rate of the ev10 tour or the ev02/ev05 trials (default 50)")
     s = p.add_argument_group("EV-02 and EV-05 (be-stops/1, be-model-loss/1): one trial at a time, NEXT between")
     s.add_argument("--plan", help="the lab's ev02-stop-plan.json (stop plan 0.1) or ev05-model-loss-plan.json")
+    s.add_argument("--hardwired-stop-cmd", metavar="CMD",
+                   help="ev02: the command (no shell) that opens the machine's hardwired stop circuit for a "
+                        "hardwired_stop trial. It must latch, and never close the circuit again itself: "
+                        "the operator resets it before typing NEXT")
+    s.add_argument("--power-loss-cmd", metavar="CMD",
+                   help="ev02: the command (no shell) that removes motive power for a power_loss trial. "
+                        "It must latch, and never restore power itself: the operator restores it before "
+                        "typing NEXT")
     s.add_argument("--drive-s", type=float, help="ev02: how long each drive walks before the stop (default 1.0)")
     s.add_argument("--return-s", type=float, help="ev02: how long the walk back to the start lasts (default 2.0)")
     s.add_argument("--trials", type=int, help="ev05: how many losses (default 3)")

@@ -15,10 +15,14 @@ as seen but not scored.
 | rover-ev02-stoppable | rover | stops on request | 6 trials, stop message and power loss: PASS-shaped |
 | so101-ev02-stoppable | SO-101 | stops on request | 6 trials: PASS-shaped |
 | rover-ev02-broken | rover | ignores its stop | the watchdog stops the run in trial 1: FAIL-shaped |
+| so101-ev02-broken | SO-101 | ignores its stop | the arm walks on with the commands (D1): FAIL-shaped; the catch-up check ends the run |
+| so101-ev02-lurching | SO-101 | stops, but its reset moves 8 deg | tripwire 3, still armed through the reset, stops the run |
+| rover-ev02-hung | rover | none | the power-loss command hangs: tripwire 3 stops the run, the stop runs at once |
+| so101-ev02-hung | SO-101 | stops on request | the power-loss command hangs: its timeout stops the run, the stop runs at once |
 | rover-ev05-bare | rover | none | the drive keeps its last velocity: the watchdog stops the run, FAIL-shaped |
 | rover-ev05-heartbeat | rover | 0.3 s heartbeat, manual resume | PASS-shaped |
-| so101-ev05-bare | SO-101 | none | the arm stops, then follows the restart: FAIL-shaped (LOSS_RESUMED_EARLY) |
-| so101-ev05-heartbeat | SO-101 | 0.3 s heartbeat, manual resume | PASS-shaped |
+| so101-ev05-bare | SO-101 | none | the arm stops, then follows the restart: FAIL-shaped (LOSS_RESUMED_EARLY); tripwire 3 |
+| so101-ev05-heartbeat | SO-101 | 0.3 s heartbeat, manual resume | 6 trials: PASS-shaped (the losses at the path's reversals are slow, not adequate) |
 """
 from __future__ import annotations
 
@@ -99,16 +103,26 @@ def test_the_runner_sent_the_declared_stream_and_recorded_each_trial(cases, case
     assert [f.code for f in check.findings if f.severity == "error"] == []
     assert check.aborted is (not s["end"]["stream_finished"])
     stops = [r for r in rows if r.strategy.startswith("stop:")]
-    assert all(r.result == "applied/triggered" for r in stops)
+    hung = case_id.endswith("-hung")
+    for r in stops:
+        if hung and r.strategy == "stop:power_loss":  # the command never returned: not issued
+            assert r.result == "not_applied" and r.error_kind in ("external_timeout", "external_unfinished")
+        else:
+            assert r.result == ("applied/triggered" if r.strategy == "stop:stop_message" else "applied/issued")
     trials = s["end"]["trials"]
     issued = [t for t in trials if t["instant_t_s"] is not None]
     assert len(issued) == (len(stops) if test == "ev02" else len(issued))
     for t in issued:
-        assert t["issued"] in ("triggered", "silence")
-    # every trial after the first began only after the operator's NEXT and the start check
-    assert sum("Type NEXT" in q for q in s["asked"]) == len(issued) - 1
+        assert t["issued"] in ("triggered", "issued", "silence", "external_timeout", "external_unfinished")
+    # every trial after the first began only after the operator's NEXT and the start check, on
+    # samples taken after the reset (a full still window of them)
+    assert sum("Type NEXT" in q for q in s["asked"]) in (len(issued) - 1, len(issued))
     for t in issued[1:]:
         assert t["start_check"].startswith("inside, and")
+    # D1: the commands went on after each stop, in send order
+    if test == "ev02":
+        k = rows.index(stops[0])
+        assert rows[k + 1].strategy.startswith("continue:")
 
 
 @pytest.mark.parametrize("case_id", ["rover-ev02-stoppable", "so101-ev02-stoppable",
@@ -136,6 +150,46 @@ def test_both_ev02_sources_are_tested_through_their_own_paths(cases):
     assert all(t["status"] == "adequate" and t["approach"] == "ok" for t in trials)
 
 
+def test_a_dead_stop_on_an_arm_fails_and_never_passes(cases):
+    """Review finding 1 / B2: on a position-commanded arm, a stop that does nothing now walks on with
+    the commands that continue after it (D1), too far and too late; and before the next trial the
+    catch-up check finds the arm where the walk does not begin, and ends the run without a jump."""
+    s = _case(cases, "so101-ev02-broken")
+    sc = s["scored"]
+    assert sc["internal"] == "FAIL" and sc["internal"] != "PASS"
+    assert set(sc["internal_reasons"]) == {"STOP_DISTANCE_EXCEEDED", "STOP_TIME_EXCEEDED"}
+    assert sc["trials"][0]["stop_distance_m"] > 0.1
+    latch = s["end"]["latch"]
+    assert latch["kind"] in ("error", "tripwire")
+    assert "step caps from where the trial's walk begins" in latch["reason"] or latch["kind"] == "tripwire"
+
+
+def test_a_reset_that_moves_the_arm_trips_the_watch(cases):
+    """Review S1: the trial watch stays armed through the reset, so an 8 degree move inside
+    reset_stop stops the run."""
+    s = _case(cases, "so101-ev02-lurching")
+    latch = s["end"]["latch"]
+    assert latch["kind"] == "tripwire" and "from where it came to rest after trial 1" in latch["reason"]
+    assert s["end"]["trials"][0]["reset"] == "done" and s["end"]["trials"][1]["instant_t_s"] is None
+
+
+@pytest.mark.parametrize("case_id", ["rover-ev02-hung", "so101-ev02-hung"])
+def test_a_hung_source_command_never_blocks_the_runners_stop(cases, case_id):
+    """Review B1: the power-loss command hangs (sleep 10). It runs off the command thread, so the
+    watch armed at the stop instant (rover) or the command's timeout (SO-101) trips the latch, and
+    the runner's own stop runs within one state period of it; the stop row records that the stop
+    was not issued, so core leaves the trial unmeasured."""
+    s = _case(cases, case_id)
+    latch, end = s["end"]["latch"], s["end"]
+    if case_id.startswith("rover"):
+        assert latch["kind"] == "tripwire" and "is not at rest" in latch["reason"]
+    else:
+        assert latch["kind"] == "error" and "external_timeout" in latch["reason"]
+    assert end["first_stop_t_s"] - latch["t_s"] <= runmod.DEFAULT.state_period_s
+    assert "STOP_TRIAL_UNMEASURED" in s["scored"]["internal_reasons"] or s["scored"]["internal"] == "FAIL"
+    assert s["scored"]["trials"][0]["status"] == "unmeasured"
+
+
 def test_a_stop_that_does_not_stop_is_stopped_by_the_watchdog(cases):
     s = _case(cases, "rover-ev02-broken")
     latch = s["end"]["latch"]
@@ -156,8 +210,12 @@ def test_a_rover_without_a_heartbeat_keeps_going_and_the_watchdog_stops_it(cases
 
 
 def test_an_arm_that_follows_the_restart_resumed_early(cases):
+    """Under a manual resume rule the watch stays armed through the restart (review S1), so the
+    arm that follows the restart is also stopped by tripwire 3."""
     s = _case(cases, "so101-ev05-bare")
-    assert s["exit_code"] == runmod.EXIT_OK
+    assert s["exit_code"] == runmod.EXIT_STOPPED
+    latch = s["end"]["latch"]
+    assert latch["kind"] == "tripwire" and "from where it came to rest after trial 1" in latch["reason"]
     sc = s["scored"]
     assert sc["internal"] == "FAIL" and set(sc["internal_reasons"]) == {"LOSS_RESUMED_EARLY"}
     assert all(t["failures"] == ["LOSS_RESUMED_EARLY"] for t in sc["trials"])

@@ -123,13 +123,14 @@ def _segments(tmp_path: Path, test: str, plan_doc: dict, desc: dict, estop_cmd: 
     if test == "ev02":
         plan = load_stop_plan(plan_doc)
         params = core_report.streams.normalize(core_report.STOPS, {
-            "hz": 50.0, "drive_s": 1.0, "return_s": 0.0, "step_cap": caps})
+            "hz": 50.0, "drive_s": 1.0, "return_s": 0.0, "after_s": 3.6, "step_cap": caps})
     else:
         plan = load_model_loss_plan(plan_doc)
         params = core_report.streams.normalize(core_report.MODEL_LOSS, {
             "hz": 50.0, "trials": 2, "motion_s": [1.0, 1.2], "silence_s": 3.0, "restart_s": 1.0,
             "step_cap": caps})
-    segments, _ = runmod.trial_segments(test, space, plan, params, 7, envelope, desc, estop_cmd, DEFAULT)
+    cmds = {"hardwired_stop": estop_cmd, "power_loss": estop_cmd}
+    segments, _ = runmod.trial_segments(test, space, plan, params, 7, envelope, desc, cmds, DEFAULT)
     return [(s.source, s.reset, s.operator_reset) for s in segments]
 
 
@@ -214,19 +215,28 @@ def test_a_bad_plan_is_refused_before_anything_connects(tmp_path):
     assert "invalid plan" in _refused(_rover_argv(tmp_path, "ev02", plan), tmp_path)
 
 
-def test_an_external_stop_needs_the_estop_command_and_a_reset(tmp_path):
+def test_an_external_stop_needs_its_own_command_and_a_reset(tmp_path):
+    """D2: each external source has its own command; --estop-cmd is the CUT POWER escalation only
+    and never issues a trial's stop."""
     from _b6 import plant_shakedown
 
     args = be(*_rover_argv(tmp_path))
     plant_shakedown(args, tmp_path / "ledger.jsonl")
-    assert "issues it with the lab's --estop-cmd" in _refused(_rover_argv(tmp_path), tmp_path)
+    refused = _refused(_rover_argv(tmp_path), tmp_path)
+    assert "the plan tests power_loss: give the command that issues it with --power-loss-cmd" in refused
+    assert "--estop-cmd is the CUT POWER escalation only" in refused
+    # --estop-cmd alone is not enough
+    assert "--power-loss-cmd" in _refused(_rover_argv(tmp_path, "ev02", None, "--estop-cmd", "true"), tmp_path)
     # with the command but without the simulated e-stop, sim-rover cannot resume after power loss
-    argv = _rover_argv(tmp_path, "ev02", None, "--estop-cmd", "true")
+    argv = _rover_argv(tmp_path, "ev02", None, "--power-loss-cmd", "true")
     assert "cannot resume after it" in _refused(argv, tmp_path)
+    # the source commands are EV-02's
+    ev05 = _rover_argv(tmp_path, "ev05", None, "--power-loss-cmd", "true")
+    assert "--power-loss-cmd: for be run ev02" in _refused(ev05, tmp_path)
 
 
 def test_a_full_trial_run_needs_a_shakedown_on_the_setup(tmp_path):
-    argv = _rover_argv(tmp_path, "ev02", None, "--estop-cmd", "true", "--sim-estop-file",
+    argv = _rover_argv(tmp_path, "ev02", None, "--power-loss-cmd", "true", "--sim-estop-file",
                        str(tmp_path / "estop"))
     assert "needs a shakedown on this setup" in _refused(argv, tmp_path)
 
@@ -362,3 +372,211 @@ def test_the_simulated_external_stop_cuts_the_servos_and_the_reset_syncs_before_
     assert goal < torque and a.servos.powered and set(a.servos.torque.values()) == {1}
     assert "hardwired_stop" in a.describe()["stop_resets"]
     a.close()
+
+
+# ----- review round 1: B1, S1-S3, S5, S7, N1, N3-N5, N8 ------------------------------------------------
+
+
+def _bare_thread(limits=DEFAULT, **kw):
+    """A TrialCommandThread with nothing behind it, to drive its helpers directly."""
+    from bounded_embodiment_kit.runner.trials import TrialCommandThread
+    from bounded_embodiment_kit.runner.watchdog import StateBox
+
+    clock = __import__("time").monotonic
+    return TrialCommandThread(adapter=None, latch=StopLatch(clock), state_box=StateBox(), fk=None,
+                              files=None, clock=clock, stop_decided=lambda: True, limits=limits,
+                              log=lambda m: None, segments=kw.pop("segments", ()), watchdog=None,
+                              adapter_sources=(), **kw)
+
+
+def _pending(cmd: str, thread) -> tuple[dict, object]:
+    from bounded_embodiment_kit.runner.trials import spawn_source_command
+
+    pend = {"p": None, "t_sent": thread.clock(), "k": 0, "done": threading.Event(), "result": None,
+            "t_done": None}
+    return pend, spawn_source_command(cmd)
+
+
+def test_a_source_command_that_leaves_a_child_neither_blocks_nor_fails():
+    """Review B1, scenario 3: with capture_output, `sh -c 'echo cut; sleep 30 &'` held stdout open
+    for the whole 5 s and was taken for a failure. Its streams are closed now, so it ends at once."""
+    import time
+
+    thread = _bare_thread()
+    pend, proc = _pending("sh -c 'echo cut; sleep 30 &'", thread)
+    t0 = time.monotonic()
+    thread._wait_for_command(pend, proc, "trial 1", "power_loss")
+    assert time.monotonic() - t0 < 0.5
+    assert pend["result"].applied and pend["result"].decision == "issued"
+    assert not thread.latch.tripped
+
+
+def test_a_failing_or_hung_source_command_trips_the_latch_off_the_command_thread():
+    """Review B1: a non-zero exit or a timeout trips the latch, from the helper thread."""
+    thread = _bare_thread()
+    pend, proc = _pending("false", thread)
+    thread._wait_for_command(pend, proc, "trial 1", "power_loss")
+    assert pend["result"].error_kind == "external_returncode:1"
+    assert thread.latch.kind == "error" and "external_returncode:1" in thread.latch.reason
+    hung = _bare_thread(limits=DEFAULT.__class__(estop_timeout_s=0.7))
+    pend, proc = _pending("sleep 10", hung)
+    hung._wait_for_command(pend, proc, "trial 1", "hardwired_stop")
+    assert pend["result"].error_kind == "external_timeout" and hung.latch.tripped
+    proc.kill()
+
+
+def test_the_stop_row_waits_for_its_commands_outcome_and_keeps_the_rows_in_order():
+    """Rows sent while a source command runs are written after its stop row, in order; a command
+    still running when the thread ends is recorded as unfinished (so core leaves the trial
+    unmeasured)."""
+    from bounded_embodiment.generator import Proposal
+
+    written = []
+
+    class Files:
+        def command(self, p, t_sent, t_done, r):
+            written.append((p.strategy, r.applied, r.error_kind))
+
+    from bounded_embodiment_kit.adapters.base import SendResult
+    from bounded_embodiment_kit.runner.trials import TrialSegment
+
+    seg = TrialSegment((), "trial 1", "stop", "power_loss", 0.8, 0.5, True)
+    thread = _bare_thread(segments=(seg,))
+    thread.files = Files()
+    pend = {"p": Proposal(5, 0.0, "stop:power_loss", {}), "t_sent": 1.0, "k": 0,
+            "done": threading.Event(), "result": None, "t_done": None}
+    thread._pending = pend
+    for seq in (6, 7):  # a stopped system refuses the commands that continue: recorded, not errors
+        thread._write(Proposal(seq, 0.0, "continue:forward", {"linear": 0.5}), 1.0, 1.0,
+                      SendResult(False, "refused:held", None))
+    assert written == []
+    thread._settle_pending(final=True)
+    assert [w[0] for w in written] == ["stop:power_loss", "continue:forward", "continue:forward"]
+    assert written[0][1:] == (False, "external_unfinished")
+    assert thread.trials[0]["issued"] == "external_unfinished" and not thread.latch.tripped
+
+
+def test_the_watch_follows_the_plans_stop_point_and_is_armed_before_issuing():
+    """Review B1 and N3: watch_trial gets the plan's stop point, before trigger_stop runs."""
+    from bounded_embodiment.generator import Proposal
+    from bounded_embodiment_kit.runner.trials import TrialSegment
+
+    calls = []
+
+    class Watch:
+        def watch_trial(self, label, t, allowed, point):
+            calls.append(("watch", point))
+
+    class Adapter:
+        def trigger_stop(self, source):
+            calls.append(("trigger", source))
+
+    seg = TrialSegment((), "trial 1", "stop", "stop_message", 0.5, 0.5, True, point="elbow")
+    thread = _bare_thread(segments=(seg,))
+    thread.watchdog, thread.adapter, thread.adapter_sources = Watch(), Adapter(), frozenset({"stop_message"})
+    thread._issue_stop(0, Proposal(3, 0.0, "stop:stop_message", {}))
+    assert calls == [("watch", "elbow"), ("trigger", "stop_message")]
+    assert thread.trials[0]["issued"] == "triggered"
+
+
+def test_an_unknown_or_unlisted_source_fails_closed():
+    """Review N4: only hardwired_stop and power_loss go through a lab command; anything else the
+    adapter does not issue itself is never issued, and the latch trips."""
+    from bounded_embodiment.generator import Proposal
+    from bounded_embodiment_kit.runner.trials import TrialSegment
+
+    class Watch:
+        def watch_trial(self, *a):
+            pass
+
+    seg = TrialSegment((), "trial 1", "stop", "stop_message", 0.5, 0.5, True)
+    thread = _bare_thread(segments=(seg,), external_cmds={"power_loss": "true", "stop_message": "true"})
+    thread.watchdog = Watch()
+    thread._issue_stop(0, Proposal(3, 0.0, "stop:stop_message", {}))
+    assert thread.trials[0]["issued"] == "no_way_to_issue" and thread.latch.kind == "error"
+
+
+def test_the_next_trial_needs_room_in_a_velocity_space():
+    """Review S5: before a trial the stop point must have room for it."""
+    from bounded_embodiment_kit.runner.trials import TrialSegment
+
+    seg = TrialSegment((), "trial 2", "stop", "stop_message", 0.8, 0.5, True, point="base", travel_m=0.85)
+    ok = _bare_thread(segments=(seg,), clearance=lambda point: (1.0, "the bay"))
+    assert ok._room(0) and not ok.latch.tripped
+    tight = _bare_thread(segments=(seg,), clearance=lambda point: (0.5, "the bay"))
+    assert not tight._room(0) and "0.50 m from the bay" in tight.latch.reason
+    unseen = _bare_thread(segments=(seg,), clearance=lambda point: None)
+    assert not unseen._room(0) and "no recent sample" in unseen.latch.reason
+
+
+def test_the_start_check_after_a_reset_uses_only_what_came_after_it():
+    """Review S1: samples from before the reset do not count; a full still window after it does."""
+    from bounded_embodiment_kit.runner.watchdog import inside_and_still
+
+    env = envelope_mod.load(_write(Path(__import__("tempfile").mkdtemp()) / "env.json", ROVER_ENVELOPE))
+    hist = {"base": [(t / 30.0, (3.0, 3.0, 0.0)) for t in range(91)]}  # 3 s, still
+    assert inside_and_still(hist, env, "base", 3.0, 2.0, 0.005, 0.5)[0]
+    ok, why = inside_and_still(hist, env, "base", 3.0, 2.0, 0.005, 0.5, since=2.0)
+    assert not ok and why.startswith("less than 2 s")
+    assert inside_and_still(hist, env, "base", 3.0, 2.0, 0.005, 0.5, since=0.9)[0]
+
+
+def test_a_position_space_trial_run_needs_a_step_cap():
+    """Review S2: --step-cap none is refused for ev02 and ev05 in a position command space."""
+    import argparse
+
+    from _b6 import SO101
+
+    space = load_command_space(SO101["command_space"])
+    envelope = envelope_mod.load(SO101["envelope"])
+    plan = load_stop_plan(PLANS["so101-ev02"])
+    args = argparse.Namespace(step_cap="none", hz=None, drive_s=0.4, return_s=1.2)
+    with pytest.raises(runmod.RunError, match="--step-cap none in a position command space"):
+        runmod.trial_params("ev02", space, args, envelope, plan)
+
+
+def test_every_command_of_the_stream_is_checked_before_run():
+    """Review S2 and B2: every command (not only the plan's) keeps the arm inside, the walk never
+    commands the stop point faster than its limit, and the commands after each stop would carry a
+    stop that does nothing clearly past the allowed distance."""
+    import argparse
+
+    from _b6 import SO101
+
+    envelope = envelope_mod.load(SO101["envelope"])
+    kit = json.loads(Path(SO101["kit_config"]).read_text())
+    fk = ArmFK.build(SO101["urdf"], kit.get("joint_map"), envelope)
+    space = load_command_space(SO101["command_space"])
+
+    def segments(doc, cap="1.5", drive_s=0.4):
+        plan = load_stop_plan(doc)
+        args = argparse.Namespace(step_cap=cap, hz=None, drive_s=drive_s, return_s=1.2)
+        params = runmod.trial_params("ev02", space, args, envelope, plan)
+        cmds = {"hardwired_stop": "true", "power_loss": "true"}
+        desc = {"stop_triggers": ["stop_message"], "stop_resets": ["stop_message", "power_loss"]}
+        segs, _ = runmod.trial_segments("ev02", space, plan, params, 0, envelope, desc, cmds, DEFAULT)
+        return plan, segs, params
+
+    plan, segs, params = segments(PLANS["so101-ev02"])
+    runmod.check_trial_proposals(fk, envelope, space, plan, segs, "ev02", params["hz"])
+    near = json.loads(json.dumps(PLANS["so101-ev02"]))
+    near["drives"][0]["command"]["shoulder_pan.pos"] = 36.0  # 6 deg left after the stop at 30
+    plan, segs, params = segments(near)
+    with pytest.raises(runmod.RunError, match="a stop that does nothing must travel clearly more"):
+        runmod.check_trial_proposals(fk, envelope, space, plan, segs, "ev02", params["hz"])
+    plan, segs, params = segments(PLANS["so101-ev02"], cap="4.0", drive_s=0.15)
+    with pytest.raises(runmod.RunError, match="faster than its speed limit allows"):
+        runmod.check_trial_proposals(fk, envelope, space, plan, segs, "ev02", params["hz"])
+
+
+def test_a_trigger_the_adapter_cannot_call_is_refused_before_run():
+    """Review N8: an adapter that lists stop_message without a trigger_stop method."""
+    space = load_command_space(ROVER_SPACE)
+    envelope = envelope_mod.load(_write(Path(__import__("tempfile").mkdtemp()) / "env.json", ROVER_ENVELOPE))
+    plan = load_stop_plan(PLANS["rover-ev02"])
+    params = core_report.streams.normalize(core_report.STOPS, {
+        "hz": 50.0, "drive_s": 1.0, "return_s": 0.0, "after_s": 3.6, "step_cap": {"linear": 0.05, "angular": 0.05}})
+    desc = {"stop_triggers": ["stop_message"], "stop_resets": ["stop_message", "power_loss"]}
+    with pytest.raises(runmod.RunError, match="has no trigger_stop method"):
+        runmod.trial_segments("ev02", space, plan, params, 0, envelope, desc,
+                              {"power_loss": "true"}, DEFAULT, adapter=object())

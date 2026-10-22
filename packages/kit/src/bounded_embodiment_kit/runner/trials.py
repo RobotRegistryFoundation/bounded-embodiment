@@ -61,6 +61,9 @@ class TrialSegment:
     pause_s     the least time from the instant (EV-02) or from the segment's last row (EV-05) to
                 the moment the operator is asked for NEXT
     reset       whether ``adapter.reset_stop(source)`` runs after NEXT, before the next segment
+    operator_reset  whether the operator must reset something by hand before typing NEXT (EV-05
+                under a manual resume rule the adapter cannot reset; EV-02's external sources
+                always ask for it)
     """
 
     proposals: tuple[Proposal, ...]
@@ -70,6 +73,7 @@ class TrialSegment:
     allowed_s: float
     pause_s: float
     reset: bool
+    operator_reset: bool = False
 
     @property
     def last_motion(self) -> int | None:
@@ -285,7 +289,7 @@ def _between_trials(latch, command: TrialCommandThread, prompt: Callable[[str], 
             return
         k = command.next_trial
         prev = command.segments[k - 1]
-        if prev.kind == "stop" and prev.source not in ADAPTER_STOP_SOURCES:  # the lab's external path
+        if prev.operator_reset or (prev.kind == "stop" and prev.source not in ADAPTER_STOP_SOURCES):
             reset = f" Reset {prev.source} first; the machine must not move when you do."
         elif prev.reset:
             reset = f" After NEXT the kit resets {prev.source} through the adapter."

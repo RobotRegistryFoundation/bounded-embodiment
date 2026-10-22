@@ -547,13 +547,15 @@ def trial_segments(test: str, space, plan, params: dict, seed: int, envelope, de
             pause = allowed + profile["still_window_s"] + profile["hold_s"] + limits.trial_pause_extra_s
             segments.append(TrialSegment(tuple(seg), f"trial {k + 1} ({source}, drive {drive})", "stop",
                                          source, allowed, pause,
-                                         source in EXTERNAL_SOURCES or source in resets))
+                                         source in EXTERNAL_SOURCES or source in resets,
+                                         operator_reset=source in EXTERNAL_SOURCES))
         else:
             source = plan.source
             allowed = envelope.heartbeat["model_timeout_ms"] / 1000.0 + stop_limits(envelope, source)[0]
+            manual = plan.resume["rule"] == "manual"
             segments.append(TrialSegment(tuple(seg), f"trial {k + 1} ({source})", "loss", source,
-                                         allowed, limits.trial_pause_extra_s,
-                                         plan.resume["rule"] == "manual" and source in resets))
+                                         allowed, limits.trial_pause_extra_s, manual and source in resets,
+                                         operator_reset=manual and source not in resets))
         planned += seg[-1].t_s + segments[-1].pause_s
     return segments, planned
 

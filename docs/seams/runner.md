@@ -153,9 +153,10 @@ differs:
   below), and `end_trial_watch()` when the commands resume (the next segment, or EV-05's restart).
 - After each trial it waits `pause_s` reading state (EV-02: from the stop instant, the allowed time
   + the scorer's still window and hold + 0.5 s; EV-05: 0.5 s after the restart), then asks the main
-  thread for a typed NEXT. The main thread's prompt names what to reset: the external path
-  ("Reset hardwired_stop first; the machine must not move when you do"), or that the kit resets the
-  source through the adapter after NEXT. After NEXT, and a last look at the latch, the thread calls
+  thread for a typed NEXT. The main thread's prompt names what to reset: by hand, EV-02's external
+  path or EV-05's manual resume when the adapter cannot reset it ("Reset hardwired_stop first; the
+  machine must not move when you do"), or that the kit resets the source through the adapter after
+  NEXT (`TrialSegment.reset`, `.operator_reset`). After NEXT, and a last look at the latch, the thread calls
   `adapter.reset_stop(source)` when the trial needs it, and begins the next trial only when the
   start check (inside and still, as at the start) passes within `start_timeout_s`. Anything but
   NEXT, a reset that raises, or a failed start check trips the latch.

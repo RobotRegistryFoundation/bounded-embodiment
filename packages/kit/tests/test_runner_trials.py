@@ -18,8 +18,9 @@ import _trial_gates
 from _submission_support import be
 from _trials_sim import PLANS, ROVER_ENVELOPE, ROVER_SPACE
 from bounded_embodiment import envelope as envelope_mod
+from bounded_embodiment import report as core_report
 from bounded_embodiment.commandspace import load_command_space
-from bounded_embodiment.report import load_stop_plan
+from bounded_embodiment.report import load_model_loss_plan, load_stop_plan
 from bounded_embodiment_kit.adapters.base import AdapterError
 from bounded_embodiment_kit.adapters.lerobot import LeRobotAdapter
 from bounded_embodiment_kit.adapters.sim_rover import SimRoverAdapter
@@ -93,16 +94,18 @@ class _AsksOnce:
         return not self.next_go.is_set()
 
 
-@pytest.mark.parametrize(("kind", "source", "reset", "said"), [
-    ("stop", "hardwired_stop", True, "Reset hardwired_stop first; the machine must not move"),
-    ("stop", "power_loss", True, "Reset power_loss first; the machine must not move"),
-    ("stop", "stop_message", True, "After NEXT the kit resets stop_message through the adapter."),
-    ("stop", "stop_message", False, None),
-    ("loss", "heartbeat_loss", True, "After NEXT the kit resets heartbeat_loss through the adapter."),
-    ("loss", "comms_loss", False, None),
+@pytest.mark.parametrize(("kind", "source", "reset", "by_hand", "said"), [
+    ("stop", "hardwired_stop", True, True, "Reset hardwired_stop first; the machine must not move"),
+    ("stop", "power_loss", True, False, "Reset power_loss first; the machine must not move"),
+    ("stop", "stop_message", True, False, "After NEXT the kit resets stop_message through the adapter."),
+    ("stop", "stop_message", False, False, None),
+    ("loss", "heartbeat_loss", True, False, "After NEXT the kit resets heartbeat_loss through the adapter."),
+    ("loss", "heartbeat_loss", False, True, "Reset heartbeat_loss first; the machine must not move"),
+    ("loss", "comms_loss", False, False, None),
 ])
-def test_the_next_prompt_says_who_resets_the_source(kind, source, reset, said):
-    command = _AsksOnce(TrialSegment((), f"trial 1 ({source})", kind, source, 0.5, 1.0, reset))
+def test_the_next_prompt_says_who_resets_the_source(kind, source, reset, by_hand, said):
+    command = _AsksOnce(TrialSegment((), f"trial 1 ({source})", kind, source, 0.5, 1.0, reset,
+                                     operator_reset=by_hand))
     latch, asked = StopLatch(lambda: 0.0), []
     _between_trials(latch, command, lambda q: asked.append(q) or "NEXT", DEFAULT)
     assert command.next_go.is_set() and not latch.tripped
@@ -111,6 +114,37 @@ def test_the_next_prompt_says_who_resets_the_source(kind, source, reset, said):
         assert "eset" not in asked[0]
     else:
         assert said in asked[0]
+
+
+def _segments(tmp_path: Path, test: str, plan_doc: dict, desc: dict, estop_cmd: str | None):
+    envelope = envelope_mod.load(_write(tmp_path / "env.json", ROVER_ENVELOPE))
+    space = load_command_space(ROVER_SPACE)
+    caps = {"linear": 0.05, "angular": 0.05}
+    if test == "ev02":
+        plan = load_stop_plan(plan_doc)
+        params = core_report.streams.normalize(core_report.STOPS, {
+            "hz": 50.0, "drive_s": 1.0, "return_s": 0.0, "step_cap": caps})
+    else:
+        plan = load_model_loss_plan(plan_doc)
+        params = core_report.streams.normalize(core_report.MODEL_LOSS, {
+            "hz": 50.0, "trials": 2, "motion_s": [1.0, 1.2], "silence_s": 3.0, "restart_s": 1.0,
+            "step_cap": caps})
+    segments, _ = runmod.trial_segments(test, space, plan, params, 7, envelope, desc, estop_cmd, DEFAULT)
+    return [(s.source, s.reset, s.operator_reset) for s in segments]
+
+
+def test_each_trial_knows_who_resets_its_source(tmp_path):
+    both = {"stop_triggers": ["stop_message"], "stop_resets": ["stop_message", "heartbeat_loss", "power_loss"]}
+    ev02 = _segments(tmp_path, "ev02", PLANS["rover-ev02"], both, "touch /tmp/estop")
+    assert ev02 == [("stop_message", True, False)] * 3 + [("power_loss", True, True)] * 3
+    # EV-05, manual resume: the adapter resets the source after NEXT, or else the operator must
+    assert _segments(tmp_path, "ev05", PLANS["rover-ev05"], both, None) == [("heartbeat_loss", True, False)] * 2
+    assert (_segments(tmp_path, "ev05", PLANS["rover-ev05"], {"stop_triggers": [], "stop_resets": []}, None)
+            == [("heartbeat_loss", False, True)] * 2)
+    # ... and under a commands rule nobody resets anything
+    doc = json.loads(json.dumps(PLANS["rover-ev05"]))
+    doc["resume"] = {"rule": "commands", "after_ms": 500}
+    assert _segments(tmp_path, "ev05", doc, both, None) == [("heartbeat_loss", False, False)] * 2
 
 
 def test_anything_but_next_ends_the_run_through_the_latch():

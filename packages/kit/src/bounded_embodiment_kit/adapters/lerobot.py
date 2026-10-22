@@ -47,7 +47,14 @@ from pathlib import Path
 
 from bounded_embodiment.commandspace import CommandSpace, load_command_space
 
-from .base import AdapterError, SendResult, State, clean_text, load_callable
+from .base import (
+    AdapterError,
+    SendResult,
+    State,
+    call_resume,
+    clean_text,
+    load_callable,
+)
 from .feetech import (
     BODY_JOINT_SPEED_TRIP_DPS,
     check_bus_is_ours,
@@ -300,17 +307,22 @@ class LeRobotAdapter:
         if self._latched.is_set():
             raise AdapterError("the runner's stop is latched")
         with self._bus_lock:
+            if self._latched.is_set():  # again under the lock: the watchdog may have tripped meanwhile
+                raise AdapterError("the runner's stop is latched")
             self._target.stop()
 
     def reset_stop(self, source: str) -> None:
-        """Command thread only, after the operator's NEXT: the lab wrapper's ``resume()``, which
-        must not move the arm. Hardwired stops and power loss are refused (module docstring)."""
+        """Command thread only, after the operator's NEXT: the lab wrapper's ``resume(source)``
+        (or ``resume()``, ``base.call_resume``), which must not move the arm. Hardwired stops and
+        power loss are refused (module docstring)."""
         if source not in ("stop_message", "heartbeat_loss", "comms_loss") or not self._wrapper_has("resume"):
             raise AdapterError(f"this adapter cannot reset {source}")
         if self._latched.is_set():
             raise AdapterError("the runner's stop is latched")
         with self._bus_lock:
-            self._target.resume()
+            if self._latched.is_set():
+                raise AdapterError("the runner's stop is latched")
+            call_resume(self._target, source)
 
     # ----- close -------------------------------------------------------------------------------
     def close(self) -> None:

@@ -599,6 +599,8 @@ class SimSO101Adapter(LeRobotAdapter):
         if self._latched.is_set():
             raise AdapterError("the runner's stop is latched")
         with self._bus_lock:
+            if self._latched.is_set():
+                raise AdapterError("the runner's stop is latched")
             bus = self.sim_robot.bus
             self.servos.restore_power()
             present = bus.sync_read("Present_Position", normalize=False)

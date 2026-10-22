@@ -35,7 +35,14 @@ from pathlib import Path
 
 from bounded_embodiment.commandspace import CommandSpace, load_command_space
 
-from .base import AdapterError, SendResult, State, clean_text, load_callable
+from .base import (
+    AdapterError,
+    SendResult,
+    State,
+    call_resume,
+    clean_text,
+    load_callable,
+)
 
 __all__ = ["SimRover", "SimRoverAdapter", "add_arguments", "from_args"]
 
@@ -207,6 +214,8 @@ class SimRoverAdapter:
         if self._latched.is_set():
             raise AdapterError("the runner's stop is latched")
         with self._bus_lock:
+            if self._latched.is_set():  # again under the lock: the watchdog may have tripped meanwhile
+                raise AdapterError("the runner's stop is latched")
             self._stoppable().stop()
 
     def reset_stop(self, source: str) -> None:
@@ -214,6 +223,8 @@ class SimRoverAdapter:
         if self._latched.is_set():
             raise AdapterError("the runner's stop is latched")
         with self._bus_lock:
+            if self._latched.is_set():
+                raise AdapterError("the runner's stop is latched")
             if source in ("hardwired_stop", "power_loss"):
                 if self.estop_file is None:
                     raise AdapterError("sim-rover has no simulated external stop (--sim-estop-file)")
@@ -222,7 +233,7 @@ class SimRoverAdapter:
                 self.rover.restore_power()
             elif source in ("stop_message", "heartbeat_loss", "comms_loss"):
                 target = self._stoppable()
-                target.resume()
+                call_resume(target, source)
                 if target is not self.rover:
                     self.rover.resume()
             else:

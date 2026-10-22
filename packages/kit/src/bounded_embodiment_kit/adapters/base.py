@@ -52,13 +52,20 @@ method                 called from            what it may do
 =====================  =====================  ===================================================
 
 ``describe()["stop_triggers"]`` lists the sources ``trigger_stop`` issues, and
-``describe()["stop_resets"]`` those ``reset_stop`` can reset (both read after ``open()``). Neither
-method is ever called once the runner's own stop is latched.
+``describe()["stop_resets"]`` those ``reset_stop`` can reset (both read after ``open()``). The
+runner looks at its latch just before each call, but the watchdog may trip it in between, so an
+adapter MUST refuse both while latched: look at the latch before taking the bus lock and again
+under it, as ``send`` does. After a ``hardwired_stop`` or ``power_loss`` a reset MUST bring the
+machine back the way ``connect_safely`` connects it: every goal register set to the present
+position and read back, and only then torque on, so that nothing moves when power returns.
+``call_resume`` calls a wrapper's ``resume(source)`` when it takes the source (it should then
+clear only that stop), else ``resume()``.
 """
 from __future__ import annotations
 
 import importlib
 import importlib.util
+import inspect
 import math
 import sys
 from collections.abc import Callable, Mapping
@@ -77,6 +84,7 @@ __all__ = [
     "AdapterError",
     "SendResult",
     "State",
+    "call_resume",
     "check_adapter",
     "clean_text",
     "load_callable",
@@ -88,6 +96,22 @@ ADAPTER_METHODS = ("open", "describe", "send", "read_state", "latch_stop", "exec
 TRIAL_METHODS = ("trigger_stop", "reset_stop")
 #: The stop sources an adapter may issue itself; the others are outside the system's software.
 ADAPTER_STOP_SOURCES = ("stop_message",)
+
+
+def call_resume(target, source: str) -> None:
+    """``target.resume(source)`` when its ``resume`` takes an argument, else ``target.resume()``
+    (review N5): a gate that knows which stop to clear is told, and a gate written for the plain
+    ``resume()`` keeps working unchanged."""
+    fn = target.resume
+    try:
+        params = [p for p in inspect.signature(fn).parameters.values()
+                  if p.kind in (p.POSITIONAL_ONLY, p.POSITIONAL_OR_KEYWORD, p.VAR_POSITIONAL)]
+    except (TypeError, ValueError):
+        params = []
+    if params:
+        fn(source)
+    else:
+        fn()
 
 
 class AdapterError(RuntimeError):

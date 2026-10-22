@@ -69,7 +69,11 @@ Rules the runner relies on (bounded_embodiment_kit.adapters.base has the full co
   trigger_stop("stop_message") issues YOUR SYSTEM'S OWN stop request (never the runner's stop) and
   returns at once; reset_stop(source) lets your system accept commands again after that stop, after
   a hardwired stop or power loss the operator has reset, or after a model loss. It must not move
-  the robot. List what they support in describe()["stop_triggers"] and ["stop_resets"].
+  the robot. Both refuse while the runner's stop is latched: look before taking the bus lock and
+  again under it. After hardwired_stop or power_loss, reset in connect_safely's order: every goal
+  register to the present position, read the goals back, and only then torque on (a servo that
+  comes back with stale goals jumps). List what they support in describe()["stop_triggers"] and
+  ["stop_resets"].
 """
 import threading
 
@@ -138,12 +142,23 @@ class Adapter:
     def trigger_stop(self, source):
         # EV-02, command thread: issue your system's own stop request through `source`
         # ("stop_message"). Do not latch the runner's stop. Raise if it cannot be issued.
-        raise NotImplementedError("{NAME}: trigger_stop() is not written")
+        if self._latched.is_set():
+            raise RuntimeError("the runner's stop is latched")
+        with self._bus_lock:
+            if self._latched.is_set():  # again under the lock: the watchdog may trip meanwhile
+                raise RuntimeError("the runner's stop is latched")
+            raise NotImplementedError("{NAME}: trigger_stop() is not written")
 
     def reset_stop(self, source):
         # EV-02 / EV-05, command thread, after the operator typed NEXT: let your system accept
-        # commands again. Must not move the robot. Raise if it cannot.
-        raise NotImplementedError("{NAME}: reset_stop() is not written")
+        # commands again. Must not move the robot. Raise if it cannot. After "hardwired_stop" or
+        # "power_loss": every goal to the present position, read the goals back, then torque on.
+        if self._latched.is_set():
+            raise RuntimeError("the runner's stop is latched")
+        with self._bus_lock:
+            if self._latched.is_set():
+                raise RuntimeError("the runner's stop is latched")
+            raise NotImplementedError("{NAME}: reset_stop() is not written")
 
     def close(self):
         answer = self.context.prompt("Type OFF and Enter to turn torque off, or Enter to leave it on: ")

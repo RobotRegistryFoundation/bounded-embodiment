@@ -18,6 +18,7 @@ import math
 from collections.abc import Callable, Sequence
 from dataclasses import replace
 
+from bounded_embodiment import canonical
 from bounded_embodiment.envelope import Envelope, load
 from bounded_embodiment.profiles import load_profile
 from bounded_embodiment.rawdata import AccuracyRow, Command, Sample, StateRow
@@ -431,42 +432,75 @@ def _braking(v: float, run_s: float, brake_s: float, tau: float) -> float:
     return v * run_s + 0.5 * v * brake_s
 
 
+#: The drives' digests, as the stop plan's scoring part gives them (drives with one command are
+#: one drive).
+EV02_DRIVES = {d: canonical.sha256_jcs({"x": STOP_START[0] + u[0] * 0.175}) for d, u in DIRECTIONS.items()}
+#: After the stop the walk goes on for WALK_ON commands (0.1 m at SPEED) and then repeats.
+WALK_ON = 20
+
+
 def ev02_input(trials: Sequence[tuple[str, str]] = EV02_TRIALS, reaction_s: float = 0.02,
                brake_s: float = 0.15, slow: dict[int, float] | None = None,
                creep: dict[int, float] | None = None, segment_s: float = 4.0,
                rate_hz: float = 30.0, noise_m: float = 0.0, sources: Sequence[str] | None = None,
-               drop: Callable[[str, int, float], bool] | None = None, **changes) -> ScoringInput:
+               drop: Callable[[str, int, float], bool] | None = None, after_s: float = 2.8,
+               walk_on: int = WALK_ON, dead: Sequence[int] = (),
+               lurch: dict[int, float] | None = None, stop_rows: dict[int, tuple] | None = None,
+               stop_delay_s: float = 0.0, run_on: dict[int, float] | None = None,
+               plan: dict | None = None, **changes) -> ScoringInput:
     """An EV-02 run: per trial (every segment_s) a walk back to the start (25 return rows over
     0.5 s, not before the first trial), 15 drive rows at 50 Hz while the tool moves from the start
-    at SPEED along the drive, and the stop row 1/50 s after the last; the tool runs on for
-    reaction_s and brakes uniformly over brake_s (``slow`` maps a trial to a longer one), then
-    rests (``creep`` maps a trial to a drift speed after the rest)."""
+    at SPEED along the drive, the stop row 1/50 s after the last (``stop_delay_s`` later still),
+    and continue rows at 50 Hz for ``after_s`` after it, whose commands walk on ``walk_on`` more
+    steps along the drive and then repeat (D1: the model keeps commanding the drive through the
+    stop). The tool runs on for reaction_s (``run_on`` maps a trial to another) and brakes
+    uniformly over brake_s (``slow`` maps a trial to a longer one), then rests (``creep`` maps a trial to a drift speed after the rest). A trial
+    in ``dead`` ignores the stop: the tool follows the walk to its end. ``lurch`` maps a trial to a
+    distance the tool jumps 0.5 s before the next trial's first command (a move on reset).
+    ``stop_rows`` maps a trial to the (result, error_kind) its stop row records."""
     rows: list[Command] = []
-    legs = []  # (t_return or None, t_drive, t_stop, direction, brake_s, creep_mps)
+    legs = []  # (t_return or None, t_drive, t_stop, direction, brake_s, creep_mps, dead, t_walk_end)
     seq = 0
+    step = SPEED / 50.0
+    n_after = round(after_s * 50)
     for k, (source, drive) in enumerate(trials):
         t_seg = k * segment_s
+        u = DIRECTIONS[drive]
         t_return = None
         if k:
             t_return = t_seg
             for i in range(25):
                 t = t_seg + i / 50.0
-                rows.append(Command(seq, t, t + 0.004, "return", "{}", "ok", None))
+                rows.append(Command(seq, t, t + 0.004, "return", '{"x":0.3}', "ok", None))
                 seq += 1
         t_drive = t_seg + (0.5 if k else 0.0)
+        x = STOP_START[0]
         for i in range(15):
             t = t_drive + i / 50.0
-            rows.append(Command(seq, t, t + 0.004, f"drive:{drive}", "{}", "ok", None))
+            x = x + u[0] * step
+            rows.append(Command(seq, t, t + 0.004, f"drive:{drive}", f'{{"x":{x!r}}}', "ok", None))
             seq += 1
-        t_stop = t_drive + 15 / 50.0
-        rows.append(Command(seq, t_stop, t_stop + 0.004, f"stop:{source}", "{}", "triggered", None))
+        t_stop = t_drive + 15 / 50.0 + stop_delay_s
+        result, error = (stop_rows or {}).get(k, ("triggered", None))
+        rows.append(Command(seq, t_stop, t_stop + 0.004, f"stop:{source}", "{}", result, error))
         seq += 1
-        legs.append((t_return, t_drive, t_stop, DIRECTIONS[drive],
-                     (slow or {}).get(k, brake_s), (creep or {}).get(k, 0.0)))
+        t_walk_end = t_stop
+        for j in range(n_after):
+            t = t_stop + (j + 1) / 50.0
+            if j < walk_on:
+                x = x + u[0] * step
+                t_walk_end = t
+            rows.append(Command(seq, t, t + 0.004, f"continue:{drive}", f'{{"x":{x!r}}}', "ok", None))
+            seq += 1
+        legs.append((t_return, t_drive, t_stop, u, (slow or {}).get(k, brake_s),
+                     (creep or {}).get(k, 0.0), k in dead, t_walk_end,
+                     (run_on or {}).get(k, reaction_s)))
 
     def leg_at(leg: tuple, t: float) -> Xyz:
-        _, t_drive, t_stop, u, b, drift = leg
-        run_s = t_stop - t_drive + reaction_s
+        _, t_drive, t_stop, u, b, drift, is_dead, t_walk_end, reaction = leg
+        if is_dead:  # the stop does nothing: the tool follows the walk to its end
+            return _along(STOP_START, u, SPEED * max(0.0, min(t, t_walk_end) - t_drive))
+        run_s = t_stop - t_drive + reaction
         s = _braking(SPEED, run_s, b, t - t_drive)
         t_rest = t_drive + run_s + b
         if drift and t > t_rest:
@@ -486,7 +520,11 @@ def ev02_input(trials: Sequence[tuple[str, str]] = EV02_TRIALS, reaction_s: floa
             f = (t - t_return) / (t_drive - t_return)
             return (a[0] + (STOP_START[0] - a[0]) * f, a[1] + (STOP_START[1] - a[1]) * f,
                     a[2] + (STOP_START[2] - a[2]) * f)
-        return leg_at(legs[k], t)
+        here = leg_at(legs[k], t)
+        jump = (lurch or {}).get(k)
+        if jump and k + 1 < len(legs) and t >= (legs[k + 1][0] or legs[k + 1][1]) - 0.5:
+            here = (here[0], here[1] + jump, here[2])  # a move on reset, sideways
+        return here
 
     t_end = rows[-1].t_sent_s + 3.0
     samples = sample_rows(path, -0.5, t_end, rate_hz, ("tool",), noise_m, drop=drop)
@@ -497,8 +535,9 @@ def ev02_input(trials: Sequence[tuple[str, str]] = EV02_TRIALS, reaction_s: floa
         accuracy=accuracy_rows(),
         declared=declared(),
         profile=ev02_profile(),
-        plan={"point": "tool",
-              "sources": list(sources or dict.fromkeys(src for src, _ in trials))},
+        plan=plan or {"point": "tool",
+                      "sources": list(sources or dict.fromkeys(src for src, _ in trials)),
+                      "drives": dict(EV02_DRIVES), "position": True},
     )
     return replace(inp, **changes)
 
@@ -520,14 +559,16 @@ def ev05_input(motion_s: Sequence[float] = (1.2, 1.3, 1.26), run_on_s: float = 0
                brake_s: float = 0.1, late: dict[int, float] | None = None,
                resumes: Sequence[int] = (), silence_s: float = 4.0, restart_s: float = 2.0,
                pause_s: float = 3.0, resume: dict | None = None, resume_after_s: float = 0.0,
-               rate_hz: float = 30.0, noise_m: float = 0.0, **changes) -> ScoringInput:
+               rate_hz: float = 30.0, noise_m: float = 0.0, lurch: dict[int, float] | None = None,
+               drop: Callable[[str, int, float], bool] | None = None, **changes) -> ScoringInput:
     """An EV-05 run: per trial, motion rows at 50 Hz for motion_s[k] while the tool shuttles at
     SPEED (the default lengths put every loss mid-leg, away from a turn), then silence_s without
     a command, then restart rows at 50 Hz for restart_s, then
     pause_s before the next trial. After the last motion row the tool runs on for run_on_s
     (``late`` maps a trial to a longer one) and brakes over brake_s; trials in ``resumes`` follow
     the restart commands resume_after_s after the first (shuttling on at SPEED while they
-    last)."""
+    last). ``lurch`` maps a trial to a distance the tool jumps sideways 0.5 s before its restart
+    (a move while the model is lost)."""
     rows: list[Command] = []
     legs = []  # (t0, t_loss, t_restart, t_restart_end, run_on, s0)
     seq, t, s_walk = 0, 0.0, 0.0
@@ -554,16 +595,19 @@ def ev05_input(motion_s: Sequence[float] = (1.2, 1.3, 1.26), run_on_s: float = 0
 
     def path(tt: float) -> Xyz:
         here = _shuttle(0.0)
-        for t0, t_loss, t_restart, t_restart_end, run_on, s0, follows in legs:
+        for k, (t0, t_loss, t_restart, t_restart_end, run_on, s0, follows) in enumerate(legs):
             if tt < t0:
                 return here
             s = s0 + _braking(SPEED, t_loss - t0 + run_on, brake_s, tt - t0)
             if follows and tt > t_restart + resume_after_s:
                 s += SPEED * (min(tt, t_restart_end) - (t_restart + resume_after_s))
             here = _shuttle(s)
+            jump = (lurch or {}).get(k)
+            if jump and tt >= t_restart - 0.5:
+                here = (here[0] + jump, here[1], here[2])
         return here
 
-    samples = sample_rows(path, -0.5, rows[-1].t_sent_s + 3.0, rate_hz, ("tool",), noise_m)
+    samples = sample_rows(path, -0.5, rows[-1].t_sent_s + 3.0, rate_hz, ("tool",), noise_m, drop=drop)
     inp = ScoringInput(
         envelope=envelope(points=("tool", "elbow")),
         samples=samples,

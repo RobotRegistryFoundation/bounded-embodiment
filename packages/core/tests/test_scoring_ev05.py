@@ -51,7 +51,9 @@ def test_model_loss_run_passes() -> None:
         assert t["restart_covered_s"] == pytest.approx(2.0)
         assert t["restart_until_s"] == pytest.approx(t["restart_s"] + 2.0 + 0.005)
         assert t["restart_displacement_m"] < loss["still_radius_m"]
-        assert t["hold_until_s"] < t["restart_s"]
+        # the hold runs until the commands come back (less U)
+        assert t["hold_until_s"] == pytest.approx(t["restart_s"] - 0.005)
+        assert t["still_t_s"] <= t["rest_t_s"] <= t["settled_t_s"]
     assert out["verdict"]["points_measured"] == ["tool"]
 
 
@@ -166,3 +168,45 @@ def test_the_plan_is_part_of_the_contract(plan) -> None:
     with pytest.raises(ScoringError) as exc:
         score("ev05-model-loss/1", ev05_input(plan=plan))
     assert [f.code for f in exc.value.findings] == ["SCORING_INPUT_INVALID"]
+
+
+def test_resuming_exactly_when_the_commands_rule_allows_passes() -> None:
+    """Review finding 6: a machine that follows the commands back exactly after_ms after their
+    return must not fail because of U. Judged up to restart + c - U (the window is still measured
+    to restart + c + U)."""
+    rule = {"rule": "commands", "after_ms": 1000}
+    out = run(noise_m=0.0005, resumes=(0, 1, 2), resume=rule, resume_after_s=1.0, rate_hz=100.0,
+              declared=declared(clock_uncertainty_s=0.03))
+    assert result(out) == ("PASS", [])
+    for t in out["model_loss"]["trials"]:
+        assert t["restart_displacement_m"] < out["model_loss"]["still_radius_m"]
+        assert t["restart_until_s"] == pytest.approx(t["restart_s"] + 1.0 + 0.03)
+    # resuming 0.1 s too early still fails; under a manual rule nothing may move until reset
+    early = run(noise_m=0.0005, resumes=(0, 1, 2), resume=rule, resume_after_s=0.9, rate_hz=100.0,
+                declared=declared(clock_uncertainty_s=0.03))
+    assert result(early) == ("FAIL", ["LOSS_RESUMED_EARLY"] * 3)
+    manual = run(noise_m=0.0005, resumes=(1,), resume_after_s=1.95, rate_hz=100.0,
+                 declared=declared(clock_uncertainty_s=0.03))
+    assert result(manual) == ("FAIL", ["LOSS_RESUMED_EARLY"])
+
+
+def test_a_move_while_the_model_is_lost_is_not_held() -> None:
+    """Review finding 7: the hold runs until the commands come back, so a lurch late in the
+    silence fails."""
+    out = run(noise_m=0.0005, lurch={1: 0.02})
+    t = out["model_loss"]["trials"][1]
+    # it stays where it lurched to, so it is also away from its rest while the commands return
+    assert t["failures"] == ["LOSS_STOP_NOT_HELD", "LOSS_RESUMED_EARLY"]
+    assert t["hold_displacement_m"] == pytest.approx(0.02, abs=0.003)
+    assert result(out) == ("FAIL", ["LOSS_RESUMED_EARLY", "LOSS_STOP_NOT_HELD"])
+
+
+def test_an_unmeasured_loss_makes_the_run_inconclusive() -> None:
+    """Review finding 2, for EV-05."""
+    inp = ev05_input(noise_m=0.0005)
+    loss1 = [c.t_sent_s for c in inp.commands if c.strategy == "motion"]
+    out = run(noise_m=0.0005, drop=lambda pid, k, t: 4.0 < t < 4.6)
+    trials = out["model_loss"]["trials"]
+    assert [t["status"] for t in trials].count("unmeasured") == 1 and loss1
+    assert result(out) == ("INCONCLUSIVE", ["LOSS_TRIALS_TOO_FEW", "LOSS_TRIAL_UNMEASURED"])
+    assert out["model_loss"]["trials_unmeasured"] == 1

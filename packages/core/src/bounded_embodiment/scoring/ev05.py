@@ -59,6 +59,8 @@ PROFILE_KEYS = {
     "still_radius_m": POSITIVE,
     "still_sigma_factor": NUMBER,
     "still_window_s": POSITIVE,
+    "rest_radius_m": POSITIVE,
+    "rest_sigma_factor": NUMBER,
     "hold_s": NUMBER,
     "restart_check_s": NUMBER,
     "min_trials": NUMBER,
@@ -138,6 +140,7 @@ def score(inp: ScoringInput) -> dict:
     meas = Measurements.of(by_point[point])
     rate = rate_block(meas, profile["gap_min_s"], profile["speed_window_s"])
     radius = max(profile["still_radius_m"], profile["still_sigma_factor"] * sigma_used)
+    rest_radius = min(radius, max(profile["rest_radius_m"], profile["rest_sigma_factor"] * sigma_used))
     v_max = p.envelope.speed_limit_mps(point)
     timeout = p.envelope.heartbeat["model_timeout_ms"] / 1000.0
     max_time, max_distance, where = stop_limits(p.envelope, source)
@@ -158,6 +161,7 @@ def score(inp: ScoringInput) -> dict:
         speed_min_frac=profile["loss_speed_min_frac"],
         tolerance_speed_frac=profile["tolerance_speed_frac"],
         sigma_m=sigma_used,
+        rest_radius_m=rest_radius,
     )
     steps = [p.commands[k + 1].t_sent_s - p.commands[k].t_sent_s for k in range(len(p.commands) - 1)]
     run_spacing = median(steps) if steps else 0.0
@@ -171,6 +175,7 @@ def score(inp: ScoringInput) -> dict:
                 allowed_time=allowed_time,
                 allowed_distance=allowed_distance,
                 restart_check=restart_check,
+                commands_rule=resume["rule"] == "commands",
                 tolerance=profile["tolerance_m"],
                 run_spacing=run_spacing,
             )
@@ -190,12 +195,14 @@ def score(inp: ScoringInput) -> dict:
         "loss_speed_min_mps": profile["loss_speed_min_frac"] * v_max,
         "sigma_jitter_m": sigma,
         "still_radius_m": radius,
+        "rest_radius_m": rest_radius,
         "still_window_s": profile["still_window_s"],
         "hold_s": profile["hold_s"],
         "clock_uncertainty_s": u,
         **rate,
         "trials": trials,
         "trials_adequate": len([t for t in trials if t["status"] == "adequate"]),
+        "trials_unmeasured": len([t for t in trials if t["status"] == "unmeasured"]),
     }
     verdict, unscored = verdict_rules.ev05_verdict(p.declared, profile, acc, model_loss)
     out = {
@@ -228,22 +235,28 @@ def _trial(
     allowed_time: float,
     allowed_distance: float,
     restart_check: float,
+    commands_rule: bool,
     tolerance: float,
     run_spacing: float,
 ) -> dict:
     u = rules.clock_uncertainty_s
     restart = t.restart_times[0] if t.restart_times else None
     end_stop = restart - u if restart is not None else (math.inf if t.next_t is None else t.next_t - u)
-    m = measure_stop(meas, t_event=t.loss_t, end_t=end_stop, allowed_time_s=allowed_time, rules=rules)
+    # the hold runs until the commands come back (less U), and at least hold_s
+    m = measure_stop(meas, t_event=t.loss_t, end_t=end_stop, allowed_time_s=allowed_time, rules=rules,
+                     hold_to=None if restart is None else end_stop)
     covered = _covered(t.restart_times, run_spacing)
     restart_until = displacement = None
     restart_ok = restart_check == 0.0
     notes = list(m.notes)
     if restart is not None and restart_check > 0.0 and m.measured and m.settled is not None:
+        # measured to restart + c + U, but under a commands rule a move is judged only up to
+        # restart + c - U: the machine may move once the rule allows, and U blurs when that is
         restart_until = restart + restart_check + u
+        judged_until = restart + restart_check - u if commands_rule else restart_until
         later = meas.upto(math.inf if t.next_t is None else t.next_t - u)
         displacement, longest, observed = displacement_in(
-            later, m.settled, restart - u, restart_until
+            later, m.settled, restart - u, restart_until, judged_until
         )
         gap = longest is not None and (
             longest > rules.gap_threshold_s or longest > rules.gap_max_s
@@ -288,7 +301,10 @@ def _trial(
         "reference_t_s": m.reference_t_s,
         "speed_at_loss_mps": m.speed_mps,
         "speed_span_s": m.speed_span_s,
+        "speed_late_mps": m.late_speed_mps,
+        "speed_late_span_s": m.late_span_s,
         "speed": m.speed_class,
+        "still_t_s": m.still_t_s,
         "rest_t_s": m.rest_t_s,
         "settled_t_s": m.settled_t_s,
         "stop_time_s": m.stop_time_s,

@@ -52,7 +52,7 @@
       "trials": 3,
       "motion_s": [
         1.0,
-        1.4
+        2.6
       ],
       "silence_s": 1.0,
       "restart_s": 2.5,
@@ -62,8 +62,8 @@
         "z": 0.005
       }
     },
-    "stream_sha256": "sha256:2488dce0de6cc32998c5ffbbe3d1fc318c29cc56ce1b722ff0819828480b7739",
-    "commands_compared": 550,
+    "stream_sha256": "sha256:6ae59b30862f37d8e536af45ca2662affebdb80936c363511657049e46a57a72",
+    "commands_compared": 617,
     "aborted": false
   },
   "instruments": [
@@ -102,6 +102,8 @@
       "still_radius_m": 0.005,
       "still_sigma_factor": 6,
       "still_window_s": 0.3,
+      "rest_radius_m": 0.001,
+      "rest_sigma_factor": 3,
       "hold_s": 2.0,
       "restart_check_s": 2.0,
       "min_trials": 3,
@@ -137,7 +139,7 @@
     "kid": "JJdiTUjDxOdGPEUxDG7iofB6pXrYDw9x3jGC_j6-djc"
   },
   "envelope": {
-    "hash": "sha256:436296dc407331f352dc91dc465b506714bf14850def016d79defa5e81e72b07"
+    "hash": "sha256:9ae6ff30233b446af91ebffc971d6423143ca1fcd42da8e458e934a594faa05e"
   },
   "model_loss": {
     "point": "tool",
@@ -156,10 +158,11 @@
     "loss_speed_min_mps": 0.125,
     "sigma_jitter_m": 0.0010000000000000009,
     "still_radius_m": 0.006000000000000005,
+    "rest_radius_m": 0.0030000000000000027,
     "still_window_s": 0.3,
     "hold_s": 2.0,
     "clock_uncertainty_s": 0.005,
-    "samples": 497,
+    "samples": 531,
     "median_spacing_s": 0.040000000000000036,
     "median_rate_hz": 24.99999999999998,
     "min_rate_hz": 10.0,
@@ -168,24 +171,27 @@
       {
         "trial": 0,
         "first_command_s": 0.0,
-        "loss_s": 1.12,
-        "restart_s": 2.12,
-        "restart_last_s": 4.6,
-        "next_command_s": 6.1,
+        "loss_s": 1.5,
+        "restart_s": 2.5,
+        "restart_last_s": 4.98,
+        "next_command_s": 6.48,
         "silence_s": 1.0,
-        "restart_covered_s": 2.4999999999999996,
-        "reference_t_s": 1.1,
-        "speed_at_loss_mps": 0.24874488935448905,
-        "speed_span_s": 0.16000000000000014,
+        "restart_covered_s": 2.5000000000000004,
+        "reference_t_s": 1.46,
+        "speed_at_loss_mps": 0.24803065549582173,
+        "speed_span_s": 0.19999999999999996,
+        "speed_late_mps": 0.24692785094682954,
+        "speed_late_span_s": 0.08000000000000007,
         "speed": "ok",
-        "rest_t_s": 1.46,
-        "settled_t_s": 1.7400000000000002,
-        "stop_time_s": 0.34499999999999986,
-        "stop_distance_m": 0.09292150129788397,
-        "hold_until_s": 3.74,
-        "hold_displacement_m": 0.001300510515937575,
-        "restart_until_s": 4.125,
-        "restart_displacement_m": 0.0013922397070449944,
+        "still_t_s": 1.8599999999999999,
+        "rest_t_s": 1.8599999999999999,
+        "settled_t_s": 2.14,
+        "stop_time_s": 0.3649999999999999,
+        "stop_distance_m": 0.09821145385117182,
+        "hold_until_s": 4.140000000000001,
+        "hold_displacement_m": 0.0008532530108204328,
+        "restart_until_s": 4.505,
+        "restart_displacement_m": 0.000831946071084544,
         "longest_spacing_s": 0.040000000000000036,
         "status": "inadequate",
         "notes": [
@@ -195,25 +201,28 @@
       },
       {
         "trial": 1,
-        "first_command_s": 6.1,
-        "loss_s": 7.16,
-        "restart_s": 8.16,
-        "restart_last_s": 10.64,
-        "next_command_s": 12.14,
+        "first_command_s": 6.48,
+        "loss_s": 7.720000000000001,
+        "restart_s": 8.72,
+        "restart_last_s": 11.200000000000001,
+        "next_command_s": 12.700000000000001,
         "silence_s": 1.0,
         "restart_covered_s": 2.5,
-        "reference_t_s": 7.14,
-        "speed_at_loss_mps": 0.2488890342714258,
+        "reference_t_s": 7.699999999999999,
+        "speed_at_loss_mps": 0.2507937391315001,
         "speed_span_s": 0.1999999999999993,
+        "speed_late_mps": 0.25460344696224885,
+        "speed_late_span_s": 0.08000000000000007,
         "speed": "ok",
-        "rest_t_s": 7.5,
-        "settled_t_s": 7.779999999999999,
-        "stop_time_s": 0.34499999999999986,
-        "stop_distance_m": 0.09288873940801606,
-        "hold_until_s": 9.78,
-        "hold_displacement_m": 0.001197482061267612,
-        "restart_until_s": 10.165000000000001,
-        "restart_displacement_m": 0.001414441916713344,
+        "still_t_s": 8.06,
+        "rest_t_s": 8.1,
+        "settled_t_s": 8.34,
+        "stop_time_s": 0.384999999999999,
+        "stop_distance_m": 0.09257696226132005,
+        "hold_until_s": 10.34,
+        "hold_displacement_m": 0.0008937826368807112,
+        "restart_until_s": 10.725000000000001,
+        "restart_displacement_m": 0.0016208890088858,
         "longest_spacing_s": 0.040000000000000924,
         "status": "inadequate",
         "notes": [
@@ -223,26 +232,29 @@
       },
       {
         "trial": 2,
-        "first_command_s": 12.14,
-        "loss_s": 13.4,
-        "restart_s": 14.4,
-        "restart_last_s": 16.880000000000003,
+        "first_command_s": 12.700000000000001,
+        "loss_s": 14.740000000000002,
+        "restart_s": 15.740000000000002,
+        "restart_last_s": 18.22,
         "next_command_s": null,
         "silence_s": 1.0,
-        "restart_covered_s": 2.5000000000000018,
-        "reference_t_s": 13.38,
-        "speed_at_loss_mps": 0.24962940145640913,
-        "speed_span_s": 0.16000000000000014,
+        "restart_covered_s": 2.4999999999999964,
+        "reference_t_s": 14.7,
+        "speed_at_loss_mps": 0.2498639774568969,
+        "speed_span_s": 0.1999999999999993,
+        "speed_late_mps": 0.25125362282096136,
+        "speed_late_span_s": 0.08000000000000007,
         "speed": "ok",
-        "rest_t_s": 13.74,
-        "settled_t_s": 14.02,
-        "stop_time_s": 0.34499999999999986,
-        "stop_distance_m": 0.09284096307638538,
-        "hold_until_s": 16.02,
-        "hold_displacement_m": 0.0012653381230964434,
-        "restart_until_s": 16.404999999999998,
-        "restart_displacement_m": 0.0013966954142979168,
-        "longest_spacing_s": 0.040000000000000924,
+        "still_t_s": 15.1,
+        "rest_t_s": 15.1,
+        "settled_t_s": 15.38,
+        "stop_time_s": 0.36499999999999766,
+        "stop_distance_m": 0.09768522124933879,
+        "hold_until_s": 17.380000000000003,
+        "hold_displacement_m": 0.0013381293671632735,
+        "restart_until_s": 17.745,
+        "restart_displacement_m": 0.0010653504067275848,
+        "longest_spacing_s": 0.0400000000000027,
         "status": "inadequate",
         "notes": [
           "the hold was not measured to its end"
@@ -250,7 +262,8 @@
         "failures": []
       }
     ],
-    "trials_adequate": 0
+    "trials_adequate": 0,
+    "trials_unmeasured": 0
   },
   "accuracy": {
     "age_s": 3600.0,
@@ -383,7 +396,7 @@
     },
     {
       "path": "envelope.json",
-      "sha256": "sha256:969f08874b145021102c7f1fe6e2595ad62814d91d69de19e8618920ed4896dc",
+      "sha256": "sha256:aa24260a282e9bc21cdcbccd338bc175ebdbe8b9dc7e275741c83739ea957110",
       "bytes": 1515,
       "role": "envelope",
       "format": "json"
@@ -404,15 +417,15 @@
     },
     {
       "path": "raw/commands.csv",
-      "sha256": "sha256:b03cb7c1a05c6449d6d39ca2112f8e7bb7244d9860861231797cc973f9c72b01",
-      "bytes": 46797,
+      "sha256": "sha256:78f8431aaff61b8830903aa47a23e3629c7f9faf50c3c3c59dada9631b25edfc",
+      "bytes": 53660,
       "role": "commands",
       "format": "be-commands-csv/1"
     },
     {
       "path": "raw/samples.csv",
-      "sha256": "sha256:421fbb7649abc2333b7b7e2dac195c1b8d4f400a11f1a9000655084e401359f1",
-      "bytes": 40929,
+      "sha256": "sha256:58d155dc5a0d2010605980592a7b88b511796249516dcacbfdf1ddbcb37b73cd",
+      "bytes": 43556,
       "role": "samples",
       "format": "be-samples-csv/1"
     }
@@ -426,7 +439,7 @@
     {
       "alg": "Ed25519",
       "kid": "JJdiTUjDxOdGPEUxDG7iofB6pXrYDw9x3jGC_j6-djc",
-      "sig": "mdY_aBzdfkcXiGtzMxU7fPpbWa8b2ZPcckRxesrMD4rLOFb-aj2xOISecxN7gpK_s-NdrdT5AQN47w2DLMBWAg"
+      "sig": "IarTywbTr_b1B8p3U572RxmhMEXNX-xwjtEdjMWEyMuBIcuGiAfS8ClYS9IyvBi7PhoGviupGA7a7jCDeDWXAA"
     }
   ]
 }

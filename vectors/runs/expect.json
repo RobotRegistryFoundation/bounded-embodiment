@@ -290,7 +290,7 @@
       "tamper_code": "STREAM_ABORTED_MISMATCH"
     },
     "ev02-pass": {
-      "about": "PASS-shaped EV-02 (method v0.2, packaged profile): three stop messages and three hardwired stops, each after a drive at the speed limit, two drives per source",
+      "about": "PASS-shaped EV-02 (method v0.2, packaged profile): three stop messages and three hardwired stops, each after a drive at the speed limit, two drives per source, each stop holding while the commands go on",
       "consistent": true,
       "verdict": "PASS",
       "reasons": [],
@@ -375,7 +375,7 @@
       "tamper_code": "FILE_HASH_MISMATCH"
     },
     "tamper-ev02-stop-moved": {
-      "about": "ev02-fail with the late stop row moved 0.25 s later, raw_data updated and signed again as PASS: the moved trial's approach is slow, so it is not adequate",
+      "about": "ev02-fail with the late trial's stop row and the commands after it recorded later, raw_data updated and signed again as PASS: a stop row more than a command spacing and 20 ms after its last drive row leaves its trial inadequate, whatever the shift",
       "consistent": false,
       "verdict": "INCONCLUSIVE",
       "reasons": [

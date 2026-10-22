@@ -8,6 +8,8 @@
   "still_radius_m": 0.005,
   "still_sigma_factor": 6,
   "still_window_s": 0.3,
+  "rest_radius_m": 0.001,
+  "rest_sigma_factor": 3,
   "hold_s": 2.0,
   "restart_check_s": 2.0,
   "min_trials": 3,

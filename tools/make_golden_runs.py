@@ -776,21 +776,26 @@ def tamper_abort_undeclared(base: Path, run: Path) -> None:
 
 # --------------------------------------------------------------------------- EV-02 and EV-05 (method v0.2)
 
-STOP_DRIVES = {"x_plus": (0.4, 0.0, 0.175), "x_minus": (0.2, 0.0, 0.175)}
+#: The drives reach the ends of the command space's x range, 0.15 m from the start: the stop
+#: comes 0.07 m along (14 commands), so the walk goes on for 0.08 m after it, more than the
+#: largest allowed stop distance plus the tolerance, with the profile's margin.
+STOP_DRIVES = {"x_plus": (0.45, 0.0, 0.175), "x_minus": (0.15, 0.0, 0.175)}
+STOP_BOX = ([0.1, -0.15, 0.05], [0.5, 0.15, 0.3])  # the tool box, wide enough for the drives
 STOP_CAP = {"x": 0.005, "y": 0.005, "z": 0.005}  # 0.25 m/s at 50 Hz: the tool's speed limit
-STOP_PARAMS = {"hz": 50.0, "drive_s": 0.3, "return_s": 0.5, "step_cap": dict(STOP_CAP)}
-LOSS_PARAMS = {"hz": 50.0, "trials": 3, "motion_s": [1.0, 1.4], "silence_s": 3.0,
+STOP_PARAMS = {"hz": 50.0, "drive_s": 0.28, "return_s": 0.7, "after_s": 3.0, "step_cap": dict(STOP_CAP)}
+LOSS_PARAMS = {"hz": 50.0, "trials": 3, "motion_s": [1.0, 2.6], "silence_s": 3.0,
                "restart_s": 2.5, "step_cap": dict(STOP_CAP)}
 LOSS_SEED = 7
 SPEED = 0.25
-#: Between two trials the bench waits this long after the hold window (the operator's NEXT).
+#: Between two trials the bench waits this long after the last command that continues the
+#: previous trial's drive (the operator's NEXT).
 PAUSE_S = 1.0
 
 
 def stop_envelope_doc() -> dict:
     """envelope_doc() with stop limits per source and the heartbeat EV-05 judges: the
     hardwired stop is declared tighter than the top-level stop (the worst case)."""
-    doc = envelope_doc()
+    doc = envelope_doc(STOP_BOX)
     doc["stop"] = {
         "category": 1,
         "max_time_ms": 300,
@@ -910,12 +915,13 @@ def _unit(a: Xyz, b: Xyz) -> Xyz:
 def ev02_files(trials: list[tuple[str, str]], slow: dict[int, float] | None = None) -> dict[str, bytes]:
     """An EV-02 run of the synthetic machine: each trial's drive followed exactly, then after the
     stop 20 ms at speed and 0.15 s of braking (``slow`` maps a trial to a longer braking time),
-    rest, and between trials a walk back to the start at the same speed."""
+    rest, held while the commands go on for after_s (a stop that overrides them and stays in
+    force), and between trials a walk back to the start at the same speed."""
     space = load_command_space(COMMAND_SPACE)
     plan = rep.load_stop_plan(stop_plan_doc(trials))
     segments = rep.split_segments(rep.stop_stream(space, plan, STOP_PARAMS))
     hold = load_profile("ev02-illustrative-0.1")["hold_s"]
-    after = [0.3 + hold + PAUSE_S] * (len(segments) - 1)
+    after = [PAUSE_S] * (len(segments) - 1)
     times = _segment_times(segments, after)
     rows, script = [], Script(CENTRE)
     rest = CENTRE
@@ -929,7 +935,7 @@ def ev02_files(trials: list[tuple[str, str]], slow: dict[int, float] | None = No
         pts = [CENTRE] + [_xyz(seg[i].payload) for i in drive]
         tt = [ts[d0] - 1.0 / STOP_PARAMS["hz"]] + [ts[i] for i in drive]
         script.add(tt[0], _follow(tt, pts))
-        stop_t = ts[-1]
+        stop_t = ts[next(i for i, p in enumerate(seg) if p.strategy.startswith("stop:"))]
         last = pts[-1]
         direction = _unit(pts[-2], pts[-1])
         at, rest, _ = _brake(last, direction, ts[drive[-1]], (stop_t - ts[drive[-1]]) + 0.02,
@@ -937,8 +943,7 @@ def ev02_files(trials: list[tuple[str, str]], slow: dict[int, float] | None = No
         script.add(ts[drive[-1]], at)
         for p, t in zip(seg, ts):
             rows.append((p.seq, t, t + 0.003, p.strategy, encode_payload(p.payload),
-                         "ok" if p.strategy.startswith("drive:") or p.strategy == "return" else "triggered",
-                         None))
+                         "triggered" if p.strategy.startswith("stop:") else "ok", None))
     last_t = rows[-1][1]
     return {
         "envelope.json": _json(stop_envelope_doc()),
@@ -1062,22 +1067,37 @@ def tamper_plan_swapped(base: Path, run: Path) -> None:
     (run / "ev02-stop-plan.json").write_bytes(_json(stop_plan_doc(swapped)))
 
 
+#: How much later tamper-ev02-stop-moved records the late trial's stop (and the commands after it).
+STOP_MOVED_S = 0.1
+
+
+def move_stop(lines: list[str], trial: int, shift_s: float) -> list[str]:
+    """commands.csv lines with trial ``trial``'s stop row and its continuing rows sent
+    ``shift_s`` later (send and done times; the next trial's rows come a pause later still)."""
+    out = list(lines)
+    stop = [i for i, line in enumerate(out) if ",stop:" in line][trial]
+    i = stop
+    while i < len(out) and (i == stop or ",continue:" in out[i]):
+        cells = out[i].split(",")
+        cells[1] = repr(float(cells[1]) + shift_s)
+        cells[2] = repr(float(cells[2]) + shift_s)
+        out[i] = ",".join(cells)
+        i += 1
+    return out
+
+
 def tamper_stop_moved(base: Path, run: Path) -> None:
-    """ev02-fail with the late trial's stop row moved 0.25 s later (so its stop looks quick),
-    raw_data updated and signed again as PASS. The stream still matches (send times are not part
-    of it), but the recomputed trial is not adequate: the machine was already braking at the
-    moved instant, so its approach is slow."""
+    """ev02-fail with the late trial's stop row (and the commands after it) recorded STOP_MOVED_S
+    later, so that its stop looks quick, raw_data updated and signed again as PASS. The stream
+    still matches (send times are not part of it), but the recomputed trial is not adequate
+    whatever the shift: its stop row comes more than a command spacing and 20 ms after its last
+    drive row (method §12.7.4)."""
     report = _copy(base, run)
     report["verdict"]["result"] = "PASS"
     report["verdict"]["reasons"] = []
     commands = run / "raw" / "commands.csv"
     lines = commands.read_bytes().decode("utf-8").split("\n")
-    stops = [i for i, line in enumerate(lines) if ",stop:" in line]
-    cells = lines[stops[4]].split(",")
-    cells[1] = repr(float(cells[1]) + 0.25)
-    cells[2] = repr(float(cells[2]) + 0.25)
-    lines[stops[4]] = ",".join(cells)
-    commands.write_bytes("\n".join(lines).encode("utf-8"))
+    commands.write_bytes("\n".join(move_stop(lines, 4, STOP_MOVED_S)).encode("utf-8"))
     _relist(run, report, "raw/commands.csv")
     _resign(run, report)
 
@@ -1286,7 +1306,8 @@ EXPECT: dict[str, dict] = {
         warnings=[],
         about=(
             "PASS-shaped EV-02 (method v0.2, packaged profile): three stop messages and three "
-            "hardwired stops, each after a drive at the speed limit, two drives per source"
+            "hardwired stops, each after a drive at the speed limit, two drives per source, each "
+            "stop holding while the commands go on"
         ),
     ),
     "ev02-fail": _e(
@@ -1344,8 +1365,9 @@ EXPECT: dict[str, dict] = {
         warnings=[],
         specific="VERDICT_MISMATCH",
         about=(
-            "ev02-fail with the late stop row moved 0.25 s later, raw_data updated and signed "
-            "again as PASS: the moved trial's approach is slow, so it is not adequate"
+            "ev02-fail with the late trial's stop row and the commands after it recorded later, "
+            "raw_data updated and signed again as PASS: a stop row more than a command spacing "
+            "and 20 ms after its last drive row leaves its trial inadequate, whatever the shift"
         ),
     ),
     "tamper-ev05-fail-as-pass": _e(

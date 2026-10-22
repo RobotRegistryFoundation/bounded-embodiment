@@ -448,7 +448,7 @@
     "stops": {
       "description": "DERIVED, EV-02 only. Each trial's stop against the envelope's limits for its source, and each source's trials (method §12.6).",
       "type": "object",
-      "required": ["point", "speed_limit_mps", "approach_speed_min_mps", "sigma_jitter_m", "still_radius_m", "still_window_s", "hold_s", "clock_uncertainty_s", "samples", "median_spacing_s", "median_rate_hz", "min_rate_hz", "gap_threshold_s", "sources", "trials"],
+      "required": ["point", "speed_limit_mps", "approach_speed_min_mps", "sigma_jitter_m", "still_radius_m", "rest_radius_m", "still_window_s", "hold_s", "clock_uncertainty_s", "command_spacing_s", "samples", "median_spacing_s", "median_rate_hz", "min_rate_hz", "gap_threshold_s", "sources", "trials"],
       "additionalProperties": false,
       "properties": {
         "point": { "$ref": "#/$defs/point_id" },
@@ -456,9 +456,11 @@
         "approach_speed_min_mps": { "type": "number" },
         "sigma_jitter_m": { "$ref": "#/$defs/number_or_null" },
         "still_radius_m": { "type": "number" },
+        "rest_radius_m": { "type": "number" },
         "still_window_s": { "type": "number" },
         "hold_s": { "type": "number" },
         "clock_uncertainty_s": { "type": "number" },
+        "command_spacing_s": { "$ref": "#/$defs/number_or_null" },
         "samples": { "$ref": "#/$defs/count" },
         "median_spacing_s": { "$ref": "#/$defs/number_or_null" },
         "median_rate_hz": { "$ref": "#/$defs/number_or_null" },
@@ -468,7 +470,7 @@
           "type": "array",
           "items": {
             "type": "object",
-            "required": ["source", "limits_from", "max_time_s", "max_distance_m", "trials", "trials_adequate", "drives_adequate"],
+            "required": ["source", "limits_from", "max_time_s", "max_distance_m", "trials", "trials_adequate", "trials_unmeasured", "drives_adequate"],
             "additionalProperties": false,
             "properties": {
               "source": { "$ref": "#/$defs/stop_source" },
@@ -477,6 +479,7 @@
               "max_distance_m": { "type": "number" },
               "trials": { "$ref": "#/$defs/count" },
               "trials_adequate": { "$ref": "#/$defs/count" },
+              "trials_unmeasured": { "$ref": "#/$defs/count" },
               "drives_adequate": { "type": "array", "items": { "$ref": "#/$defs/plan_id" } }
             }
           }
@@ -485,21 +488,28 @@
           "type": "array",
           "items": {
             "type": "object",
-            "required": ["trial", "source", "drive", "first_command_s", "stop_s", "next_command_s", "max_time_s", "max_distance_m", "reference_t_s", "approach_speed_mps", "approach_span_s", "approach", "rest_t_s", "settled_t_s", "stop_time_s", "stop_distance_m", "hold_until_s", "hold_displacement_m", "longest_spacing_s", "status", "notes", "failures"],
+            "required": ["trial", "source", "drive", "first_command_s", "drive_last_s", "stop_s", "issued", "after_last_s", "walk_end_s", "next_command_s", "max_time_s", "max_distance_m", "reference_t_s", "approach_speed_mps", "approach_span_s", "approach_late_speed_mps", "approach_late_span_s", "approach", "still_t_s", "rest_t_s", "settled_t_s", "stop_time_s", "stop_distance_m", "hold_until_s", "hold_displacement_m", "longest_spacing_s", "status", "notes", "failures"],
             "additionalProperties": false,
             "properties": {
               "trial": { "$ref": "#/$defs/count" },
               "source": { "$ref": "#/$defs/stop_source" },
               "drive": { "oneOf": [{ "type": "null" }, { "$ref": "#/$defs/plan_id" }] },
               "first_command_s": { "type": "number" },
+              "drive_last_s": { "$ref": "#/$defs/number_or_null" },
               "stop_s": { "type": "number" },
+              "issued": { "type": "boolean" },
+              "after_last_s": { "type": "number" },
+              "walk_end_s": { "type": "number" },
               "next_command_s": { "$ref": "#/$defs/number_or_null" },
               "max_time_s": { "type": "number" },
               "max_distance_m": { "type": "number" },
               "reference_t_s": { "$ref": "#/$defs/number_or_null" },
               "approach_speed_mps": { "$ref": "#/$defs/number_or_null" },
               "approach_span_s": { "$ref": "#/$defs/number_or_null" },
+              "approach_late_speed_mps": { "$ref": "#/$defs/number_or_null" },
+              "approach_late_span_s": { "$ref": "#/$defs/number_or_null" },
               "approach": { "$ref": "#/$defs/speed_class" },
+              "still_t_s": { "$ref": "#/$defs/number_or_null" },
               "rest_t_s": { "$ref": "#/$defs/number_or_null" },
               "settled_t_s": { "$ref": "#/$defs/number_or_null" },
               "stop_time_s": { "$ref": "#/$defs/number_or_null" },
@@ -518,7 +528,7 @@
     "model_loss": {
       "description": "DERIVED, EV-05 only. Each trial's stop after the model's last command, against the model timeout plus the stop limits of the plan's source, and the restart check (method §13.6).",
       "type": "object",
-      "required": ["point", "source", "limits_from", "speed_limit_mps", "model_timeout_s", "max_time_s", "max_distance_m", "allowed_time_s", "allowed_distance_m", "resume", "restart_check_s", "loss_speed_min_mps", "sigma_jitter_m", "still_radius_m", "still_window_s", "hold_s", "clock_uncertainty_s", "samples", "median_spacing_s", "median_rate_hz", "min_rate_hz", "gap_threshold_s", "trials", "trials_adequate"],
+      "required": ["point", "source", "limits_from", "speed_limit_mps", "model_timeout_s", "max_time_s", "max_distance_m", "allowed_time_s", "allowed_distance_m", "resume", "restart_check_s", "loss_speed_min_mps", "sigma_jitter_m", "still_radius_m", "rest_radius_m", "still_window_s", "hold_s", "clock_uncertainty_s", "samples", "median_spacing_s", "median_rate_hz", "min_rate_hz", "gap_threshold_s", "trials", "trials_adequate", "trials_unmeasured"],
       "additionalProperties": false,
       "properties": {
         "point": { "$ref": "#/$defs/point_id" },
@@ -540,6 +550,7 @@
         "loss_speed_min_mps": { "type": "number" },
         "sigma_jitter_m": { "$ref": "#/$defs/number_or_null" },
         "still_radius_m": { "type": "number" },
+        "rest_radius_m": { "type": "number" },
         "still_window_s": { "type": "number" },
         "hold_s": { "type": "number" },
         "clock_uncertainty_s": { "type": "number" },
@@ -552,7 +563,7 @@
           "type": "array",
           "items": {
             "type": "object",
-            "required": ["trial", "first_command_s", "loss_s", "restart_s", "restart_last_s", "next_command_s", "silence_s", "restart_covered_s", "reference_t_s", "speed_at_loss_mps", "speed_span_s", "speed", "rest_t_s", "settled_t_s", "stop_time_s", "stop_distance_m", "hold_until_s", "hold_displacement_m", "restart_until_s", "restart_displacement_m", "longest_spacing_s", "status", "notes", "failures"],
+            "required": ["trial", "first_command_s", "loss_s", "restart_s", "restart_last_s", "next_command_s", "silence_s", "restart_covered_s", "reference_t_s", "speed_at_loss_mps", "speed_span_s", "speed_late_mps", "speed_late_span_s", "speed", "still_t_s", "rest_t_s", "settled_t_s", "stop_time_s", "stop_distance_m", "hold_until_s", "hold_displacement_m", "restart_until_s", "restart_displacement_m", "longest_spacing_s", "status", "notes", "failures"],
             "additionalProperties": false,
             "properties": {
               "trial": { "$ref": "#/$defs/count" },
@@ -566,7 +577,10 @@
               "reference_t_s": { "$ref": "#/$defs/number_or_null" },
               "speed_at_loss_mps": { "$ref": "#/$defs/number_or_null" },
               "speed_span_s": { "$ref": "#/$defs/number_or_null" },
+              "speed_late_mps": { "$ref": "#/$defs/number_or_null" },
+              "speed_late_span_s": { "$ref": "#/$defs/number_or_null" },
               "speed": { "$ref": "#/$defs/speed_class" },
+              "still_t_s": { "$ref": "#/$defs/number_or_null" },
               "rest_t_s": { "$ref": "#/$defs/number_or_null" },
               "settled_t_s": { "$ref": "#/$defs/number_or_null" },
               "stop_time_s": { "$ref": "#/$defs/number_or_null" },
@@ -582,7 +596,8 @@
             }
           }
         },
-        "trials_adequate": { "$ref": "#/$defs/count" }
+        "trials_adequate": { "$ref": "#/$defs/count" },
+        "trials_unmeasured": { "$ref": "#/$defs/count" }
       }
     },
     "coverage": {
@@ -865,6 +880,8 @@
           "motion": { "not": {} }, "liveness": { "not": {} }, "coverage": { "not": {} }, "model_loss": { "not": {} },
           "scoring": { "properties": { "method": { "const": "ev02-stop/1" } } },
           "generator": { "properties": { "name": { "const": "be-stops" } } },
+          "method": { "properties": { "version": { "const": "0.2", "description": "EV-02 is defined from method version 0.2 on." } } },
+          "role": { "enum": ["test", "rehearsal"], "description": "EV-02 has no control run (method §9.3)." },
           "observations": { "$ref": "#/$defs/failure_observations" }
         }
       }
@@ -878,6 +895,8 @@
           "motion": { "not": {} }, "liveness": { "not": {} }, "coverage": { "not": {} }, "stops": { "not": {} },
           "scoring": { "properties": { "method": { "const": "ev05-model-loss/1" } } },
           "generator": { "properties": { "name": { "const": "be-model-loss" } } },
+          "method": { "properties": { "version": { "const": "0.2", "description": "EV-05 is defined from method version 0.2 on." } } },
+          "role": { "enum": ["test", "rehearsal"], "description": "EV-05 has no control run (method §9.3)." },
           "observations": { "$ref": "#/$defs/failure_observations" }
         }
       }
@@ -1005,14 +1024,15 @@
       }
     },
     "stop_params": {
-      "description": "be-stops: the trials of ev02-stop-plan.json; each walks for drive_s at hz (after a return walk of return_s for a position command space), at most step_cap per axis per command (null: straight to the target), then issues its stop.",
+      "description": "be-stops: the trials of ev02-stop-plan.json; each walks for drive_s at hz (after a return walk of return_s for a position command space), at most step_cap per axis per command (null: straight to the target), issues its stop, and goes on commanding the drive for after_s.",
       "type": "object",
-      "required": ["hz", "drive_s", "return_s", "step_cap"],
+      "required": ["hz", "drive_s", "return_s", "after_s", "step_cap"],
       "additionalProperties": false,
       "properties": {
         "hz": { "$ref": "#/$defs/hz" },
         "drive_s": { "$ref": "#/$defs/seconds" },
         "return_s": { "type": "number", "minimum": 0, "maximum": 86400 },
+        "after_s": { "$ref": "#/$defs/seconds" },
         "step_cap": { "oneOf": [{ "type": "null" }, { "$ref": "#/$defs/caps" }] }
       }
     },
@@ -1170,7 +1190,10 @@
         "still_radius_m": { "$ref": "#/$defs/profile_number" },
         "still_sigma_factor": { "$ref": "#/$defs/profile_number" },
         "still_window_s": { "$ref": "#/$defs/profile_number" },
+        "rest_radius_m": { "$ref": "#/$defs/profile_number" },
+        "rest_sigma_factor": { "$ref": "#/$defs/profile_number" },
         "hold_s": { "$ref": "#/$defs/profile_number" },
+        "dead_stop_margin_frac": { "$ref": "#/$defs/profile_number" },
         "restart_check_s": { "$ref": "#/$defs/profile_number" },
         "min_trials": { "$ref": "#/$defs/profile_number" },
         "min_trials_per_source": { "$ref": "#/$defs/profile_number" },

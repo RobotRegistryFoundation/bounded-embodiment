@@ -5,23 +5,32 @@ that stops sending at the loss instant. Either way the scorer asks the same ques
 point's measurements after that instant (method §12.6, §13.6):
 
 - the reference: the last measurement at or before the instant less the clock uncertainty U;
-- the speed there, by the speed rule of EV-03 (§7.8.4), over a span of 0.5 w to w;
-- the rest: the first measurement from the reference on that every measurement in the next
-  ``still_window_s`` stays within the still radius of (and the instrument kept measuring to the
-  end of that window); the settled position: the mean of the measurements from the rest to the
-  end of that window, and its time the last of them;
-- the stop time (rest time less the instant, plus U; 0 if that is negative), the stop distance (the farthest any
-  measurement from the reference to the settled position lies from the reference), and the hold
-  (the farthest any measurement in the ``hold_s`` after the settled position lies from it).
-
-The rest is the first measurement from which the point stays within the still radius r, so the
-last r or less of the travel comes after it: the stop time is early by the time the point takes
-to cover that (for a uniform deceleration a, at most sqrt(2 r / a)). The stop distance and the
-hold are measured from and to the settled position, so they are not shortened by it. The settled
-position is a mean so that the hold compares each measurement with a steadier reference than one
-noisy measurement.
+- the speed there, by the speed rule of EV-03 (§7.8.4), over a span of 0.5 w to w, and the late
+  chord: against the earliest measurement within w / 2 before the reference, or the one before
+  that when it is less than w / 4 before it. Both must reach the least speed for the approach to
+  be ``ok``, so a point that had already slowed, at a reversal for example, is not taken as at
+  speed;
+- still: the first measurement from the reference on that every measurement in the next
+  ``still_window_s`` stays within the still radius r of (and the instrument kept measuring to the
+  end of that window); the settled position: the mean of the measurements from there to the end
+  of that window, and its time the last of them;
+- the rest: the first measurement from that one on that lies within the rest radius r_t (smaller
+  than r, noise-scaled) of the settled position, or the still measurement when none does;
+- the stop time (rest time less the instant, plus U; 0 if that is negative), the stop distance (the
+  farthest any measurement from the reference to the settled position lies from the reference),
+  and the hold (the farthest any measurement from the settled position's time to the end of the
+  hold lies from it; the hold lasts at least ``hold_s`` and, when the caller says so, until the
+  next commands);
 - the trial's window: no spacing between consecutive measurements in it longer than the gap
   threshold or ``gap_max_s``, and measurements to its end.
+
+The rest is the first measurement within r_t of where the point then stayed, so up to r_t of its
+travel comes after it: the stop time is early by the time the point takes to cover that (for a
+uniform deceleration a, at most sqrt(2 r_t / a): 45 ms at 1 m/s^2 and 89 ms at 0.25 m/s^2 with
+r_t = 1 mm), and late by up to one spacing of the measurements. The stop distance and the hold are
+measured from and to the settled position, so they are not shortened by it. The settled position
+is a mean so that the hold compares each measurement with a steadier reference than one noisy
+measurement.
 
 Everything here is a pure function of the measurements; arithmetic is ``+ - * /``, ``math.sqrt``
 and comparisons in a fixed order, as everywhere in core.
@@ -96,6 +105,7 @@ class StopRules:
     speed_min_frac: float
     tolerance_speed_frac: float
     sigma_m: float  # σ_jitter, 0 when there is no jitter record
+    rest_radius_m: float  # r_t, the radius the rest is timed with (at most the still radius)
 
 
 @dataclass
@@ -110,8 +120,11 @@ class StopTrial:
     reference: Point3 | None = None
     speed_mps: float | None = None
     speed_span_s: float | None = None
+    late_speed_mps: float | None = None  # the late chord's speed
+    late_span_s: float | None = None
     speed_class: str | None = None  # "ok" | "slow" | "fast"
-    rest_t_s: float | None = None
+    still_t_s: float | None = None  # the first measurement it stayed within r of
+    rest_t_s: float | None = None  # the timed rest (within r_t of the settled position)
     rest: Point3 | None = None
     settled_t_s: float | None = None
     settled: Point3 | None = None
@@ -134,6 +147,8 @@ def _unmeasured(out: StopTrial, note: str) -> StopTrial:
         reference=out.reference,
         speed_mps=out.speed_mps,
         speed_span_s=out.speed_span_s,
+        late_speed_mps=out.late_speed_mps,
+        late_span_s=out.late_span_s,
         speed_class=out.speed_class,
         longest_spacing_s=out.longest_spacing_s,
     )
@@ -186,14 +201,36 @@ def _speed_at(meas: Measurements, i: int, w: float) -> tuple[float | None, float
     return distance(x_i, meas.items[j][1]) / span, span
 
 
-def classify_speed(v: float, span: float, rules: StopRules) -> str:
+def _late_chord(meas: Measurements, i: int, w: float) -> tuple[float | None, float | None]:
+    """The late chord at measurement i: against the earliest measurement j with t_i - t_j <=
+    w / 2, or, when that is less than w / 4 before it, against the measurement before j (more
+    than w / 2 before, and so at most w before whenever the speed rule at i has a span). None
+    when there is no such measurement."""
+    t_i, x_i = meas.items[i]
+    times = meas.times
+    half = w / 2.0
+    j = bisect.bisect_left(times, t_i - half)
+    while j > 0 and t_i - times[j - 1] <= half:
+        j -= 1
+    while j < i and t_i - times[j] > half:
+        j += 1
+    if t_i - times[j] < SPEED_MIN_SPAN_FRACTION * half:
+        j -= 1
+    if j < 0 or t_i - times[j] > w:
+        return None, None
+    span = t_i - times[j]
+    return distance(x_i, meas.items[j][1]) / span, span
+
+
+def classify_speed(v: float, span: float, rules: StopRules, late: float | None = None) -> str:
     """"fast" when the speed would be a speed excursion under §7.8.4 (above v_max x (1 +
-    tolerance_speed_frac) plus the jitter allowance 3√2 x σ / span), "slow" when it is below
-    ``speed_min_frac`` x v_max, else "ok"."""
+    tolerance_speed_frac) plus the jitter allowance 3√2 x σ / span), "slow" when it, or the late
+    chord's speed ``late``, is below ``speed_min_frac`` x v_max, else "ok"."""
     limit = rules.speed_limit_mps * (1.0 + rules.tolerance_speed_frac)
     if v > limit + SPEED_ALLOWANCE_FACTOR * rules.sigma_m / span:
         return "fast"
-    if v < rules.speed_min_frac * rules.speed_limit_mps:
+    least = rules.speed_min_frac * rules.speed_limit_mps
+    if v < least or (late is not None and late < least):
         return "slow"
     return "ok"
 
@@ -261,20 +298,22 @@ def measure_stop(
     end_t: float,
     allowed_time_s: float,
     rules: StopRules,
+    hold_to: float | None = None,
 ) -> StopTrial:
     """Measure the stop that follows ``t_event`` (a stop instant or a loss instant, on the run
-    timebase), from the measurements before ``end_t`` (the next segment's first command less U,
-    or infinity for the last one).
+    timebase), from the measurements at or before ``end_t`` (the next segment's first command less
+    U, or infinity for the last one).
 
-    The rest and the settled position are as the module docstring says; the hold runs from the
-    settled position for ``hold_s``.
+    Still, the settled position and the rest are as the module docstring says; the hold runs from
+    the settled position's time for ``hold_s``, or to ``hold_to`` when that is later (the caller's
+    "until the next commands"), so a move on reset, or while the commands still come, is judged.
 
     Unmeasured (no judgement either way) when: there is no measurement at or before
-    ``t_event - U``; the speed there has no span; a spacing in the trial's window is longer than
-    the gap threshold or ``gap_max_s``; or the measurements end before the window does. The
-    window runs from the reference to the end of the hold, or, when the point never came to rest,
-    to ``allowed_time_s + still_window_s`` after ``t_event - U``, by when a rest in time would
-    have shown."""
+    ``t_event - U``; the speed or the late chord there has no span; a spacing in the trial's window
+    is longer than the gap threshold or ``gap_max_s``; or the measurements end before the window
+    does. The window runs from the reference to the end of the hold, or, when the point never came
+    to rest, to ``allowed_time_s + still_window_s`` after ``t_event - U``, by when a rest in time
+    would have shown."""
     out = StopTrial()
     u = rules.clock_uncertainty_s
     data = meas.upto(end_t)
@@ -288,61 +327,81 @@ def measure_stop(
         out.notes.append("the speed at the instant has no span of 0.5 w to w")
         return out
     out.speed_mps, out.speed_span_s = v, span
-    out.speed_class = classify_speed(v, span, rules)
+    late, late_span = _late_chord(data, i_ref, rules.speed_window_s)
+    if late is None or late_span is None:
+        out.notes.append("the late chord at the instant has no span of w / 4 to w")
+        return out
+    out.late_speed_mps, out.late_span_s = late, late_span
+    out.speed_class = classify_speed(v, span, rules, late)
 
-    i_rest = None
+    i_still = None
     for i in range(i_ref, len(data)):
         if _at_rest(data, i, rules):
-            i_rest = i
+            i_still = i
             break
     limit_t = t_event - u + allowed_time_s
-    if i_rest is not None:
-        out.rest_t_s, out.rest = data.items[i_rest]
-        # _at_rest saw a measurement at or after the window's end, so this is i_rest or later.
-        i_settled = bisect.bisect_right(data.times, out.rest_t_s + rules.still_window_s) - 1
+    if i_still is not None:
+        out.still_t_s = data.times[i_still]
+        # _at_rest saw a measurement at or after the window's end, so this is i_still or later.
+        i_settled = bisect.bisect_right(data.times, out.still_t_s + rules.still_window_s) - 1
         out.settled_t_s = data.times[i_settled]
-        out.settled = _mean(data, i_rest, i_settled)
-        # 0 when the rest is the reference itself (the point stopped within r of where it was)
+        out.settled = _mean(data, i_still, i_settled)
+        i_rest = i_still
+        for m in range(i_still, i_settled + 1):
+            if distance(data.items[m][1], out.settled) <= rules.rest_radius_m:
+                i_rest = m
+                break
+        out.rest_t_s, out.rest = data.items[i_rest]
+        # 0 when the rest is the reference itself (the point stopped within r_t of where it was)
         out.stop_time_s = max(0.0, out.rest_t_s - t_event + u)
         out.stop_distance_m = _farthest(data, out.reference, i_ref, out.settled_t_s)
         out.hold_until_s = out.settled_t_s + rules.hold_s
+        if hold_to is not None and hold_to > out.hold_until_s:
+            out.hold_until_s = hold_to
         out.hold_displacement_m = _farthest(data, out.settled, i_settled, out.hold_until_s)
         window_end = out.hold_until_s
         out.late = out.rest_t_s > limit_t
+        # The hold may run to end_t itself (the next commands less U): whether the instrument
+        # measured to its end is seen from the measurements after it too, which only count for
+        # their times; a hold that would end after end_t is not measured to its end.
+        longest, observed = longest_spacing(meas, i_ref, window_end)
+        observed = observed and window_end <= end_t
     else:
         window_end = limit_t + rules.still_window_s
         out.stop_distance_m = _farthest(data, out.reference, i_ref, math.inf)
         out.late = True
-    longest, observed = longest_spacing(data, i_ref, window_end)
+        longest, observed = longest_spacing(data, i_ref, window_end)
     out.longest_spacing_s = longest
-    out.hold_observed = i_rest is not None and observed
+    out.hold_observed = i_still is not None and observed
     if longest is not None and (longest > rules.gap_threshold_s or longest > rules.gap_max_s):
         return _unmeasured(
             out,
             f"a spacing of {longest:.3f} s between measurements in the trial's window (gap "
             f"threshold {rules.gap_threshold_s:.3f} s, longest allowed {rules.gap_max_s:g} s)",
         )
-    if i_rest is None and not observed:
+    if i_still is None and not observed:
         return _unmeasured(out, "the measurements end before a stop in time would have shown")
     out.measured = True
-    if i_rest is not None and not observed:
+    if i_still is not None and not observed:
         out.notes.append("the hold was not measured to its end")
     return out
 
 
 def displacement_in(
-    meas: Measurements, x0: Point3, t_from: float, t_to: float
+    meas: Measurements, x0: Point3, t_from: float, t_to: float, judged_to: float | None = None
 ) -> tuple[float | None, float | None, bool]:
-    """Over the measurements from t_from to t_to: the largest distance from x0 (None without a
-    measurement there), the longest spacing from the last measurement at or before t_from to the
-    first at or after t_to, and whether one at or after t_to exists."""
+    """Over the measurements from t_from to ``judged_to`` (t_to when not given): the largest
+    distance from x0 (None without a measurement there); and over t_from to t_to the longest
+    spacing from the last measurement at or before t_from to the first at or after t_to, and
+    whether one at or after t_to exists."""
     if not meas.items:
         return None, None, False
+    judged = t_to if judged_to is None else judged_to
     i = max(0, bisect.bisect_right(meas.times, t_from) - 1)
     worst = None
     for m in range(bisect.bisect_left(meas.times, t_from), len(meas)):
         t, x = meas.items[m]
-        if t > t_to:
+        if t > judged:
             break
         d = distance(x, x0)
         if worst is None or d > worst:

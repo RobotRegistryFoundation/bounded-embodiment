@@ -224,3 +224,43 @@ def test_make_run_round_trips(tmp_path: Path) -> None:
         want = json.loads((golden().OUT / "expect.json").read_text())["runs"][name]
         result = rep.verify(run, keyring())
         assert result.consistent and result.verdict["result"] == want["verdict"]
+
+
+@pytest.mark.parametrize("shift_s", [0.1, 0.15, 0.25])
+def test_a_stop_recorded_late_is_caught_whatever_the_shift(tmp_path: Path, shift_s: float) -> None:
+    """Review finding 5: moving ev02-fail's late stop row by +0.10 s or +0.15 s (rather than the
+    first vector's +0.25 s) gave a consistent PASS, because the moved trial still read as at speed.
+    A stop row more than a command spacing and 20 ms after its last drive row now leaves the trial
+    inadequate, so the re-signed PASS is caught at every shift, with the same derived verdict."""
+    g = golden()
+    run = copy_run("ev02-fail", tmp_path)
+    report = read_report(run)
+    report["verdict"]["result"], report["verdict"]["reasons"] = "PASS", []
+    commands = run / "raw" / "commands.csv"
+    lines = commands.read_bytes().decode("utf-8").split("\n")
+    commands.write_bytes("\n".join(g.move_stop(lines, 4, shift_s)).encode("utf-8"))
+    g._relist(run, report, "raw/commands.csv")
+    resign(run, report)
+    result = rep.verify(run, keyring())
+    assert not result.consistent
+    codes = [f.code for f in result.findings if f.severity == "error"]
+    assert codes == ["DERIVED_MISMATCH", "VERDICT_MISMATCH"]
+    assert result.verdict["result"] == "INCONCLUSIVE"
+    assert [r["code"] for r in result.verdict["reasons"]] == ["STOP_DRIVES_TOO_FEW", "STOP_TRIALS_TOO_FEW"]
+
+
+def test_ev02_and_ev05_reports_pin_the_method_version_and_have_no_control_role(tmp_path: Path) -> None:
+    """Review note 11: method.version must be 0.2 and the role may not be control (method §9.3:
+    EV-02 and EV-05 have no control run), in the 0.2 schema, which build and verify enforce."""
+    g = golden()
+    run = _ev02_run(tmp_path)
+    bad_version = _ev02_declared()
+    bad_version["method"] = dict(bad_version["method"], version="0.1")
+    with pytest.raises(rep.ReportError) as exc:
+        rep.build(bad_version, run)
+    assert "SCHEMA_INVALID" in _codes(exc)
+    with pytest.raises(rep.ReportError) as exc:
+        rep.build(_ev02_declared(role="control"), run)
+    assert "SCHEMA_INVALID" in _codes(exc)
+    report = g.finish(run, _ev02_declared())  # the good one builds
+    assert report["method"]["version"] == "0.2" and report["role"] == "test"

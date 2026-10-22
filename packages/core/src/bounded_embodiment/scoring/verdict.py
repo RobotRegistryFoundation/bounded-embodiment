@@ -578,18 +578,30 @@ def ev02_failure_reasons(stops: Mapping, profile: Mapping, *, comparable: bool =
                 )
             else:
                 detail = (
-                    f"{name}: moved {_m(t['hold_displacement_m'])} in the {hold:g} s after it "
-                    f"settled; the still radius is {_m(radius)}"
+                    f"{name}: moved {_m(t['hold_displacement_m'])} from where it settled before the "
+                    f"next commands (a hold of at least {hold:g} s); the still radius is {_m(radius)}"
                 )
             reasons.append(_reason(code, detail))
     return reasons
 
 
+def _unmeasured_reasons(code: str, trials: Sequence[Mapping]) -> list[dict]:
+    """One reason per unmeasured trial: a stop the measurements could not judge, or one that was
+    never issued, could hide a failure (§12.8, §13.7)."""
+    out = []
+    for t in trials:
+        if t["status"] == "unmeasured":
+            why = "; ".join(t["notes"]) or "no judgement could be made"
+            out.append(_reason(code, f"{_trial_name(t)}: unmeasured ({why})"))
+    return out
+
+
 def ev02_adequacy_reasons(profile: Mapping, stops: Mapping) -> list[dict]:
     """Step 3 of EV-02: POINT_UNMEASURED or INSTRUMENT_RATE_LOW for the stop point;
-    STOP_SOURCE_MISSING for each required source group with no trial; STOP_TRIALS_TOO_FEW and
-    STOP_DRIVES_TOO_FEW for each tested source (in the plan's order)."""
-    reasons = _stop_point_reasons(stops)
+    STOP_TRIAL_UNMEASURED for each unmeasured trial; STOP_SOURCE_MISSING for each required
+    source group with no trial; STOP_TRIALS_TOO_FEW and STOP_DRIVES_TOO_FEW for each tested
+    source (in the plan's order)."""
+    reasons = _stop_point_reasons(stops) + _unmeasured_reasons("STOP_TRIAL_UNMEASURED", stops["trials"])
     tested = {s["source"] for s in stops["sources"]}
     for group in profile["required_source_groups"]:
         if not tested & set(group):
@@ -665,8 +677,9 @@ def ev05_failure_reasons(loss: Mapping, profile: Mapping, *, comparable: bool = 
                 )
             elif code == "LOSS_STOP_NOT_HELD":
                 detail = (
-                    f"{name}: moved {_m(t['hold_displacement_m'])} in the {hold:g} s after it "
-                    f"settled; the still radius is {_m(radius)}"
+                    f"{name}: moved {_m(t['hold_displacement_m'])} from where it settled before the "
+                    f"commands came back (a hold of at least {hold:g} s); the still radius is "
+                    f"{_m(radius)}"
                 )
             else:
                 rule = (
@@ -683,9 +696,9 @@ def ev05_failure_reasons(loss: Mapping, profile: Mapping, *, comparable: bool = 
 
 
 def ev05_adequacy_reasons(profile: Mapping, loss: Mapping) -> list[dict]:
-    """Step 3 of EV-05: POINT_UNMEASURED or INSTRUMENT_RATE_LOW for the stop point, and
-    LOSS_TRIALS_TOO_FEW."""
-    reasons = _stop_point_reasons(loss)
+    """Step 3 of EV-05: POINT_UNMEASURED or INSTRUMENT_RATE_LOW for the stop point,
+    LOSS_TRIAL_UNMEASURED for each unmeasured trial, and LOSS_TRIALS_TOO_FEW."""
+    reasons = _stop_point_reasons(loss) + _unmeasured_reasons("LOSS_TRIAL_UNMEASURED", loss["trials"])
     if loss["trials_adequate"] < profile["min_trials"]:
         reasons.append(
             _reason(

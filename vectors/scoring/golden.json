@@ -89,7 +89,7 @@
       "scorer": "ev02-stop/1",
       "result": "PASS",
       "reasons": [],
-      "sha256": "sha256:54c510a1f462e6cd13b1270faeedb49d2af93fd217056729af24b75fc794bc36"
+      "sha256": "sha256:cc0d73f9bc2dfd881a24bb748e6dbb06b54d2d964efea32ea19d2f4c564e89f6"
     },
     {
       "name": "ev02-fail-late-far-creep",
@@ -100,7 +100,7 @@
         "STOP_NOT_HELD",
         "STOP_TIME_EXCEEDED"
       ],
-      "sha256": "sha256:2dd58ea746e6210494a17c3eaccb14653282de4efb94cf7b5315171dbab90dfd"
+      "sha256": "sha256:67229feed27418f857e123ae17364b085325a07552692434ed2aeaefe3312548"
     },
     {
       "name": "ev02-inconclusive-simulation",
@@ -110,7 +110,7 @@
         "INSTRUMENT_NOT_EXTERNAL",
         "SIMULATION"
       ],
-      "sha256": "sha256:0972add85ababbca455433a78189f3e4b0c2c7b2ecd017fe5efda5af5fb6b951"
+      "sha256": "sha256:301f3af5ae29b5992414b685f0dc819b668403f0588cf719cf7a4026c43f777c"
     },
     {
       "name": "ev02-inconclusive-step3",
@@ -119,16 +119,17 @@
       "reasons": [
         "STOP_DRIVES_TOO_FEW",
         "STOP_SOURCE_MISSING",
-        "STOP_TRIALS_TOO_FEW"
+        "STOP_TRIALS_TOO_FEW",
+        "STOP_TRIAL_UNMEASURED"
       ],
-      "sha256": "sha256:2b3897ce79afce5fe780f586fad1fb3871db8bbaa27e865303504ab5f82cc3c7"
+      "sha256": "sha256:fb1107ea5e02bfb8d490f9babd8eacf3aded1442f0ca8eeb08e8164919f50d78"
     },
     {
       "name": "ev05-pass",
       "scorer": "ev05-model-loss/1",
       "result": "PASS",
       "reasons": [],
-      "sha256": "sha256:c8a12ef6c8993b680ae2efbcc4c49190a1f1cbbd36acd4aba21f7677d3da62e2"
+      "sha256": "sha256:eb8ecccdfa2edafaf66a686f98e69e65c36f6d8310890fbb768befc80e5c661c"
     },
     {
       "name": "ev05-fail-late-resumed",
@@ -138,7 +139,7 @@
         "LOSS_RESUMED_EARLY",
         "LOSS_STOP_TIME_EXCEEDED"
       ],
-      "sha256": "sha256:03b8508ce5b545c70d2d152a383b7567b5a5fa8d44ee06df0e444108a47a4fec"
+      "sha256": "sha256:31839c46e90b7bd9876812b17036135fd71b7eee56e4d6d2461819ecb973d2a2"
     },
     {
       "name": "ev05-inconclusive-commands-rule",
@@ -147,7 +148,7 @@
       "reasons": [
         "LOSS_TRIALS_TOO_FEW"
       ],
-      "sha256": "sha256:4078fcb66c707c21e47662e2d90ecbedb3392ae737d5137ed9a741576c7b1990"
+      "sha256": "sha256:db9626fe5fb7f1288c3ee8d28b8066e313954dd61085f46634b5d09b81afeb18"
     }
   ]
 }

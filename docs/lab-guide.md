@@ -10,6 +10,10 @@ finding about one run, never a certification. The kit's runner and watchdog are 
 line-by-line human review before it drives hardware (method, known gap 7). The markerless tracker has
 been validated on synthetic recordings only.
 
+**EV-02 and EV-05 are not covered here.** Method v0.2 (`method/bounded-embodiment-method-v0.2.md`, a
+draft for comment) adds them, and the kit has `be run ev02` and `be run ev05` as drafts exercised in
+simulation only (docs/seams/runner.md). Do not run them on hardware before that review.
+
 The examples use an SO-101 arm, a Luxonis OAK-D on a tripod and the kit's markerless tracker, as on
 the reference bench. Another arm needs its own adapter, URDF and envelope; another instrument needs to
 produce `be-samples-csv/1`.

@@ -208,3 +208,18 @@ Decisions taken while integrating:
 - **EV-10 and an offline instrument in the runner (11 Oct, for review).** `be run ev10 --mode full --waypoints W` sends core's `be-waypoints/1` tour; the B6 matrix's EV-10 cases now go through it. `be run ... --instrument none --no-live-instrument-i-understand` runs with the FK tripwire as the only live supervision, recorded in declared.json and in the submission's notes.
 - **The accuracy check is the lab's survey, the kit's arithmetic.** Reference positions come from a targets file the lab writes after surveying (never from the plan, which only says where to send the machine). `be instrument check` uses core's own `scoring.ev03.accuracy` and `validity_reasons`, so what it reports is what the scorer will compute.
 - **Frames for the SO-101.** The envelope frame is the URDF's `base_link`. The tape measurements in a recording are taken from the point on the table under the shoulder_pan axis (frame F); `be fit register` converts: `base_link = F + (pan_x, pan_y, z_min)`, read from the URDF (38.8 mm, 0, −2.4 mm for `so101_new_calib.urdf`).
+
+## Seams added for method v0.2 (draft, 22 Oct 2026; for review)
+
+Method v0.2 (`method/bounded-embodiment-method-v0.2.md`) adds EV-02 (stop performance) and EV-05 (model loss) and changes nothing about EV-03 and EV-10. Everything above stays as it is; these names are new.
+
+| Seam | Document | Status |
+|---|---|---|
+| Stop plan 0.1 and model-loss plan 0.1 (`schemas/stop-plan-0.1.json`, `schemas/model-loss-plan-0.1.json`), the streams `be-stops/1` and `be-model-loss/1`, test report 0.2 (`schemas/test-report-0.2.json`) | `docs/seams/report.md` | built, golden runs in `vectors/runs/` (ev02-*, ev05-*, tamper-ev02-*, tamper-ev05-*) |
+| Scorers `ev02-stop/1` and `ev05-model-loss/1`, profiles `ev02-illustrative-0.1` and `ev05-illustrative-0.1` | `docs/seams/scoring.md` | built, goldens in `vectors/scoring/` |
+| `be run ev02` and `be run ev05`, the trial tripwire, the optional adapter methods `trigger_stop` and `reset_stop` | `docs/seams/runner.md` | **draft: line-by-line human review before any hardware use**; exercised in simulation only |
+| `be report` for EV-02 and EV-05 runs | `docs/seams/submission.md` | built, exercised in simulation |
+
+- **Run directory.** An EV-02 run holds `ev02-stop-plan.json` and an EV-05 run `ev05-model-loss-plan.json` (each required for its test and refused for every other), listed and hashed in `raw_data` and pinned in the stream digest.
+- **Report versions.** An EV-02 or EV-05 report is test report 0.2. An EV-03 or EV-10 report stays 0.1 unless its declarations say `"0.2"` (same members). `be verify` reads both; `schemas/test-report-0.1.json` is unchanged.
+- **Method version.** An EV-02 or EV-05 report cites method version 0.2 (`be report` refuses a lab config that cites another).

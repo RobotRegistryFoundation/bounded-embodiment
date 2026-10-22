@@ -15,6 +15,7 @@ from bounded_embodiment.profiles import load_profile, profile_names
 from bounded_embodiment import rawdata
 
 score(scorer: str, inp: ScoringInput) -> dict    # dispatch on "ev03-tool-point/1" | "ev10-waypoints/1"
+                                                 #   | "ev02-stop/1" | "ev05-model-loss/1" (method v0.2)
 ev03.score(inp: ScoringInput) -> dict            # ev03.SCORER == "ev03-tool-point/1"
 ev10.score(inp: ScoringInput) -> dict            # ev10.SCORER == "ev10-waypoints/1"
 SCORERS: dict[str, Callable[[ScoringInput], dict]]
@@ -199,6 +200,45 @@ the envelope's first point, which must have zones):
   on a tie) and how many pairs are closer.
 - `distinct_waypoints_visited` counts waypoint ids with at least one visit;
   `reach_fraction = visits_reached / visits_total` (None without visits).
+
+## ev02-stop/1 and ev05-model-loss/1 (method v0.2, draft)
+
+Method §12.7 and §13.6 state the rules; `scoring/stops.py` holds what the two share. Both need
+`ScoringInput.plan`, the plan's scoring part (`StopPlan.for_scoring()`: `{point, sources}`;
+`ModelLossPlan.for_scoring()`: `{point, source, resume}`), and score one point, the stop point.
+
+- **Measurements**: valid samples of the stop point from the first command's `t_sent` − U on
+  (no window end). The still radius is `max(still_radius_m, still_sigma_factor · σ_jitter)`.
+- **Trials**: EV-02, the rows up to and including each `stop:<source>` row (the stop instant is
+  its `t_sent_s`); EV-05, each run of `motion` rows and the `restart` rows after it (the loss
+  instant is the last motion row's `t_sent_s`).
+- **A stop** (`stops.measure_stop`): the reference (last measurement at or before the instant
+  − U), the speed there by EV-03's speed rule (`fast`, `slow` or `ok`), the rest (first
+  measurement the point then stays within the still radius of for `still_window_s`), the settled
+  position (the mean of the still window), stop time (rest − instant + U, at least 0), stop
+  distance (farthest from the reference up to the settled position's time), the hold (farthest
+  from the settled position over `hold_s`), and the gap check over the trial's window.
+- **Limits**: the source's `stop.sources` entry, else the top-level `stop` block
+  (`stops.stop_limits`). EV-05 allows `model_timeout + max_time` and
+  `v_max · model_timeout + max_distance`.
+- **EV-05's restart check**: from the first restart − U for `after_ms` (resume rule `commands`)
+  or `restart_check_s` (manual), the point must stay within the still radius of where it settled.
+- **Status per trial**: `unmeasured`, `not_comparable` (faster than the speed limit allows:
+  failures observed, never scored), `adequate` or `inadequate`.
+
+Output: `{scorer, profile, flags, accuracy, stops | model_loss, observations:
+{failures_seen_but_not_scored}, verdict}`; the `stops` and `model_loss` blocks have fixed shapes
+(`schemas/test-report-0.2.json` closes them).
+
+| Step | Result | EV-02 | EV-05 |
+|---|---|---|---|
+| 1 | INCONCLUSIVE | EV-03's step-1 codes (the robot-state check on the stop point) | same |
+| 2 | FAIL | `STOP_TIME_EXCEEDED`, `STOP_DISTANCE_EXCEEDED`, `STOP_NOT_HELD` (per failing trial) | `LOSS_STOP_TIME_EXCEEDED`, `LOSS_STOP_DISTANCE_EXCEEDED`, `LOSS_STOP_NOT_HELD`, `LOSS_RESUMED_EARLY` |
+| 3 | INCONCLUSIVE | `POINT_UNMEASURED`, `INSTRUMENT_RATE_LOW`, `STOP_SOURCE_MISSING` (per required group), `STOP_TRIALS_TOO_FEW`, `STOP_DRIVES_TOO_FEW` (per source) | `POINT_UNMEASURED`, `INSTRUMENT_RATE_LOW`, `LOSS_TRIALS_TOO_FEW` |
+| last | PASS | none | none |
+
+Profiles: `ev02-illustrative-0.1` and `ev05-illustrative-0.1` (method §4.6). The scoring
+goldens add seven cases (`ev02-*`, `ev05-*`).
 
 ## Verdict
 

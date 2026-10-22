@@ -120,6 +120,48 @@ Every signature entry must verify, so a co-signature by a key outside the keyrin
 | ev03-aborted | consistent, `aborted: true`, INCONCLUSIVE (strategies missing) |
 | tamper-file-edited / -unlisted-file / -unknown-key / -embedded-key / -pass-over-fail / -envelope-swapped / -stream-edited / -abort-undeclared | not consistent: FILE_HASH_MISMATCH / UNLISTED_FILE / UNKNOWN_KID / EMBEDDED_KEY / VERDICT_MISMATCH / ENVELOPE_HASH_MISMATCH / STREAM_MISMATCH / STREAM_ABORTED_MISMATCH |
 
+## Method v0.2: EV-02, EV-05 and test report 0.2 (draft)
+
+```python
+report.load_stop_plan(src) -> StopPlan                  # ev02-stop-plan.json; PlanError(findings)
+report.load_model_loss_plan(src) -> ModelLossPlan       # ev05-model-loss-plan.json; PlanError(findings)
+report.check_plan_commands(plan, space, file) -> list[Finding]
+report.stop_stream(space, plan, params) -> Iterator[Proposal]          # be-stops/1
+report.model_loss_stream(space, plan, seed, params) -> Iterator[Proposal]   # be-model-loss/1
+report.split_segments(proposals) -> list[list[Proposal]]  # one segment per trial (t_s restarts at 0)
+report.report_version_for(test) -> "0.1" | "0.2"         # EV-02, EV-05: "0.2"
+report.REPORT_VERSIONS, report.SCHEMA_NAMES               # ("0.1", "0.2"), version -> schema name
+```
+
+| path | role | format | |
+|---|---|---|---|
+| `ev02-stop-plan.json` | stop_plan | json | EV-02: required; every other test: not allowed |
+| `ev05-model-loss-plan.json` | model_loss_plan | json | EV-05: required; every other test: not allowed |
+
+| name/version | test, role | params (normalized) | stream |
+|---|---|---|---|
+| `be-stops/1` | EV-02, test or rehearsal | `{hz, drive_s, return_s, step_cap}` | per trial: a `return` walk to the plan's start (position spaces, after the first trial), a `drive:<id>` walk, one `stop:<source>` proposal with payload `{}` (the bench issues the stop instead of sending it); each segment's `t_s` from 0 |
+| `be-model-loss/1` | EV-05, test or rehearsal | `{hz, trials, motion_s: [lo, hi], silence_s, restart_s, step_cap}` | per trial: `motion` round the plan's path for a seeded time, nothing for `silence_s`, then `restart` commands out along the path and back to the last motion command |
+
+Their digests add one header line, the plan's digest (as be-waypoints adds the waypoints'). Plan
+findings are relayed with their own codes (PLAN_PARSE_ERROR, PLAN_NOT_OBJECT,
+PLAN_VERSION_UNSUPPORTED, PLAN_DUPLICATE_ID, PLAN_DUPLICATE_SOURCE, PLAN_UNKNOWN_DRIVE,
+PLAN_UNKNOWN_SOURCE, PLAN_COMMAND_UNKNOWN_AXIS, PLAN_COMMAND_MISSING_AXIS,
+PLAN_COMMAND_OUTSIDE_LIMITS; schema violations SCHEMA_INVALID), as WAYPOINTS_* are.
+
+**Test report 0.2** is 0.1 with `test` EV-02 and EV-05, their generators and scorers, and the
+derived blocks `stops` (EV-02) or `model_loss` (EV-05) in place of `window`, `achieved_rates`,
+`score`, `gaps`, `motion`/`liveness` and `coverage`; `observations` holds
+`failures_seen_but_not_scored`. An EV-03 or EV-10 report may declare 0.2 and has the same members
+as in 0.1. `schemas/test-report-0.1.json` and every 0.1 report are unchanged.
+
+Golden runs added: `ev02-pass`, `ev02-fail`, `ev02-inconclusive-one-source`, `ev05-pass`,
+`ev05-fail-resumed`, `ev05-inconclusive-short-silence` (packaged profiles, no NONSTANDARD_PARAMS),
+and `tamper-ev02-plan-swapped` (FILE_HASH_MISMATCH, with STREAM_DIGEST_MISMATCH and
+STREAM_MISMATCH), `tamper-ev02-stop-moved` (ev02-fail's late stop row moved 0.25 s later, raw_data
+updated and re-signed as PASS: DERIVED_MISMATCH and VERDICT_MISMATCH; the moved trial's approach is
+slow, so core derives INCONCLUSIVE) and `tamper-ev05-fail-as-pass` (VERDICT_MISMATCH).
+
 ## Decisions and open questions
 
 - **EV-10's stream.** Core had nothing to regenerate EV-10 commands from, so `be-waypoints/1` is defined here as a step tour over declared waypoint commands (the shape the scoring tests already use). The kit's EV-10 runner must send exactly this stream; interpolated paths would need a new generator version.

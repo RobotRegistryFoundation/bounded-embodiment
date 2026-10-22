@@ -24,7 +24,7 @@ or a verdict.
 be report RUN_DIR --lab-config LAB.json --key KEY.json --out SUBMISSION_DIR \
     [--samples PATH ...] [--clock monotonic|wall|run] [--clock-csv PATH] [--wall-clock-agreement-s S] \
     [--accuracy PATH] [--instrument-file PATH ...] [--notes NOTES.md] [--photo JPG ...] \
-    [--test EV-03|EV-10] [--role test|control|rehearsal] [--reproduces RESULT] [--control-run RUN] \
+    [--test EV-03|EV-10|EV-02|EV-05] [--role test|control|rehearsal] [--reproduces RESULT] [--control-run RUN] \
     [--redact TEXT ...]
 ```
 
@@ -38,7 +38,7 @@ consistent submission is renamed to SUBMISSION_DIR, which must not exist or be e
 
 | Submission file | From | How |
 |---|---|---|
-| `envelope.json`, `command-space.json`, `ev10-waypoints.json` (EV-10) | RUN_DIR | byte copies; refused if their hash/digest differs from declared.json's; scanned, not scrubbed (below) |
+| `envelope.json`, `command-space.json`, `ev10-waypoints.json` (EV-10), `ev02-stop-plan.json` (EV-02), `ev05-model-loss-plan.json` (EV-05) | RUN_DIR | byte copies; refused if their hash/digest differs from declared.json's (a plan's from `generator.plan_digest`); scanned, not scrubbed (below) |
 | `raw/commands.csv.gz`, `raw/state.csv.gz` | RUN_DIR/raw (`.csv` or `.csv.gz`) | scrubbed CSV, gzipped |
 | `raw/samples.csv.gz` | `--samples` (several are joined in order), else the runner's simulated instrument's RUN_DIR/raw/samples.csv | converted to the run timebase, scrubbed, gzipped |
 | `raw/accuracy.csv` | `--accuracy` | checked with core's reader, scrubbed, **not** gzipped (core's layout has no `raw/accuracy.csv.gz`) |
@@ -60,6 +60,16 @@ test; a simulation must be a rehearsal, the control stream makes a control or re
 control run takes no `--control-run`. `--reproduces` is a result id `<lab>/<run>` or a path ending
 in `results/<lab>/<run>`; `--control-run` also takes a bare run name or a local submission
 directory (named from its report.json).
+
+**EV-02 and EV-05 (added 22 Oct for method v0.2, draft, for review).** A run of `be run ev02` or
+`be run ev05` carries its plan (`ev02-stop-plan.json`, `ev05-model-loss-plan.json`), which be report
+loads with core's loader and copies byte for byte only when its digest is declared.json's
+`generator.plan_digest`. The lab config's `method.version` must be `0.2`, the first version that
+defines EV-02 and EV-05 (refused otherwise); its `text_sha256` is the lab's to give, from
+method/README.md, and is not checked here (as for EV-03 and EV-10). Core builds a
+test report 0.2 for these tests (0.1 is unchanged for EV-03 and EV-10) and scores it with its
+packaged `ev02-illustrative-0.1` or `ev05-illustrative-0.1` profile, whose thresholds are
+illustrative. The run directory name and `be submit` need nothing new (`ev02-<UTC>-s<seed>`).
 
 ## The lab config (`be-lab-config/0.1`)
 
@@ -161,7 +171,7 @@ regenerates and compares them), point and joint ids, or `source` and `phase`. A 
 found in keeps its bytes. be report prints what it replaced per file, by category and count, never
 the values.
 
-envelope.json, command-space.json and ev10-waypoints.json are copied byte for byte: their hash
+envelope.json, command-space.json, ev10-waypoints.json and the EV-02 and EV-05 plans are copied byte for byte: their hash
 identifies what the run used (the gate loaded those bytes), so scrubbing them would make the report
 describe a different setup. What the scrubber would replace there is printed as a warning, to fix
 in the file before the next run.
@@ -208,8 +218,10 @@ not go with the method); a monotonic cross-check that fails; no clock.csv pair w
 run; samples that core's reader refuses, that overlap, or none of which fall in the run; an accuracy
 file core's reader refuses; instrument file names a run directory does not allow, that hold a
 scrubbed word, or that be report writes itself; a non-UTF-8 NOTES.md; a photo that is not a JPEG;
-any file that looks like a private key or an LFS pointer; anything core's `build` refuses (its
-findings are printed); and a signed report that `verify` does not find consistent.
+any file that looks like a private key or an LFS pointer; an EV-02 or EV-05 run whose plan file is
+missing, does not load, or is not the plan the run used, or whose lab config cites a method version
+other than 0.2; anything core's `build` refuses (its findings are printed); and a signed report that
+`verify` does not find consistent.
 
 ## Decisions and open points
 

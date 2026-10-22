@@ -5,6 +5,31 @@ The method text has its own version and SHA-256 (see `method/README.md`); nothin
 Generators, scorers and profiles are versioned by name (`be-hostile/1`, `ev03-tool-point/1`,
 `ev03-illustrative-0.1`), and no release below changes any of them.
 
+## Unreleased (method v0.2 draft: EV-02 and EV-05)
+
+Nothing here changes any released generator, scorer, profile or format: EV-03 and EV-10, their
+streams, scorers, profiles, test report 0.1 and every existing vector are byte for byte as they
+were. The method text v0.2 is a new file (`method/README.md`); v0.1 is unchanged.
+
+Core:
+
+- New formats: stop plan 0.1 and model-loss plan 0.1 (`ev02-stop-plan.json`,
+  `ev05-model-loss-plan.json` in a run directory), and test report 0.2 (test report 0.1 plus
+  EV-02 and EV-05; an EV-02 or EV-05 report is always 0.2). `be verify` reads 0.1 and 0.2.
+- New streams `be-stops/1` and `be-model-loss/1`, new scorers `ev02-stop/1` and
+  `ev05-model-loss/1`, new profiles `ev02-illustrative-0.1` and `ev05-illustrative-0.1`
+  (illustrative thresholds).
+- Golden runs (PASS, FAIL and INCONCLUSIVE of each, three tamper cases) and scoring goldens.
+
+Kit (draft; line-by-line human review before any hardware use):
+
+- `be run ev02` and `be run ev05`: one trial at a time, the operator's NEXT between trials, a
+  new watchdog tripwire for a stop that does not stop or let go; every EV-03 interlock applies.
+- Adapters: optional `trigger_stop` and `reset_stop` (the system's own stop request, and resuming
+  after a stop or a lost model). `sim-rover` and `sim-so101` simulate an external stop
+  (`--sim-estop-file`).
+- `be report` packages EV-02 and EV-05 runs.
+
 ## bounded-embodiment 0.1.1 and bounded-embodiment-kit 0.1.2 (2026-10-16)
 
 Core and kit:

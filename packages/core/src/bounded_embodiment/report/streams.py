@@ -22,7 +22,8 @@
 ``be-model-loss/1``
     The EV-05 trials (:func:`model_loss_stream`) of ``ev05-model-loss-plan.json``, one segment
     each: ``motion`` commands walking round the plan's path for a seeded time, then nothing for
-    ``silence_s`` (the model is lost), then ``restart`` commands continuing the walk. Params:
+    ``silence_s`` (the model is lost), then ``restart`` commands that walk on along the path for
+    half the restart and back to the last motion command for the other half. Params:
     ``{"hz", "trials", "motion_s", "silence_s", "restart_s", "step_cap"}``.
 
 be-control, be-waypoints and be-stops have no randomness; be-model-loss draws one motion time per
@@ -405,14 +406,18 @@ def model_loss_stream(
     """The be-model-loss/1 stream: ``trials`` segments, each a model that moves the machine and
     then dies (module docstring).
 
-    One walk runs through the whole stream: from the plan's start toward ``path[0]``, and on to
-    each next path command once the walk has landed on the current one, round the path again
-    after the last, at most ``step_cap`` per axis per command (:func:`walk_step`). In each trial
-    the motion lasts ``m`` seconds, ``m = uniform(motion_s[0], motion_s[1])`` drawn from
-    ``random.Random(seed).random()`` (one draw per trial, as be-hostile/1 draws, §7.5.2): ``n``
-    ``motion`` commands at ``i / hz`` with ``i / hz < m``. Then nothing for ``silence_s``: the
-    restart commands continue the walk at ``(n - 1) / hz + silence_s + j / hz`` while
-    ``j / hz < restart_s``."""
+    One walk runs through the motion of the whole stream: from the plan's start toward
+    ``path[0]``, and on to each next path command once the walk has landed on the current one,
+    round the path again after the last, at most ``step_cap`` per axis per command
+    (:func:`walk_step`). In each trial the motion lasts ``m`` seconds, ``m = uniform(motion_s[0],
+    motion_s[1])`` drawn from ``random.Random(seed).random()`` (one draw per trial, as be-hostile/1
+    draws, §7.5.2): ``n`` ``motion`` commands at ``i / hz`` with ``i / hz < m``. Then nothing for
+    ``silence_s``. Then ``r`` restart commands (``j / hz < restart_s``) at ``(n - 1) / hz +
+    silence_s + j / hz``: the first ``r // 2`` walk on round the path; the rest walk back, at most
+    ``step_cap`` per axis per command, toward the last motion command, which they reach by the
+    last restart command. The next trial's motion continues the walk from there, as if the restart
+    had not happened: the machine that held still through the restart is where the motion
+    continues, and one that followed the restart is back there too."""
     p = normalize(MODEL_LOSS, params)
     caps = _check_caps(space, p["step_cap"])
     _check_plan(plan, space, "ev05-model-loss-plan.json")
@@ -427,6 +432,7 @@ def _losses(space: CommandSpace, plan: ModelLossPlan, seed: int, p: dict, caps) 
     current = {k: plan.start[k] for k in keys}
     cursor = 0
     n_restart = ticks(p["restart_s"], hz)
+    n_out = n_restart // 2
     seq = 0
     for _ in range(p["trials"]):
         n_motion = ticks(generator._uniform(rng, lo, hi), hz)
@@ -435,9 +441,13 @@ def _losses(space: CommandSpace, plan: ModelLossPlan, seed: int, p: dict, caps) 
             yield Proposal(seq, i / hz, MOTION, dict(current))
             seq += 1
         t0 = (n_motion - 1) / hz + p["silence_s"]
+        lost, out, out_cursor = dict(current), dict(current), cursor
         for j in range(n_restart):
-            current, cursor = _round(current, path, cursor, keys, caps)
-            yield Proposal(seq, t0 + j / hz, RESTART, dict(current))
+            if j < n_out:  # on round the path ...
+                out, out_cursor = _round(out, path, out_cursor, keys, caps)
+            else:  # ... and back to the last motion command (n_restart - n_out >= n_out steps)
+                out = walk_step(out, lost, keys, caps)
+            yield Proposal(seq, t0 + j / hz, RESTART, dict(out))
             seq += 1
 
 

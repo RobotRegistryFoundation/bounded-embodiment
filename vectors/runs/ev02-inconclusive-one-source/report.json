@@ -190,7 +190,7 @@
         "stop_time_s": 0.12500000000000006,
         "stop_distance_m": 0.03467795571991067,
         "hold_until_s": 2.7,
-        "hold_displacement_m": 0.0012154935029481365,
+        "hold_displacement_m": 0.0012586256968918975,
         "longest_spacing_s": 0.040000000000000036,
         "status": "adequate",
         "notes": [],
@@ -214,7 +214,7 @@
         "stop_time_s": 0.10500000000000054,
         "stop_distance_m": 0.028996821640802174,
         "hold_until_s": 6.78,
-        "hold_displacement_m": 0.001380950930164322,
+        "hold_displacement_m": 0.0012976019001487522,
         "longest_spacing_s": 0.040000000000000036,
         "status": "adequate",
         "notes": [],
@@ -238,7 +238,7 @@
         "stop_time_s": 0.12499999999999922,
         "stop_distance_m": 0.03369329599300839,
         "hold_until_s": 10.9,
-        "hold_displacement_m": 0.0011908863971776401,
+        "hold_displacement_m": 0.0011958223162181203,
         "longest_spacing_s": 0.040000000000000924,
         "status": "adequate",
         "notes": [],
@@ -420,7 +420,7 @@
     {
       "alg": "Ed25519",
       "kid": "JJdiTUjDxOdGPEUxDG7iofB6pXrYDw9x3jGC_j6-djc",
-      "sig": "4vhTK48uO1AopnkfpJKV-Z0j1ZeguEWNcplt-BaZCjfJtux8HKKAWKZxpbHH4TUA5MdNjw_9Xp56Ztgl9Tb7Bg"
+      "sig": "y8URELeXhYDvRboOWGjOlYQE--03U47Oaep6X12tTdW9HlwLc-pHcl23QwXBm_TfTJEg0OllU6RNNeVIVWxLBw"
     }
   ]
 }

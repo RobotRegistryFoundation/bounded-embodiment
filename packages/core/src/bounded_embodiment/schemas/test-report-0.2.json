@@ -1017,7 +1017,7 @@
       }
     },
     "model_loss_params": {
-      "description": "be-model-loss: trials segments, each a motion of a seeded length from motion_s, a silence of silence_s and restart_s of restart commands, walking round the plan's path at most step_cap per axis per command at hz.",
+      "description": "be-model-loss: trials segments, each a motion of a seeded length from motion_s walking round the plan's path, a silence of silence_s, and restart_s of restart commands that walk on along the path for half of it and back to the last motion command for the rest; at most step_cap per axis per command, at hz.",
       "type": "object",
       "required": ["hz", "trials", "motion_s", "silence_s", "restart_s", "step_cap"],
       "additionalProperties": false,

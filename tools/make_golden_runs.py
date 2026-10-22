@@ -781,7 +781,7 @@ STOP_CAP = {"x": 0.005, "y": 0.005, "z": 0.005}  # 0.25 m/s at 50 Hz: the tool's
 STOP_PARAMS = {"hz": 50.0, "drive_s": 0.3, "return_s": 0.5, "step_cap": dict(STOP_CAP)}
 LOSS_PARAMS = {"hz": 50.0, "trials": 3, "motion_s": [1.0, 1.4], "silence_s": 3.0,
                "restart_s": 2.5, "step_cap": dict(STOP_CAP)}
-LOSS_SEED = 5
+LOSS_SEED = 7
 SPEED = 0.25
 #: Between two trials the bench waits this long after the hold window (the operator's NEXT).
 PAUSE_S = 1.0

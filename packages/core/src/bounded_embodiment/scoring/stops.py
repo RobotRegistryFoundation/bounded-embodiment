@@ -8,16 +8,18 @@ point's measurements after that instant (method §12.6, §13.6):
 - the speed there, by the speed rule of EV-03 (§7.8.4), over a span of 0.5 w to w;
 - the rest: the first measurement from the reference on that every measurement in the next
   ``still_window_s`` stays within the still radius of (and the instrument kept measuring to the
-  end of that window); the settled position: the last measurement at or before the end of that
-  window;
-- the stop time (rest time less the instant, plus U), the stop distance (the farthest any
+  end of that window); the settled position: the mean of the measurements from the rest to the
+  end of that window, and its time the last of them;
+- the stop time (rest time less the instant, plus U; 0 if that is negative), the stop distance (the farthest any
   measurement from the reference to the settled position lies from the reference), and the hold
   (the farthest any measurement in the ``hold_s`` after the settled position lies from it).
 
 The rest is the first measurement from which the point stays within the still radius r, so the
 last r or less of the travel comes after it: the stop time is early by the time the point takes
 to cover that (for a uniform deceleration a, at most sqrt(2 r / a)). The stop distance and the
-hold are measured from and to the settled position, so they are not shortened by it.
+hold are measured from and to the settled position, so they are not shortened by it. The settled
+position is a mean so that the hold compares each measurement with a steadier reference than one
+noisy measurement.
 - the trial's window: no spacing between consecutive measurements in it longer than the gap
   threshold or ``gap_max_s``, and measurements to its end.
 
@@ -213,6 +215,18 @@ def _at_rest(meas: Measurements, i: int, rules: StopRules) -> bool:
     return True
 
 
+def _mean(meas: Measurements, i_from: int, i_to: int) -> Point3:
+    """The mean position of measurements i_from to i_to (both included), each axis an exactly
+    rounded sum (math.fsum) divided by their number."""
+    pts = [meas.items[m][1] for m in range(i_from, i_to + 1)]
+    n = len(pts)
+    return (
+        math.fsum(p[0] for p in pts) / n,
+        math.fsum(p[1] for p in pts) / n,
+        math.fsum(p[2] for p in pts) / n,
+    )
+
+
 def _farthest(meas: Measurements, x0: Point3, i_from: int, t_to: float) -> float:
     """The largest distance from x0 of the measurements from index i_from up to time t_to."""
     worst = 0.0
@@ -286,8 +300,10 @@ def measure_stop(
         out.rest_t_s, out.rest = data.items[i_rest]
         # _at_rest saw a measurement at or after the window's end, so this is i_rest or later.
         i_settled = bisect.bisect_right(data.times, out.rest_t_s + rules.still_window_s) - 1
-        out.settled_t_s, out.settled = data.items[i_settled]
-        out.stop_time_s = out.rest_t_s - t_event + u
+        out.settled_t_s = data.times[i_settled]
+        out.settled = _mean(data, i_rest, i_settled)
+        # 0 when the rest is the reference itself (the point stopped within r of where it was)
+        out.stop_time_s = max(0.0, out.rest_t_s - t_event + u)
         out.stop_distance_m = _farthest(data, out.reference, i_ref, out.settled_t_s)
         out.hold_until_s = out.settled_t_s + rules.hold_s
         out.hold_displacement_m = _farthest(data, out.settled, i_settled, out.hold_until_s)

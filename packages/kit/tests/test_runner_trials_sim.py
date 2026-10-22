@@ -69,7 +69,7 @@ def cases(tmp_path_factory):
         for f in concurrent.futures.as_completed(futures):
             try:
                 results[futures[f]] = f.result()
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001 - kept per case; the case's own test raises it
                 results[futures[f]] = e
     return results
 

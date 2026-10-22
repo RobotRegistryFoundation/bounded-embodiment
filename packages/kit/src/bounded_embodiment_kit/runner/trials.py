@@ -38,7 +38,7 @@ from dataclasses import dataclass
 
 from bounded_embodiment.generator import Proposal
 
-from ..adapters.base import SendResult
+from ..adapters.base import ADAPTER_STOP_SOURCES, SendResult
 from .interlocks import confirm
 from .limits import DEFAULT, Limits
 from .session import CommandThread, SessionResult, run_session
@@ -212,6 +212,8 @@ class TrialCommandThread(CommandThread):
             self._state_if_due()
             time.sleep(0.002)
         self.next_go.clear()
+        if self.latch.tripped or self.abort.is_set():  # the last look before the reset
+            return False
         if prev.reset:
             try:
                 self.adapter.reset_stop(prev.source)
@@ -283,8 +285,12 @@ def _between_trials(latch, command: TrialCommandThread, prompt: Callable[[str], 
             return
         k = command.next_trial
         prev = command.segments[k - 1]
-        reset = (f" Reset {prev.source} first; the machine must not move when you do."
-                 if prev.reset or prev.kind == "stop" and prev.source != "stop_message" else "")
+        if prev.kind == "stop" and prev.source not in ADAPTER_STOP_SOURCES:  # the lab's external path
+            reset = f" Reset {prev.source} first; the machine must not move when you do."
+        elif prev.reset:
+            reset = f" After NEXT the kit resets {prev.source} through the adapter."
+        else:
+            reset = ""
         text = f"{prev.label} done ({k} of {n}).{reset} Hands clear of the machine; one hand on the hardware stop."
         if confirm(prompt, "NEXT", text):
             command.next_go.set()

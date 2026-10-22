@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import json
 import sys
+import threading
 from pathlib import Path
 
 import pytest
@@ -25,7 +26,8 @@ from bounded_embodiment_kit.adapters.sim_rover import SimRoverAdapter
 from bounded_embodiment_kit.runner import run as runmod
 from bounded_embodiment_kit.runner.kin import ArmFK
 from bounded_embodiment_kit.runner.limits import DEFAULT
-from bounded_embodiment_kit.runner.watchdog import TrialWatch, trial_trip
+from bounded_embodiment_kit.runner.trials import TrialSegment, _between_trials
+from bounded_embodiment_kit.runner.watchdog import StopLatch, TrialWatch, trial_trip
 
 # ----- the trial tripwire (a pure function) ----------------------------------------------------------
 
@@ -74,6 +76,50 @@ def test_too_few_samples_is_no_judgement():
 def test_the_trial_numbers_live_with_the_runners_limits():
     assert (DEFAULT.trial_rest_grace_s, DEFAULT.trial_still_m, DEFAULT.trial_still_window_s,
             DEFAULT.trial_hold_trip_m, DEFAULT.trial_pause_extra_s) == (0.5, 0.02, 0.5, 0.02, 0.5)
+
+
+# ----- the operator's NEXT between trials -------------------------------------------------------------
+
+
+class _AsksOnce:
+    """Stands in for TrialCommandThread: asks for NEXT before trial 2, and ends once it is given."""
+
+    def __init__(self, segment: TrialSegment):
+        self.segments, self.next_trial = (segment, segment), 1
+        self.asking, self.next_go = threading.Event(), threading.Event()
+        self.asking.set()
+
+    def is_alive(self) -> bool:
+        return not self.next_go.is_set()
+
+
+@pytest.mark.parametrize(("kind", "source", "reset", "said"), [
+    ("stop", "hardwired_stop", True, "Reset hardwired_stop first; the machine must not move"),
+    ("stop", "power_loss", True, "Reset power_loss first; the machine must not move"),
+    ("stop", "stop_message", True, "After NEXT the kit resets stop_message through the adapter."),
+    ("stop", "stop_message", False, None),
+    ("loss", "heartbeat_loss", True, "After NEXT the kit resets heartbeat_loss through the adapter."),
+    ("loss", "comms_loss", False, None),
+])
+def test_the_next_prompt_says_who_resets_the_source(kind, source, reset, said):
+    command = _AsksOnce(TrialSegment((), f"trial 1 ({source})", kind, source, 0.5, 1.0, reset))
+    latch, asked = StopLatch(lambda: 0.0), []
+    _between_trials(latch, command, lambda q: asked.append(q) or "NEXT", DEFAULT)
+    assert command.next_go.is_set() and not latch.tripped
+    assert len(asked) == 1 and asked[0].startswith(f"trial 1 ({source}) done (1 of 2).")
+    if said is None:
+        assert "eset" not in asked[0]
+    else:
+        assert said in asked[0]
+
+
+def test_anything_but_next_ends_the_run_through_the_latch():
+    latch = StopLatch(lambda: 0.0)
+    command = _AsksOnce(TrialSegment((), "trial 1 (stop_message)", "stop", "stop_message", 0.5, 1.0, True))
+    command.is_alive = lambda: not latch.tripped
+    _between_trials(latch, command, lambda q: "next", DEFAULT)
+    assert not command.next_go.is_set()
+    assert latch.kind == "operator" and "before trial 2 of 2" in latch.reason
 
 
 # ----- refusals before anything moves ---------------------------------------------------------------

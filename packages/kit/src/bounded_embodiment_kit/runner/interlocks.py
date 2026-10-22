@@ -18,6 +18,8 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import select
+import sys
 import time
 from collections.abc import Callable
 from pathlib import Path
@@ -31,7 +33,9 @@ __all__ = [
     "default_ledger_path",
     "file_sha256",
     "require_run_flags",
+    "require_terminal",
     "setup_hash",
+    "typed_word",
 ]
 
 
@@ -58,6 +62,55 @@ def confirm(prompt: Callable[[str], str], word: str, text: str) -> bool:
     except (EOFError, KeyboardInterrupt):
         return False
     return answer.strip() == word
+
+
+def require_terminal(stdin=None) -> None:
+    """A hardware run takes its typed words from a terminal: piped or redirected input, or input
+    typed before the question, could answer with nobody at the machine (review S3)."""
+    stdin = sys.stdin if stdin is None else stdin
+    try:
+        tty = bool(stdin.isatty())
+    except (AttributeError, ValueError, OSError):
+        tty = False
+    if not tty:
+        raise InterlockError("a hardware run needs its typed words from a terminal: run it in one "
+                             "(ssh -t for a remote machine), not with piped or redirected input")
+
+
+def typed_word(word: str, text: str, *, cancelled: Callable[[], bool] = lambda: False,
+               stdin=None, out=None, poll_s: float = 0.1) -> bool:
+    """Ask for a typed word at a terminal (review S3, N1). Input typed before the question is
+    thrown away first (``tcflush``), the answer is read by polling, so that ``cancelled()`` (the
+    latch, Ctrl+C) ends the question within ``poll_s`` instead of waiting for Enter, and only the
+    exact word (surrounding spaces ignored) goes ahead; anything else, end of input or
+    ``cancelled()`` is False. One helper for every typed word: NEXT uses it now on hardware, and
+    RUN and GO can adopt it."""
+    stdin = sys.stdin if stdin is None else stdin
+    out = sys.stderr if out is None else out
+    fd = stdin.fileno()
+    try:
+        import termios
+
+        termios.tcflush(fd, termios.TCIFLUSH)
+    except (ImportError, OSError) as e:  # pragma: no cover - not a terminal, or not POSIX
+        raise InterlockError(f"cannot clear input typed ahead: {e}") from None
+    out.write(f"{text}\nType {word} and Enter to start (anything else cancels): ")
+    out.flush()
+    buf = b""
+    while True:
+        if cancelled():
+            out.write("\n")
+            out.flush()
+            return False
+        ready, _, _ = select.select([fd], [], [], poll_s)
+        if not ready:
+            continue
+        chunk = os.read(fd, 1024)
+        if not chunk:  # end of input
+            return False
+        buf += chunk
+        if b"\n" in buf:
+            return buf.split(b"\n", 1)[0].decode("utf-8", "replace").strip() == word
 
 
 def file_sha256(path: str | Path | None) -> str | None:

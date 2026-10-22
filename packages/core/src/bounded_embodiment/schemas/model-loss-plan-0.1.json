@@ -1,0 +1,71 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://robotregistryfoundation.github.io/bounded-embodiment/schemas/model-loss-plan-0.1.json",
+  "$comment": "SPDX-FileCopyrightText: 2026 Craig Merry and contributors. SPDX-License-Identifier: CC-BY-4.0.",
+  "title": "Bounded Embodiment EV-05 model-loss plan 0.1",
+  "description": "What an EV-05 run does, declared by the lab before the run and saved in the run directory as ev05-model-loss-plan.json, listed and hashed in the report's raw_data like every other file. The plan names the stop point, the stop source whose limits apply to a lost model, the motion the machine makes while the model is alive (a walk from the start command around a cycle of path commands), and the resume rule: what the system under test requires before it moves again once the model's commands return. The be-model-loss/1 generator turns the plan, a seed and its parameters into the command stream; the ev05-model-loss/1 scorer reads the stop point, the source and the resume rule. Rules a schema cannot express (every command naming every axis of command-space.json and nothing else, within its limits; point naming an envelope point) are checked by bounded_embodiment.report.",
+  "type": "object",
+  "required": ["model_loss_plan_version", "start", "path", "resume"],
+  "additionalProperties": false,
+  "properties": {
+    "model_loss_plan_version": {
+      "const": "0.1",
+      "description": "Version of this format. Quote it in YAML (\"0.1\")."
+    },
+    "point": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_][A-Za-z0-9_.-]*$",
+      "description": "The envelope point whose stop is measured (the stop point). Default: the envelope's first point."
+    },
+    "source": {
+      "enum": ["heartbeat_loss", "comms_loss"],
+      "description": "The envelope stop source a lost model is: its stop.sources[] entry gives the stop limits when the envelope declares one, else the top-level stop block does. Default heartbeat_loss."
+    },
+    "start": {
+      "$ref": "#/$defs/command",
+      "description": "The command the motion walks from."
+    },
+    "path": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 100,
+      "items": { "$ref": "#/$defs/command" },
+      "description": "The commands the motion walks to, in order and round again: start, path[0], path[1], ..., path[last], path[0], ..."
+    },
+    "resume": {
+      "description": "What the system under test needs, once its model's commands come back after a loss, before it moves again. Declared by the lab from the integrator's documentation (envelope 0.2 has no member for it).",
+      "oneOf": [
+        {
+          "type": "object",
+          "required": ["rule"],
+          "additionalProperties": false,
+          "properties": {
+            "rule": { "const": "manual", "description": "Motion resumes only after an action outside the model's commands (an operator's reset, an explicit resume request): commands alone never restart it." },
+            "description": { "$ref": "#/$defs/text" }
+          }
+        },
+        {
+          "type": "object",
+          "required": ["rule", "after_ms"],
+          "additionalProperties": false,
+          "properties": {
+            "rule": { "const": "commands", "description": "Motion may resume once fresh commands have been arriving for after_ms." },
+            "after_ms": { "type": "integer", "minimum": 0, "maximum": 3600000 },
+            "description": { "$ref": "#/$defs/text" }
+          }
+        }
+      ]
+    },
+    "description": { "$ref": "#/$defs/text", "description": "Free text: how the motion was chosen." }
+  },
+  "$defs": {
+    "text": { "type": "string", "minLength": 1, "maxLength": 2000 },
+    "command": {
+      "type": "object",
+      "minProperties": 1,
+      "propertyNames": { "type": "string", "pattern": "^[!-~]{1,128}$" },
+      "additionalProperties": { "type": "number", "minimum": -1000000, "maximum": 1000000 },
+      "description": "A value for every axis of the command space."
+    }
+  }
+}

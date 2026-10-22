@@ -1,0 +1,1186 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://robotregistryfoundation.github.io/bounded-embodiment/schemas/test-report-0.2.json",
+  "$comment": "SPDX-FileCopyrightText: 2026 Craig Merry and contributors. SPDX-License-Identifier: CC-BY-4.0.",
+  "title": "Bounded Embodiment test report 0.2",
+  "description": "Test report 0.2 is test report 0.1 with two more tests, EV-02 (stop performance, scored by ev02-stop/1 from the be-stops/1 stream) and EV-05 (model loss, scored by ev05-model-loss/1 from the be-model-loss/1 stream), and their derived blocks stops and model_loss; an EV-02 or EV-05 report is always 0.2, and an EV-03 or EV-10 report may be 0.1 or 0.2 with the same members. The signed record of one run of a Bounded Embodiment test. It sits in a run directory next to the raw data it was built from (docs/seams/report.md). Two kinds of member: DECLARED members are what the lab states (the method, the run, the system under test, the instruments, the generator's seed and parameters, the profile, the signer); they are signed but no tool can check them against the world. DERIVED members (envelope.hash, generator.stream_sha256, commands_compared and aborted, window, achieved_rates, score, gaps, motion, liveness, coverage, accuracy, observations, flags, verdict, raw_data, statements) are computed by bounded_embodiment.report.build from the raw data, and `be verify` recomputes every one of them and compares the RFC 8785 bytes. A consistent report is one whose derived members follow from its files; that says nothing about whether the files came from the machine described. There is no assurance-level member and no registry number. Every structural object rejects unknown members.",
+  "type": "object",
+  "required": [
+    "report_version", "method", "test", "role", "run", "system_under_test", "adapter", "generator",
+    "instruments", "scoring", "safety", "provenance", "license", "rights_affirmed", "signer",
+    "envelope", "accuracy", "observations", "flags", "verdict", "raw_data", "statements"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "report_version": {
+      "const": "0.2",
+      "description": "Version of this report format."
+    },
+    "method": {
+      "description": "DECLARED. The method text the run followed.",
+      "type": "object",
+      "required": ["id", "version", "text_sha256"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "$ref": "#/$defs/name", "description": "Identifier of the method, for example bounded-embodiment." },
+        "version": { "$ref": "#/$defs/name", "description": "Version of the method text, for example 0.1." },
+        "text_sha256": { "$ref": "#/$defs/sha256", "description": "sha256 of the method text as published." }
+      }
+    },
+    "test": {
+      "enum": ["EV-02", "EV-03", "EV-05", "EV-10"],
+      "description": "DECLARED. The test: EV-02 (stop performance), EV-03 (hostile model), EV-05 (model loss) or EV-10 (liveness through waypoints)."
+    },
+    "role": {
+      "enum": ["test", "control", "rehearsal"],
+      "description": "DECLARED. test: a run of the test. control: a run meant to show the instrument sees an excursion (for example the control stream against an ungated machine). rehearsal: a dry run that is not evidence; every simulation is a rehearsal."
+    },
+    "reproduces": {
+      "type": "string",
+      "pattern": "^[a-z0-9](?:[a-z0-9-]{0,62}[a-z0-9])?/[a-z0-9]+-[0-9]{8}T[0-9]{6}Z-s[0-9]{1,20}$",
+      "description": "DECLARED, optional. The result this run reproduces, as <lab>/<run directory> in the results repository."
+    },
+    "control_run": {
+      "type": "string",
+      "pattern": "^(?:[a-z0-9](?:[a-z0-9-]{0,62}[a-z0-9])?/)?[a-z0-9]+-[0-9]{8}T[0-9]{6}Z-s[0-9]{1,20}$",
+      "description": "DECLARED, optional, not on a control run. The control run paired with this one, as <run directory> or <lab>/<run directory>."
+    },
+    "run": {
+      "description": "DECLARED. When and how the run was made.",
+      "type": "object",
+      "required": ["mode", "started_at", "ended_at", "operator", "clock"],
+      "additionalProperties": false,
+      "properties": {
+        "mode": { "enum": ["hardware", "simulation"] },
+        "started_at": { "$ref": "#/$defs/utc", "description": "UTC wall-clock time of the run start (t_s = 0 on the run's timebase)." },
+        "ended_at": { "$ref": "#/$defs/utc", "description": "UTC wall-clock time of the run end; not before started_at." },
+        "operator": { "$ref": "#/$defs/name", "description": "Who ran it (a name or a role)." },
+        "clock": {
+          "type": "object",
+          "required": ["offset_s", "uncertainty_s", "method"],
+          "additionalProperties": false,
+          "properties": {
+            "offset_s": { "type": "number", "minimum": -1000000000, "maximum": 1000000000, "description": "Offset applied to bring the primary instrument's timestamps onto the run timebase." },
+            "uncertainty_s": { "type": "number", "minimum": 0, "maximum": 3600, "description": "U: the uncertainty of that offset. The scoring window is widened by U at both ends." },
+            "method": { "$ref": "#/$defs/text", "description": "How the offset and U were found." }
+          }
+        }
+      }
+    },
+    "system_under_test": {
+      "description": "DECLARED. The machine, its gate and the software in the command path.",
+      "type": "object",
+      "required": ["machine", "gate", "software"],
+      "additionalProperties": false,
+      "properties": {
+        "machine": {
+          "type": "object",
+          "required": ["make", "model", "class"],
+          "additionalProperties": false,
+          "properties": {
+            "make": { "$ref": "#/$defs/name" },
+            "model": { "$ref": "#/$defs/name", "description": "The model, or \"withheld\"." },
+            "class": { "enum": ["arm", "mobile_base", "mobile_manipulator", "legged", "other"] },
+            "physical_max_tool_speed_mps": {
+              "type": "number", "exclusiveMinimum": 0, "maximum": 1000,
+              "description": "v_phys: the fastest the measured point can physically move (a machine capability, not an envelope limit). Without it no tracking gap can be bounded."
+            }
+          }
+        },
+        "gate": {
+          "type": "object",
+          "required": ["name", "version", "placement"],
+          "additionalProperties": false,
+          "properties": {
+            "name": { "$ref": "#/$defs/name", "description": "The gate under test, or \"none\" for an ungated machine." },
+            "version": { "$ref": "#/$defs/name" },
+            "placement": { "enum": ["none", "in_process", "separate_process", "separate_compute", "firmware", "other"] }
+          }
+        },
+        "software": {
+          "type": "array",
+          "maxItems": 100,
+          "items": {
+            "type": "object",
+            "required": ["name", "version"],
+            "additionalProperties": false,
+            "properties": {
+              "name": { "$ref": "#/$defs/name" },
+              "version": { "$ref": "#/$defs/name" },
+              "role": { "$ref": "#/$defs/name" }
+            }
+          }
+        }
+      }
+    },
+    "adapter": {
+      "description": "DECLARED. The adapter that turned proposals into the machine's commands, and the command space it was opened with. be verify checks command_space_sha256 against command-space.json.",
+      "type": "object",
+      "required": ["name", "version", "command_space_sha256"],
+      "additionalProperties": false,
+      "properties": {
+        "name": { "$ref": "#/$defs/name" },
+        "version": { "$ref": "#/$defs/name" },
+        "command_space_sha256": { "$ref": "#/$defs/sha256", "description": "The digest (sha256 of the RFC 8785 JSON) of command-space.json." }
+      }
+    },
+    "generator": {
+      "description": "name, version, seed and params are DECLARED; stream_sha256, commands_compared and aborted are DERIVED. be verify regenerates the stream from command-space.json (and ev10-waypoints.json for be-waypoints) and compares it with raw/commands.csv.",
+      "type": "object",
+      "required": ["name", "version", "seed", "params", "stream_sha256", "commands_compared", "aborted"],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "enum": ["be-hostile", "be-control", "be-waypoints", "be-stops", "be-model-loss"],
+          "description": "be-hostile: the hostile command generator (EV-03). be-control: the control stream, one lab far target (EV-03 control or rehearsal runs). be-waypoints: the EV-10 waypoint tour. be-stops: the EV-02 trials of ev02-stop-plan.json. be-model-loss: the EV-05 trials of ev05-model-loss-plan.json."
+        },
+        "version": { "const": "1" },
+        "seed": {
+          "type": "integer", "minimum": 0, "maximum": 9007199254740992,
+          "description": "The seed (0 to 2^53). be-control, be-waypoints and be-stops have no randomness; their seed is carried so every run has one, and it is part of their stream digest. be-model-loss draws each trial's motion time from it."
+        },
+        "params": { "type": "object", "description": "The generator's parameters, normalized (every default written out)." },
+        "stream_sha256": { "$ref": "#/$defs/sha256", "description": "DERIVED. Digest of the whole stream the declared generator, seed, params, command space and (be-waypoints, be-stops, be-model-loss) declared file produce (docs/seams/report.md)." },
+        "commands_compared": { "$ref": "#/$defs/count", "description": "DERIVED. Rows of raw/commands.csv compared with the regenerated stream." },
+        "aborted": { "type": "boolean", "description": "DERIVED. True when the rows are a strict prefix of the stream: the run stopped early." }
+      },
+      "allOf": [
+        { "if": { "properties": { "name": { "const": "be-hostile" } }, "required": ["name"] }, "then": { "properties": { "params": { "$ref": "#/$defs/hostile_params" } } } },
+        { "if": { "properties": { "name": { "const": "be-control" } }, "required": ["name"] }, "then": { "properties": { "params": { "$ref": "#/$defs/control_params" } } } },
+        { "if": { "properties": { "name": { "const": "be-waypoints" } }, "required": ["name"] }, "then": { "properties": { "params": { "$ref": "#/$defs/waypoint_params" } } } },
+        { "if": { "properties": { "name": { "const": "be-stops" } }, "required": ["name"] }, "then": { "properties": { "params": { "$ref": "#/$defs/stop_params" } } } },
+        { "if": { "properties": { "name": { "const": "be-model-loss" } }, "required": ["name"] }, "then": { "properties": { "params": { "$ref": "#/$defs/model_loss_params" } } } }
+      ]
+    },
+    "instruments": {
+      "description": "DECLARED. The instruments, exactly one of them primary: the primary instrument's samples are raw/samples.csv and its checks are raw/accuracy.csv.",
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 20,
+      "items": { "$ref": "#/$defs/instrument" },
+      "contains": { "type": "object", "properties": { "primary": { "const": true } }, "required": ["primary"] },
+      "minContains": 1,
+      "maxContains": 1
+    },
+    "scoring": {
+      "description": "DECLARED. The scorer and the profile (thresholds) it ran with. The profile is written out in full; one that differs from the packaged profile of its name, or has no packaged namesake, is flagged NONSTANDARD_PARAMS.",
+      "type": "object",
+      "required": ["method", "profile"],
+      "additionalProperties": false,
+      "properties": {
+        "method": { "enum": ["ev02-stop/1", "ev03-tool-point/1", "ev05-model-loss/1", "ev10-waypoints/1"] },
+        "profile": { "$ref": "#/$defs/profile" }
+      }
+    },
+    "safety": {
+      "description": "DECLARED. The protections in place during the run.",
+      "type": "object",
+      "required": ["hardware_stop", "fk_tripwire"],
+      "additionalProperties": false,
+      "properties": {
+        "hardware_stop": { "$ref": "#/$defs/text", "description": "The hardware stop path (for example a relay on servo power), or why there was none." },
+        "fk_tripwire": { "enum": ["on", "override"], "description": "Whether the kit's forward-kinematics tripwire was running." }
+      }
+    },
+    "provenance": {
+      "description": "DECLARED. The software that built the report. core_version is set by report.build to the core that computed the derived members.",
+      "type": "object",
+      "required": ["core_version", "kit", "python", "platform"],
+      "additionalProperties": false,
+      "properties": {
+        "core_version": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+[A-Za-z0-9.+-]*$", "maxLength": 64 },
+        "kit": {
+          "type": "object",
+          "required": ["name", "version", "git_sha", "dirty"],
+          "additionalProperties": false,
+          "properties": {
+            "name": { "$ref": "#/$defs/name" },
+            "version": { "$ref": "#/$defs/name" },
+            "git_sha": { "type": ["string", "null"], "pattern": "^[0-9a-f]{40}(?:[0-9a-f]{24})?$" },
+            "dirty": { "type": ["boolean", "null"] }
+          }
+        },
+        "python": { "$ref": "#/$defs/name" },
+        "platform": { "$ref": "#/$defs/name" }
+      }
+    },
+    "license": {
+      "const": "CC-BY-4.0",
+      "description": "DECLARED. The licence the lab grants on this report and its raw data."
+    },
+    "rights_affirmed": {
+      "const": true,
+      "description": "DECLARED. The signer affirms the lab may license the data so."
+    },
+    "signer": {
+      "description": "DECLARED. Who signed. kid must be the kid of a valid Ed25519 signature entry made with a key from the verifier's keyring.",
+      "type": "object",
+      "required": ["name", "organization", "role", "kid"],
+      "additionalProperties": false,
+      "properties": {
+        "name": { "$ref": "#/$defs/name" },
+        "organization": { "$ref": "#/$defs/name" },
+        "role": { "$ref": "#/$defs/name" },
+        "kid": { "$ref": "#/$defs/kid" }
+      }
+    },
+    "signature": {
+      "description": "Signature entries (bounded_embodiment.signing): each covers the RFC 8785 JSON of the report without this member. Absent on an unsigned report.",
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 16,
+      "items": {
+        "type": "object",
+        "required": ["alg", "kid", "sig"],
+        "additionalProperties": false,
+        "properties": {
+          "alg": { "type": "string", "maxLength": 32 },
+          "kid": { "type": "string", "maxLength": 128 },
+          "sig": { "type": "string", "maxLength": 8192 }
+        }
+      }
+    },
+    "envelope": {
+      "description": "DERIVED. The hash of envelope.json (sha256 of its RFC 8785 JSON without signature). The envelope's self-declared level is never copied into a report.",
+      "type": "object",
+      "required": ["hash"],
+      "additionalProperties": false,
+      "properties": { "hash": { "$ref": "#/$defs/sha256" } }
+    },
+    "window": {
+      "description": "DERIVED. The scoring window, or null when the run sent no commands.",
+      "oneOf": [
+        { "type": "null" },
+        {
+          "type": "object",
+          "required": ["start_s", "end_s", "length_s", "first_command_s", "last_command_s", "run_duration_s", "command_spacing_s", "covered_s", "commands", "clock_uncertainty_s", "tail_s"],
+          "additionalProperties": false,
+          "properties": {
+            "start_s": { "type": "number" },
+            "end_s": { "type": "number" },
+            "length_s": { "type": "number" },
+            "first_command_s": { "type": "number" },
+            "last_command_s": { "type": "number" },
+            "run_duration_s": { "type": "number" },
+            "command_spacing_s": { "type": "number" },
+            "covered_s": { "type": "number" },
+            "commands": { "$ref": "#/$defs/count" },
+            "clock_uncertainty_s": { "type": "number" },
+            "tail_s": { "type": "number" }
+          }
+        }
+      ]
+    },
+    "achieved_rates": {
+      "description": "DERIVED. Command rates actually achieved, per strategy and for all non-fast commands.",
+      "type": "object",
+      "required": ["base_commands", "base_duration_s", "base_rate_hz", "strategies"],
+      "additionalProperties": false,
+      "properties": {
+        "base_commands": { "$ref": "#/$defs/count" },
+        "base_duration_s": { "type": "number" },
+        "base_rate_hz": { "$ref": "#/$defs/number_or_null" },
+        "strategies": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["strategy", "commands", "segments", "duration_s", "rate_hz"],
+            "additionalProperties": false,
+            "properties": {
+              "strategy": { "type": "string" },
+              "commands": { "$ref": "#/$defs/count" },
+              "segments": { "$ref": "#/$defs/count" },
+              "duration_s": { "type": "number" },
+              "rate_hz": { "$ref": "#/$defs/number_or_null" }
+            }
+          }
+        }
+      }
+    },
+    "score": {
+      "description": "DERIVED. Position and speed excursions per envelope point.",
+      "type": "object",
+      "required": ["sigma_jitter_m", "speed_allowance_mps", "points"],
+      "additionalProperties": false,
+      "properties": {
+        "sigma_jitter_m": { "$ref": "#/$defs/number_or_null" },
+        "speed_allowance_mps": { "type": "number" },
+        "speed_span_min_s": { "type": "number", "description": "Optional: the shortest span a speed is taken over (0.75 of speed_window_s)." },
+        "points": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "point", "has_zones", "samples", "position_excursions", "worst_clearance_m", "worst_clearance_t_s",
+              "min_clearance_m", "min_clearance_t_s", "speed_limit_mps", "speed_spans", "max_speed_mps",
+              "max_speed_t_s", "speed_excursions", "worst_speed_mps", "worst_speed_t_s"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "point": { "$ref": "#/$defs/point_id" },
+              "has_zones": { "type": "boolean" },
+              "samples": { "$ref": "#/$defs/count" },
+              "position_excursions": { "$ref": "#/$defs/count" },
+              "worst_clearance_m": { "$ref": "#/$defs/number_or_null" },
+              "worst_clearance_t_s": { "$ref": "#/$defs/number_or_null" },
+              "min_clearance_m": { "$ref": "#/$defs/number_or_null" },
+              "min_clearance_t_s": { "$ref": "#/$defs/number_or_null" },
+              "speed_limit_mps": { "type": "number" },
+              "speed_spans": { "$ref": "#/$defs/count" },
+              "max_speed_mps": { "$ref": "#/$defs/number_or_null" },
+              "max_speed_t_s": { "$ref": "#/$defs/number_or_null" },
+              "speed_excursions": { "$ref": "#/$defs/count" },
+              "worst_speed_mps": { "$ref": "#/$defs/number_or_null" },
+              "worst_speed_t_s": { "$ref": "#/$defs/number_or_null" }
+            }
+          }
+        }
+      }
+    },
+    "gaps": {
+      "description": "DERIVED. Tracking gaps of each required point.",
+      "type": "object",
+      "required": ["physical_max_tool_speed_mps", "points"],
+      "additionalProperties": false,
+      "properties": {
+        "physical_max_tool_speed_mps": { "$ref": "#/$defs/number_or_null" },
+        "min_rate_hz": { "type": "number", "description": "Optional: the lowest instrument rate at which speed can be checked." },
+        "points": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["point", "samples", "median_spacing_s", "median_rate_hz", "gap_threshold_s", "count", "longest_s", "total_s", "fraction", "unbounded", "longest_spacing_s"],
+            "additionalProperties": false,
+            "properties": {
+              "point": { "$ref": "#/$defs/point_id" },
+              "samples": { "$ref": "#/$defs/count" },
+              "median_spacing_s": { "$ref": "#/$defs/number_or_null" },
+              "median_rate_hz": { "$ref": "#/$defs/number_or_null" },
+              "gap_threshold_s": { "type": "number" },
+              "count": { "$ref": "#/$defs/count" },
+              "longest_s": { "$ref": "#/$defs/number_or_null" },
+              "total_s": { "type": "number" },
+              "fraction": { "$ref": "#/$defs/number_or_null" },
+              "unbounded": { "$ref": "#/$defs/count" },
+              "longest_spacing_s": { "$ref": "#/$defs/number_or_null" }
+            }
+          }
+        }
+      }
+    },
+    "motion": {
+      "description": "DERIVED, EV-03 only. The share of whole motion windows in which a required point moved.",
+      "type": "object",
+      "required": ["window_s", "threshold_m", "windows", "moving", "share"],
+      "additionalProperties": false,
+      "properties": {
+        "window_s": { "type": "number" },
+        "threshold_m": { "type": "number" },
+        "windows": { "$ref": "#/$defs/count" },
+        "moving": { "$ref": "#/$defs/count" },
+        "share": { "$ref": "#/$defs/number_or_null" }
+      }
+    },
+    "liveness": {
+      "description": "DERIVED, EV-10 only. Waypoint visits and whether each reached its waypoint.",
+      "type": "object",
+      "required": ["point", "reach_radius_m", "inside_min_m", "grace_s", "waypoints", "visits", "visits_total", "visits_reached", "reach_fraction", "distinct_waypoints_visited"],
+      "additionalProperties": false,
+      "properties": {
+        "point": { "$ref": "#/$defs/point_id" },
+        "reach_radius_m": { "type": "number" },
+        "inside_min_m": { "type": "number" },
+        "grace_s": { "type": "number" },
+        "separation_min_m": { "type": "number", "description": "Optional: how far apart declared waypoints must be." },
+        "closest_pair": {
+          "description": "Optional: the two declared waypoints closest together, or null with fewer than two.",
+          "oneOf": [
+            { "type": "null" },
+            {
+              "type": "object",
+              "required": ["ids", "distance_m"],
+              "additionalProperties": false,
+              "properties": {
+                "ids": { "type": "array", "minItems": 2, "maxItems": 2, "items": { "$ref": "#/$defs/waypoint_id" } },
+                "distance_m": { "type": "number" }
+              }
+            }
+          ]
+        },
+        "pairs_too_close": { "$ref": "#/$defs/count", "description": "Optional: declared waypoint pairs closer than separation_min_m." },
+        "waypoints": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["id", "position_m", "clearance_m", "visits", "visits_reached"],
+            "additionalProperties": false,
+            "properties": {
+              "id": { "$ref": "#/$defs/waypoint_id" },
+              "position_m": { "$ref": "#/$defs/xyz" },
+              "clearance_m": { "type": "number" },
+              "visits": { "$ref": "#/$defs/count" },
+              "visits_reached": { "$ref": "#/$defs/count" }
+            }
+          }
+        },
+        "visits": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["waypoint", "start_s", "end_s", "reached", "closest_m", "first_reach_t_s"],
+            "additionalProperties": false,
+            "properties": {
+              "waypoint": { "$ref": "#/$defs/waypoint_id" },
+              "start_s": { "type": "number" },
+              "end_s": { "type": "number" },
+              "reached": { "type": "boolean" },
+              "closest_m": { "$ref": "#/$defs/number_or_null" },
+              "first_reach_t_s": { "$ref": "#/$defs/number_or_null" }
+            }
+          }
+        },
+        "visits_total": { "$ref": "#/$defs/count" },
+        "visits_reached": { "$ref": "#/$defs/count" },
+        "reach_fraction": { "$ref": "#/$defs/number_or_null" },
+        "distinct_waypoints_visited": { "$ref": "#/$defs/count" }
+      }
+    },
+    "stops": {
+      "description": "DERIVED, EV-02 only. Each trial's stop against the envelope's limits for its source, and each source's trials (method §12.6).",
+      "type": "object",
+      "required": ["point", "speed_limit_mps", "approach_speed_min_mps", "sigma_jitter_m", "still_radius_m", "still_window_s", "hold_s", "clock_uncertainty_s", "samples", "median_spacing_s", "median_rate_hz", "min_rate_hz", "gap_threshold_s", "sources", "trials"],
+      "additionalProperties": false,
+      "properties": {
+        "point": { "$ref": "#/$defs/point_id" },
+        "speed_limit_mps": { "type": "number" },
+        "approach_speed_min_mps": { "type": "number" },
+        "sigma_jitter_m": { "$ref": "#/$defs/number_or_null" },
+        "still_radius_m": { "type": "number" },
+        "still_window_s": { "type": "number" },
+        "hold_s": { "type": "number" },
+        "clock_uncertainty_s": { "type": "number" },
+        "samples": { "$ref": "#/$defs/count" },
+        "median_spacing_s": { "$ref": "#/$defs/number_or_null" },
+        "median_rate_hz": { "$ref": "#/$defs/number_or_null" },
+        "min_rate_hz": { "type": "number" },
+        "gap_threshold_s": { "type": "number" },
+        "sources": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["source", "limits_from", "max_time_s", "max_distance_m", "trials", "trials_adequate", "drives_adequate"],
+            "additionalProperties": false,
+            "properties": {
+              "source": { "$ref": "#/$defs/stop_source" },
+              "limits_from": { "$ref": "#/$defs/limits_from" },
+              "max_time_s": { "type": "number" },
+              "max_distance_m": { "type": "number" },
+              "trials": { "$ref": "#/$defs/count" },
+              "trials_adequate": { "$ref": "#/$defs/count" },
+              "drives_adequate": { "type": "array", "items": { "$ref": "#/$defs/plan_id" } }
+            }
+          }
+        },
+        "trials": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["trial", "source", "drive", "first_command_s", "stop_s", "next_command_s", "max_time_s", "max_distance_m", "reference_t_s", "approach_speed_mps", "approach_span_s", "approach", "rest_t_s", "settled_t_s", "stop_time_s", "stop_distance_m", "hold_until_s", "hold_displacement_m", "longest_spacing_s", "status", "notes", "failures"],
+            "additionalProperties": false,
+            "properties": {
+              "trial": { "$ref": "#/$defs/count" },
+              "source": { "$ref": "#/$defs/stop_source" },
+              "drive": { "oneOf": [{ "type": "null" }, { "$ref": "#/$defs/plan_id" }] },
+              "first_command_s": { "type": "number" },
+              "stop_s": { "type": "number" },
+              "next_command_s": { "$ref": "#/$defs/number_or_null" },
+              "max_time_s": { "type": "number" },
+              "max_distance_m": { "type": "number" },
+              "reference_t_s": { "$ref": "#/$defs/number_or_null" },
+              "approach_speed_mps": { "$ref": "#/$defs/number_or_null" },
+              "approach_span_s": { "$ref": "#/$defs/number_or_null" },
+              "approach": { "$ref": "#/$defs/speed_class" },
+              "rest_t_s": { "$ref": "#/$defs/number_or_null" },
+              "settled_t_s": { "$ref": "#/$defs/number_or_null" },
+              "stop_time_s": { "$ref": "#/$defs/number_or_null" },
+              "stop_distance_m": { "$ref": "#/$defs/number_or_null" },
+              "hold_until_s": { "$ref": "#/$defs/number_or_null" },
+              "hold_displacement_m": { "$ref": "#/$defs/number_or_null" },
+              "longest_spacing_s": { "$ref": "#/$defs/number_or_null" },
+              "status": { "$ref": "#/$defs/trial_status" },
+              "notes": { "type": "array", "items": { "type": "string" } },
+              "failures": { "type": "array", "items": { "enum": ["STOP_TIME_EXCEEDED", "STOP_DISTANCE_EXCEEDED", "STOP_NOT_HELD"] } }
+            }
+          }
+        }
+      }
+    },
+    "model_loss": {
+      "description": "DERIVED, EV-05 only. Each trial's stop after the model's last command, against the model timeout plus the stop limits of the plan's source, and the restart check (method §13.6).",
+      "type": "object",
+      "required": ["point", "source", "limits_from", "speed_limit_mps", "model_timeout_s", "max_time_s", "max_distance_m", "allowed_time_s", "allowed_distance_m", "resume", "restart_check_s", "loss_speed_min_mps", "sigma_jitter_m", "still_radius_m", "still_window_s", "hold_s", "clock_uncertainty_s", "samples", "median_spacing_s", "median_rate_hz", "min_rate_hz", "gap_threshold_s", "trials", "trials_adequate"],
+      "additionalProperties": false,
+      "properties": {
+        "point": { "$ref": "#/$defs/point_id" },
+        "source": { "enum": ["heartbeat_loss", "comms_loss"] },
+        "limits_from": { "$ref": "#/$defs/limits_from" },
+        "speed_limit_mps": { "type": "number" },
+        "model_timeout_s": { "type": "number" },
+        "max_time_s": { "type": "number" },
+        "max_distance_m": { "type": "number" },
+        "allowed_time_s": { "type": "number" },
+        "allowed_distance_m": { "type": "number" },
+        "resume": {
+          "oneOf": [
+            { "type": "object", "required": ["rule"], "additionalProperties": false, "properties": { "rule": { "const": "manual" } } },
+            { "type": "object", "required": ["rule", "after_ms"], "additionalProperties": false, "properties": { "rule": { "const": "commands" }, "after_ms": { "type": "integer", "minimum": 0, "maximum": 3600000 } } }
+          ]
+        },
+        "restart_check_s": { "type": "number" },
+        "loss_speed_min_mps": { "type": "number" },
+        "sigma_jitter_m": { "$ref": "#/$defs/number_or_null" },
+        "still_radius_m": { "type": "number" },
+        "still_window_s": { "type": "number" },
+        "hold_s": { "type": "number" },
+        "clock_uncertainty_s": { "type": "number" },
+        "samples": { "$ref": "#/$defs/count" },
+        "median_spacing_s": { "$ref": "#/$defs/number_or_null" },
+        "median_rate_hz": { "$ref": "#/$defs/number_or_null" },
+        "min_rate_hz": { "type": "number" },
+        "gap_threshold_s": { "type": "number" },
+        "trials": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["trial", "first_command_s", "loss_s", "restart_s", "restart_last_s", "next_command_s", "silence_s", "restart_covered_s", "reference_t_s", "speed_at_loss_mps", "speed_span_s", "speed", "rest_t_s", "settled_t_s", "stop_time_s", "stop_distance_m", "hold_until_s", "hold_displacement_m", "restart_until_s", "restart_displacement_m", "longest_spacing_s", "status", "notes", "failures"],
+            "additionalProperties": false,
+            "properties": {
+              "trial": { "$ref": "#/$defs/count" },
+              "first_command_s": { "type": "number" },
+              "loss_s": { "type": "number" },
+              "restart_s": { "$ref": "#/$defs/number_or_null" },
+              "restart_last_s": { "$ref": "#/$defs/number_or_null" },
+              "next_command_s": { "$ref": "#/$defs/number_or_null" },
+              "silence_s": { "$ref": "#/$defs/number_or_null" },
+              "restart_covered_s": { "type": "number" },
+              "reference_t_s": { "$ref": "#/$defs/number_or_null" },
+              "speed_at_loss_mps": { "$ref": "#/$defs/number_or_null" },
+              "speed_span_s": { "$ref": "#/$defs/number_or_null" },
+              "speed": { "$ref": "#/$defs/speed_class" },
+              "rest_t_s": { "$ref": "#/$defs/number_or_null" },
+              "settled_t_s": { "$ref": "#/$defs/number_or_null" },
+              "stop_time_s": { "$ref": "#/$defs/number_or_null" },
+              "stop_distance_m": { "$ref": "#/$defs/number_or_null" },
+              "hold_until_s": { "$ref": "#/$defs/number_or_null" },
+              "hold_displacement_m": { "$ref": "#/$defs/number_or_null" },
+              "restart_until_s": { "$ref": "#/$defs/number_or_null" },
+              "restart_displacement_m": { "$ref": "#/$defs/number_or_null" },
+              "longest_spacing_s": { "$ref": "#/$defs/number_or_null" },
+              "status": { "$ref": "#/$defs/trial_status" },
+              "notes": { "type": "array", "items": { "type": "string" } },
+              "failures": { "type": "array", "items": { "enum": ["LOSS_STOP_TIME_EXCEEDED", "LOSS_STOP_DISTANCE_EXCEEDED", "LOSS_STOP_NOT_HELD", "LOSS_RESUMED_EARLY"] } }
+            }
+          }
+        },
+        "trials_adequate": { "$ref": "#/$defs/count" }
+      }
+    },
+    "coverage": {
+      "description": "DERIVED. How close each point came to each face of its keep-in zones and to each keep-out zone.",
+      "type": "object",
+      "required": ["near_band_m", "points"],
+      "additionalProperties": false,
+      "properties": {
+        "near_band_m": { "type": "number" },
+        "points": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["point", "samples", "faces", "keep_outs"],
+            "additionalProperties": false,
+            "properties": {
+              "point": { "$ref": "#/$defs/point_id" },
+              "samples": { "$ref": "#/$defs/count" },
+              "faces": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "required": ["zone", "face", "closest_m", "near_fraction"],
+                  "additionalProperties": false,
+                  "properties": {
+                    "zone": { "type": "string" },
+                    "face": { "type": "string" },
+                    "closest_m": { "$ref": "#/$defs/number_or_null" },
+                    "near_fraction": { "$ref": "#/$defs/number_or_null" }
+                  }
+                }
+              },
+              "keep_outs": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "required": ["zone", "closest_m", "near_fraction"],
+                  "additionalProperties": false,
+                  "properties": {
+                    "zone": { "type": "string" },
+                    "closest_m": { "$ref": "#/$defs/number_or_null" },
+                    "near_fraction": { "$ref": "#/$defs/number_or_null" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "accuracy": {
+      "description": "DERIVED. The primary instrument's pre-run accuracy check, post-run drift and static jitter, from raw/accuracy.csv. age_s is run.started_at minus the primary instrument's accuracy_check.at.",
+      "type": "object",
+      "required": ["age_s", "pre", "post", "jitter", "limits"],
+      "additionalProperties": false,
+      "properties": {
+        "age_s": { "$ref": "#/$defs/number_or_null" },
+        "pre": {
+          "type": "object",
+          "required": ["points", "p95_error_m", "max_error_m", "errors"],
+          "additionalProperties": false,
+          "properties": {
+            "points": { "$ref": "#/$defs/count" },
+            "p95_error_m": { "$ref": "#/$defs/number_or_null" },
+            "max_error_m": { "$ref": "#/$defs/number_or_null" },
+            "errors": { "type": "array", "items": { "$ref": "#/$defs/labelled_error" } }
+          }
+        },
+        "post": {
+          "type": "object",
+          "required": ["points", "compared", "max_drift_m", "drifts"],
+          "additionalProperties": false,
+          "properties": {
+            "points": { "$ref": "#/$defs/count" },
+            "compared": { "$ref": "#/$defs/count" },
+            "max_drift_m": { "$ref": "#/$defs/number_or_null" },
+            "drifts": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": ["label", "drift_m"],
+                "additionalProperties": false,
+                "properties": { "label": { "type": "string" }, "drift_m": { "type": "number" } }
+              }
+            }
+          }
+        },
+        "jitter": {
+          "type": "object",
+          "required": ["sigma_m", "labels"],
+          "additionalProperties": false,
+          "properties": {
+            "sigma_m": { "$ref": "#/$defs/number_or_null" },
+            "labels": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": ["label", "samples", "sigma_m"],
+                "additionalProperties": false,
+                "properties": {
+                  "label": { "type": "string" },
+                  "samples": { "$ref": "#/$defs/count" },
+                  "sigma_m": { "$ref": "#/$defs/number_or_null" }
+                }
+              }
+            }
+          }
+        },
+        "robot_state_match": {
+          "description": "Optional: how closely the instrument track matches the encoder forward kinematics of raw/state.csv (a track copied from the robot's own state); null without fk rows.",
+          "oneOf": [
+            { "type": "null" },
+            {
+              "type": "object",
+              "required": ["max_dt_s", "max_distance_m", "min_matches", "min_percent", "points"],
+              "additionalProperties": false,
+              "properties": {
+                "max_dt_s": { "type": "number" },
+                "max_distance_m": { "type": "number" },
+                "min_matches": { "type": "number" },
+                "min_percent": { "type": "number" },
+                "points": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "required": ["point", "samples", "fk_samples", "matches", "within", "share"],
+                    "additionalProperties": false,
+                    "properties": {
+                      "point": { "$ref": "#/$defs/point_id" },
+                      "samples": { "$ref": "#/$defs/count" },
+                      "fk_samples": { "$ref": "#/$defs/count" },
+                      "matches": { "$ref": "#/$defs/count" },
+                      "within": { "$ref": "#/$defs/count" },
+                      "share": { "$ref": "#/$defs/number_or_null" }
+                    }
+                  }
+                }
+              }
+            }
+          ]
+        },
+        "limits": {
+          "type": "object",
+          "required": ["min_points", "max_age_s", "p95_max_m", "max_max_m", "drift_max_m"],
+          "additionalProperties": false,
+          "properties": {
+            "min_points": { "$ref": "#/$defs/count" },
+            "max_age_s": { "type": "number" },
+            "p95_max_m": { "type": "number" },
+            "max_max_m": { "type": "number" },
+            "drift_max_m": { "type": "number" }
+          }
+        }
+      }
+    },
+    "observations": {
+      "description": "DERIVED, never scored. EV-03 and EV-10: encoder forward-kinematics excursions (from raw/state.csv) and the excursions a run showed when an earlier verdict step decided. EV-02 and EV-05: the stop failures a run showed when step 1 decided, and those of trials too fast to compare with the declared limits.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "encoder_fk_observation": {
+          "oneOf": [
+            { "type": "null" },
+            {
+              "type": "object",
+              "required": ["label", "points"],
+              "additionalProperties": false,
+              "properties": {
+                "label": { "const": "encoder_fk_observation" },
+                "points": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "required": ["point", "samples", "position_excursions", "worst_clearance_m", "worst_clearance_t_s"],
+                    "additionalProperties": false,
+                    "properties": {
+                      "point": { "$ref": "#/$defs/point_id" },
+                      "samples": { "$ref": "#/$defs/count" },
+                      "position_excursions": { "$ref": "#/$defs/count" },
+                      "worst_clearance_m": { "$ref": "#/$defs/number_or_null" },
+                      "worst_clearance_t_s": { "$ref": "#/$defs/number_or_null" }
+                    }
+                  }
+                }
+              }
+            }
+          ]
+        },
+        "excursions_seen_but_not_scored": { "type": "array", "items": { "$ref": "#/$defs/reason" } },
+        "failures_seen_but_not_scored": { "type": "array", "items": { "$ref": "#/$defs/reason" } }
+      }
+    },
+    "flags": {
+      "description": "DERIVED. Scorer flags, sorted by code. Flags never change the verdict.",
+      "type": "array",
+      "items": { "$ref": "#/$defs/reason" }
+    },
+    "verdict": {
+      "description": "DERIVED. PASS, FAIL or INCONCLUSIVE with the reasons of the verdict step that decided (docs/seams/scoring.md).",
+      "type": "object",
+      "required": ["result", "reasons", "points_measured", "points_unmeasured"],
+      "additionalProperties": false,
+      "properties": {
+        "result": { "enum": ["PASS", "FAIL", "INCONCLUSIVE"] },
+        "reasons": { "type": "array", "items": { "$ref": "#/$defs/reason" } },
+        "points_measured": { "type": "array", "items": { "$ref": "#/$defs/point_id" } },
+        "points_unmeasured": { "type": "array", "items": { "$ref": "#/$defs/point_id" } }
+      }
+    },
+    "raw_data": {
+      "description": "DERIVED. Every file of the run directory except report.json, sorted by path, with its sha256 and size. be verify refuses a run directory holding a file this list does not name.",
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 10000,
+      "items": {
+        "type": "object",
+        "required": ["path", "sha256", "bytes", "role", "format"],
+        "additionalProperties": false,
+        "properties": {
+          "path": {
+            "type": "string",
+            "maxLength": 1024,
+            "pattern": "^(?:[A-Za-z0-9][A-Za-z0-9._-]{0,127}/)*[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+          },
+          "sha256": { "$ref": "#/$defs/sha256" },
+          "bytes": { "$ref": "#/$defs/count" },
+          "role": { "enum": ["envelope", "command_space", "waypoints", "stop_plan", "model_loss_plan", "samples", "commands", "state", "accuracy", "instrument", "notes", "photo"] },
+          "format": { "enum": ["json", "be-samples-csv/1", "be-commands-csv/1", "be-state-csv/1", "be-accuracy-csv/1", "markdown", "jpeg", "bytes"] }
+        }
+      }
+    },
+    "statements": {
+      "description": "DERIVED. Fixed statements every report carries, and where the scored measurements came from.",
+      "type": "object",
+      "required": ["not_certification", "thresholds_are_illustrative", "measurement_source"],
+      "additionalProperties": false,
+      "properties": {
+        "not_certification": { "const": true },
+        "thresholds_are_illustrative": { "const": true },
+        "measurement_source": {
+          "enum": ["external_instrument", "internal_instrument", "robot_encoders", "simulation"],
+          "description": "From the primary instrument: simulation (simulation_ground_truth), robot_encoders (robot_encoders_fk), external_instrument (declared external) or internal_instrument (anything else)."
+        }
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "test": { "const": "EV-03" } }, "required": ["test"] },
+      "then": {
+        "required": ["window", "achieved_rates", "score", "gaps", "motion", "coverage"],
+        "properties": {
+          "liveness": { "not": {}, "description": "EV-10 only." },
+          "stops": { "not": {}, "description": "EV-02 only." },
+          "model_loss": { "not": {}, "description": "EV-05 only." },
+          "scoring": { "properties": { "method": { "const": "ev03-tool-point/1" } } },
+          "observations": { "$ref": "#/$defs/excursion_observations" }
+        }
+      }
+    },
+    {
+      "if": { "properties": { "test": { "const": "EV-10" } }, "required": ["test"] },
+      "then": {
+        "required": ["window", "achieved_rates", "score", "gaps", "liveness", "coverage"],
+        "properties": {
+          "motion": { "not": {}, "description": "EV-03 only." },
+          "stops": { "not": {}, "description": "EV-02 only." },
+          "model_loss": { "not": {}, "description": "EV-05 only." },
+          "scoring": { "properties": { "method": { "const": "ev10-waypoints/1" } } },
+          "observations": { "$ref": "#/$defs/excursion_observations" }
+        }
+      }
+    },
+    {
+      "if": { "properties": { "test": { "const": "EV-02" } }, "required": ["test"] },
+      "then": {
+        "required": ["stops"],
+        "properties": {
+          "window": { "not": {} }, "achieved_rates": { "not": {} }, "score": { "not": {} }, "gaps": { "not": {} },
+          "motion": { "not": {} }, "liveness": { "not": {} }, "coverage": { "not": {} }, "model_loss": { "not": {} },
+          "scoring": { "properties": { "method": { "const": "ev02-stop/1" } } },
+          "generator": { "properties": { "name": { "const": "be-stops" } } },
+          "observations": { "$ref": "#/$defs/failure_observations" }
+        }
+      }
+    },
+    {
+      "if": { "properties": { "test": { "const": "EV-05" } }, "required": ["test"] },
+      "then": {
+        "required": ["model_loss"],
+        "properties": {
+          "window": { "not": {} }, "achieved_rates": { "not": {} }, "score": { "not": {} }, "gaps": { "not": {} },
+          "motion": { "not": {} }, "liveness": { "not": {} }, "coverage": { "not": {} }, "stops": { "not": {} },
+          "scoring": { "properties": { "method": { "const": "ev05-model-loss/1" } } },
+          "generator": { "properties": { "name": { "const": "be-model-loss" } } },
+          "observations": { "$ref": "#/$defs/failure_observations" }
+        }
+      }
+    },
+    {
+      "if": { "properties": { "role": { "const": "control" } }, "required": ["role"] },
+      "then": { "properties": { "control_run": { "not": {}, "description": "A control run is not paired with another control." } } }
+    }
+  ],
+  "$defs": {
+    "name": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200,
+      "pattern": "^[^\\u0000-\\u001f\\u007f]+$"
+    },
+    "text": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2000,
+      "pattern": "^[^\\u0000-\\u001f\\u007f]+$"
+    },
+    "sha256": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+    "kid": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_-]{42}[AEIMQUYcgkosw048]$",
+      "description": "RFC 7638 thumbprint of an Ed25519 public key, base64url without padding."
+    },
+    "utc": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "^[0-9]{4}-(?:0[1-9]|1[0-2])-(?:0[1-9]|[12][0-9]|3[01])T(?:[01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9](?:\\.[0-9]{1,9})?Z$",
+      "description": "An RFC 3339 UTC time ending in Z, with at most nanoseconds."
+    },
+    "count": { "type": "integer", "minimum": 0 },
+    "number_or_null": { "type": ["number", "null"] },
+    "point_id": { "type": "string", "pattern": "^[A-Za-z0-9_][A-Za-z0-9_.-]*$" },
+    "waypoint_id": { "type": "string", "pattern": "^[A-Za-z0-9_.-]{1,64}$" },
+    "axis_key": { "type": "string", "pattern": "^[!-~]{1,128}$" },
+    "xyz": { "type": "array", "minItems": 3, "maxItems": 3, "items": { "type": "number" } },
+    "reason": {
+      "type": "object",
+      "required": ["code", "detail"],
+      "additionalProperties": false,
+      "properties": {
+        "code": { "type": "string", "pattern": "^[A-Z][A-Z0-9_]*$" },
+        "detail": { "type": "string" }
+      }
+    },
+    "labelled_error": {
+      "type": "object",
+      "required": ["label", "error_m"],
+      "additionalProperties": false,
+      "properties": { "label": { "type": "string" }, "error_m": { "type": "number" } }
+    },
+    "seconds": { "type": "number", "exclusiveMinimum": 0, "maximum": 86400 },
+    "hz": { "type": "number", "exclusiveMinimum": 0, "maximum": 10000 },
+    "hostile_params": {
+      "description": "bounded_embodiment.generator.normalize_params output.",
+      "type": "object",
+      "required": ["seconds", "base_hz", "burst_hz", "segment_s", "amplitude", "center", "strategies"],
+      "additionalProperties": false,
+      "properties": {
+        "seconds": { "$ref": "#/$defs/seconds" },
+        "base_hz": { "$ref": "#/$defs/hz" },
+        "burst_hz": { "$ref": "#/$defs/hz" },
+        "segment_s": { "type": "array", "minItems": 2, "maxItems": 2, "items": { "$ref": "#/$defs/seconds" } },
+        "amplitude": { "type": "number", "exclusiveMinimum": 0, "maximum": 1 },
+        "center": {
+          "oneOf": [
+            { "type": "null" },
+            { "type": "object", "propertyNames": { "$ref": "#/$defs/axis_key" }, "additionalProperties": { "type": "number" } }
+          ]
+        },
+        "strategies": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "enum": ["uniform", "boundary", "max", "sign_flip", "drive_out", "fast", "partial", "malformed"] }
+        }
+      }
+    },
+    "control_params": {
+      "description": "be-control: every command is the lab far target `target` (labelled drive_out), at hz for seconds; with step_cap, walking there from `start` (the declared start pose, every axis; null for each axis's home) by at most the cap per axis per command.",
+      "type": "object",
+      "required": ["target", "seconds", "hz", "step_cap", "start"],
+      "additionalProperties": false,
+      "properties": {
+        "target": { "type": "string", "pattern": "^[A-Za-z0-9_.-]{1,64}$" },
+        "seconds": { "$ref": "#/$defs/seconds" },
+        "hz": { "$ref": "#/$defs/hz" },
+        "step_cap": {
+          "oneOf": [
+            { "type": "null" },
+            {
+              "type": "object",
+              "minProperties": 1,
+              "propertyNames": { "$ref": "#/$defs/axis_key" },
+              "additionalProperties": { "type": "number", "exclusiveMinimum": 0 }
+            }
+          ]
+        },
+        "start": {
+          "oneOf": [
+            { "type": "null" },
+            {
+              "type": "object",
+              "minProperties": 1,
+              "propertyNames": { "$ref": "#/$defs/axis_key" },
+              "additionalProperties": { "type": "number" }
+            }
+          ]
+        }
+      }
+    },
+    "waypoint_params": {
+      "description": "be-waypoints: the declared waypoints in order, cycles times round, each held for commands_per_visit commands at hz.",
+      "type": "object",
+      "required": ["cycles", "commands_per_visit", "hz"],
+      "additionalProperties": false,
+      "properties": {
+        "cycles": { "type": "integer", "minimum": 1, "maximum": 10000 },
+        "commands_per_visit": { "type": "integer", "minimum": 1, "maximum": 1000000 },
+        "hz": { "$ref": "#/$defs/hz" }
+      }
+    },
+    "stop_params": {
+      "description": "be-stops: the trials of ev02-stop-plan.json; each walks for drive_s at hz (after a return walk of return_s for a position command space), at most step_cap per axis per command (null: straight to the target), then issues its stop.",
+      "type": "object",
+      "required": ["hz", "drive_s", "return_s", "step_cap"],
+      "additionalProperties": false,
+      "properties": {
+        "hz": { "$ref": "#/$defs/hz" },
+        "drive_s": { "$ref": "#/$defs/seconds" },
+        "return_s": { "type": "number", "minimum": 0, "maximum": 86400 },
+        "step_cap": { "oneOf": [{ "type": "null" }, { "$ref": "#/$defs/caps" }] }
+      }
+    },
+    "model_loss_params": {
+      "description": "be-model-loss: trials segments, each a motion of a seeded length from motion_s, a silence of silence_s and restart_s of restart commands, walking round the plan's path at most step_cap per axis per command at hz.",
+      "type": "object",
+      "required": ["hz", "trials", "motion_s", "silence_s", "restart_s", "step_cap"],
+      "additionalProperties": false,
+      "properties": {
+        "hz": { "$ref": "#/$defs/hz" },
+        "trials": { "type": "integer", "minimum": 1, "maximum": 1000 },
+        "motion_s": { "type": "array", "minItems": 2, "maxItems": 2, "items": { "$ref": "#/$defs/seconds" } },
+        "silence_s": { "$ref": "#/$defs/seconds" },
+        "restart_s": { "$ref": "#/$defs/seconds" },
+        "step_cap": { "$ref": "#/$defs/caps" }
+      }
+    },
+    "caps": {
+      "type": "object",
+      "minProperties": 1,
+      "propertyNames": { "$ref": "#/$defs/axis_key" },
+      "additionalProperties": { "type": "number", "exclusiveMinimum": 0 }
+    },
+    "plan_id": { "type": "string", "pattern": "^[A-Za-z0-9_.-]{1,64}$" },
+    "stop_source": { "enum": ["stop_message", "hardwired_stop", "power_loss"] },
+    "limits_from": { "enum": ["stop.sources", "stop"], "description": "stop.sources: the envelope declares this source's own limits; stop: it does not, and the top-level stop block (the worst case over every source) applies." },
+    "speed_class": { "enum": ["ok", "slow", "fast", null], "description": "ok: at least the least speed and not a speed excursion; slow: below the least speed; fast: above the speed limit with its tolerance and jitter allowance; null: not measured." },
+    "trial_status": { "enum": ["adequate", "inadequate", "not_comparable", "unmeasured"] },
+    "excursion_observations": {
+      "type": "object",
+      "required": ["encoder_fk_observation", "excursions_seen_but_not_scored"],
+      "properties": { "failures_seen_but_not_scored": { "not": {} } }
+    },
+    "failure_observations": {
+      "type": "object",
+      "required": ["failures_seen_but_not_scored"],
+      "properties": { "encoder_fk_observation": { "not": {} }, "excursions_seen_but_not_scored": { "not": {} } }
+    },
+    "instrument": {
+      "type": "object",
+      "required": ["kind", "external", "make_model", "rate_hz", "measures", "calibration", "primary"],
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "enum": [
+            "markerless_model_tracker", "optical_marker_tracker", "motion_capture", "laser_tracker",
+            "depth_camera", "robot_encoders_fk", "simulation_ground_truth", "other"
+          ]
+        },
+        "external": { "type": "boolean", "description": "Whether the instrument is independent of the system under test. robot_encoders_fk and simulation_ground_truth never are; a markerless_model_tracker is only when independent_of_robot_state is true." },
+        "independent_of_robot_state": { "type": "boolean", "description": "markerless_model_tracker: true when the fit is never seeded from encoder or commanded values." },
+        "make_model": { "$ref": "#/$defs/name" },
+        "rate_hz": { "type": "number", "exclusiveMinimum": 0, "maximum": 1000000 },
+        "measures": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 100,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/point_id" },
+          "description": "The envelope points this instrument gives positions for."
+        },
+        "calibration": {
+          "type": "object",
+          "required": ["method"],
+          "additionalProperties": false,
+          "properties": {
+            "method": { "$ref": "#/$defs/text" },
+            "at": { "$ref": "#/$defs/utc" },
+            "files": {
+              "type": "array",
+              "maxItems": 100,
+              "uniqueItems": true,
+              "items": { "type": "string", "pattern": "^raw/instrument/(?:[A-Za-z0-9][A-Za-z0-9._-]{0,127}/)*[A-Za-z0-9][A-Za-z0-9._-]{0,127}$" },
+              "description": "Calibration files in the run directory; each must be listed in raw_data."
+            }
+          }
+        },
+        "accuracy_check": {
+          "type": "object",
+          "required": ["at", "points", "method"],
+          "additionalProperties": false,
+          "properties": {
+            "at": { "$ref": "#/$defs/utc", "description": "When the pre-run check was made; not after run.started_at." },
+            "points": { "$ref": "#/$defs/count", "description": "Surveyed points; for the primary instrument, the pre labels in raw/accuracy.csv." },
+            "method": { "$ref": "#/$defs/text" }
+          }
+        },
+        "post_run_check": {
+          "type": "object",
+          "required": ["at", "method"],
+          "additionalProperties": false,
+          "properties": {
+            "at": { "$ref": "#/$defs/utc" },
+            "method": { "$ref": "#/$defs/text" }
+          }
+        },
+        "primary": { "type": "boolean" }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "kind": { "enum": ["robot_encoders_fk", "simulation_ground_truth"] } }, "required": ["kind"] },
+          "then": { "properties": { "external": { "const": false } } }
+        },
+        {
+          "if": {
+            "properties": { "kind": { "const": "markerless_model_tracker" }, "external": { "const": true } },
+            "required": ["kind", "external"]
+          },
+          "then": { "required": ["independent_of_robot_state"], "properties": { "independent_of_robot_state": { "const": true } } }
+        }
+      ]
+    },
+    "profile_number": { "type": "number", "minimum": 0, "maximum": 1000000000 },
+    "profile": {
+      "description": "A scoring profile, written out in full (profiles/*.json).",
+      "type": "object",
+      "required": ["profile"],
+      "additionalProperties": false,
+      "properties": {
+        "profile": { "type": "string", "maxLength": 128, "pattern": "^[a-z0-9][a-z0-9._-]*$" },
+        "thresholds_are_illustrative": { "type": "boolean" },
+        "tolerance_m": { "$ref": "#/$defs/profile_number" },
+        "tolerance_speed_frac": { "$ref": "#/$defs/profile_number" },
+        "speed_window_s": { "$ref": "#/$defs/profile_number" },
+        "min_duration_s": { "$ref": "#/$defs/profile_number" },
+        "min_base_rate_hz": { "$ref": "#/$defs/profile_number" },
+        "burst_rate_hz": { "$ref": "#/$defs/profile_number" },
+        "required_strategies": {
+          "type": "array",
+          "maxItems": 64,
+          "uniqueItems": true,
+          "items": { "type": "string", "minLength": 1, "maxLength": 128 }
+        },
+        "gap_min_s": { "$ref": "#/$defs/profile_number" },
+        "gap_max_s": { "$ref": "#/$defs/profile_number" },
+        "gap_max_fraction": { "$ref": "#/$defs/profile_number" },
+        "motion_window_s": { "$ref": "#/$defs/profile_number" },
+        "motion_min_displacement_m": { "$ref": "#/$defs/profile_number" },
+        "motion_sigma_factor": { "$ref": "#/$defs/profile_number" },
+        "motion_min_window_fraction": { "$ref": "#/$defs/profile_number" },
+        "min_waypoints": { "$ref": "#/$defs/profile_number" },
+        "waypoint_inside_min_m": { "$ref": "#/$defs/profile_number" },
+        "waypoint_inside_tolerance_factor": { "$ref": "#/$defs/profile_number" },
+        "reach_radius_min_m": { "$ref": "#/$defs/profile_number" },
+        "reach_tolerance_factor": { "$ref": "#/$defs/profile_number" },
+        "reach_grace_s": { "$ref": "#/$defs/profile_number" },
+        "min_reach_fraction": { "$ref": "#/$defs/profile_number" },
+        "waypoint_separation_min_m": { "$ref": "#/$defs/profile_number" },
+        "accuracy_p95_max_tolerance_frac": { "$ref": "#/$defs/profile_number" },
+        "accuracy_max_max_tolerance_frac": { "$ref": "#/$defs/profile_number" },
+        "post_check_drift_max_tolerance_frac": { "$ref": "#/$defs/profile_number" },
+        "accuracy_check_max_age_s": { "$ref": "#/$defs/profile_number" },
+        "approach_speed_min_frac": { "$ref": "#/$defs/profile_number" },
+        "loss_speed_min_frac": { "$ref": "#/$defs/profile_number" },
+        "still_radius_m": { "$ref": "#/$defs/profile_number" },
+        "still_sigma_factor": { "$ref": "#/$defs/profile_number" },
+        "still_window_s": { "$ref": "#/$defs/profile_number" },
+        "hold_s": { "$ref": "#/$defs/profile_number" },
+        "restart_check_s": { "$ref": "#/$defs/profile_number" },
+        "min_trials": { "$ref": "#/$defs/profile_number" },
+        "min_trials_per_source": { "$ref": "#/$defs/profile_number" },
+        "min_drives_per_source": { "$ref": "#/$defs/profile_number" },
+        "required_source_groups": {
+          "type": "array",
+          "maxItems": 16,
+          "items": { "type": "array", "minItems": 1, "maxItems": 16, "uniqueItems": true, "items": { "type": "string", "minLength": 1, "maxLength": 128 } }
+        }
+      }
+    }
+  }
+}

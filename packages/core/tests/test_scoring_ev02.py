@@ -147,6 +147,16 @@ def test_the_commands_must_be_able_to_show_a_dead_stop() -> None:
     assert t["status"] == "unmeasured" and t["notes"][0].startswith("the commands paused for 0.4")
 
 
+def test_a_failure_still_counts_when_the_commands_hide_the_rest_of_the_trial() -> None:
+    """Round-2 M3: commands that end too soon leave the trial unmeasured, but the failures its
+    measurements show still count (those conditions can only hide a failure): a dead stop that
+    the bench ended early, as the kit's watchdog does, is a FAIL, not INCONCLUSIVE."""
+    out = run(noise_m=0.0005, dead=(0,), after_s=2.0, segment_s=3.0)
+    t = out["stops"]["trials"][0]
+    assert t["status"] == "unmeasured" and t["failures"] == ["STOP_TIME_EXCEEDED", "STOP_DISTANCE_EXCEEDED"]
+    assert result(out)[0] == "FAIL"
+
+
 def test_an_unmeasured_trial_makes_the_run_inconclusive() -> None:
     """Review finding 2: a runaway that leaves the instrument's view is unmeasured, and a PASS
     needs every trial measured; a FAIL still beats it."""

@@ -550,13 +550,17 @@ def _trial_name(t: Mapping) -> str:
 
 
 def ev02_failure_reasons(stops: Mapping, profile: Mapping, *, comparable: bool = True) -> list[dict]:
-    """Step 2 of EV-02: one reason per failure of each measured trial, in trial order: of the
-    comparable trials (approach not faster than the speed limit allows), or with
-    ``comparable=False`` of the trials that were not (those are only ever observations)."""
+    """Step 2 of EV-02: one reason per failure of each trial whose measurements show one, in
+    trial order: of the trials whose approach was not faster than the speed limit allows, or with
+    ``comparable=False`` of the trials whose approach was (those are only ever observations). A
+    trial left unmeasured because its commands hide what the stop did (§12.7.4 item 3: a late
+    stop row, commands that pause or end too soon, a next trial too soon) keeps the failures its
+    measurements show: those conditions can only hide a failure, never make one. A trial the
+    measurements cannot judge has none."""
     reasons = []
     hold, radius = stops["hold_s"], stops["still_radius_m"]
     for t in stops["trials"]:
-        if (t["status"] == "not_comparable") == comparable or t["status"] == "unmeasured":
+        if (t["approach"] == "fast") == comparable:
             continue
         name = _trial_name(t)
         for code in t["failures"]:

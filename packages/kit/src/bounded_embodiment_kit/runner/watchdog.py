@@ -334,17 +334,24 @@ class Escalation:
         self.estop_cmd, self.alarm, self.timeout_s, self.run = estop_cmd, alarm, timeout_s, run
         self.fired: dict | None = None
 
-    def fire(self, reason: str) -> dict:
+    def fire(self, reason: str, on_start: Callable[[dict], None] | None = None) -> dict:
+        """Sound the alarm, then run ``--estop-cmd``: no shell, every stream on /dev/null (a command
+        that leaves a child behind cannot hold a pipe open until the timeout), and in a session of
+        its own (a Ctrl+C at the bench does not reach it). The record exists, and ``on_start`` gets
+        it, before the command runs; its returncode or error are filled in when it ends."""
         self.alarm.sound(reason)
         result = {"reason": reason, "estop_cmd": self.estop_cmd, "returncode": None, "error": None}
+        self.fired = result
+        if on_start is not None:
+            on_start(result)
         if self.estop_cmd:
             try:
-                r = self.run(shlex.split(self.estop_cmd), timeout=self.timeout_s, capture_output=True,
+                r = self.run(shlex.split(self.estop_cmd), timeout=self.timeout_s, stdin=subprocess.DEVNULL,
+                             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True,
                              check=False)
                 result["returncode"] = r.returncode
             except Exception as e:  # noqa: BLE001 - recorded; the alarm is already sounding
                 result["error"] = f"{type(e).__name__}: {e}"
-        self.fired = result
         return result
 
 
@@ -475,7 +482,8 @@ class Watchdog(threading.Thread):
             why = f"tool still at {v * 1000:.0f} mm/s"
         why += f" {lim.stop_ack_within_s} s after the latch ({self.latch.reason})"
         self.outcome = StopOutcome(True, False, now, v, source)
-        self.outcome.escalation = self.escalation.fire(why)
+        outcome = self.outcome  # recorded before the command runs, so a slow one cannot lose it
+        self.escalation.fire(why, on_start=lambda record: setattr(outcome, "escalation", record))
 
     def decided(self) -> bool:
         return self.outcome.decided

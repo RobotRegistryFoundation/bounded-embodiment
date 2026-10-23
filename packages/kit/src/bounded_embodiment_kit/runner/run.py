@@ -324,7 +324,9 @@ class _Live:
         execute it and would fire a false e-stop."""
         if self.watchdog.is_alive():
             self.watchdog.stop()
-            self.watchdog.join(2.0)
+            # it may be running the escalation command, which takes up to estop_timeout_s: wait
+            # for it, or declared.json loses the record of a command that ran
+            self.watchdog.join(self.limits.estop_timeout_s + 2.0)
         stuck = self.command.is_alive()
         closed = "not closed: the command thread is stuck holding the bus" if stuck else "closed"
         if not stuck:

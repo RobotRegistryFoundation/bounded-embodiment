@@ -58,6 +58,7 @@ __all__ = [
     "StateSnapshot",
     "StopLatch",
     "StopOutcome",
+    "TrialSpeedTrip",
     "TrialWatch",
     "TripwireConfig",
     "Watchdog",
@@ -66,6 +67,7 @@ __all__ = [
     "inside_and_still",
     "instrument_trip",
     "stop_speed",
+    "trial_speed_trip",
     "trial_trip",
     "window_speed",
 ]
@@ -371,6 +373,32 @@ def _watched(watch: TrialWatch) -> str:
     return "tool point" if watch.point is None else f"stop point ({watch.point})"
 
 
+@dataclass(frozen=True)
+class TrialSpeedTrip:
+    """EV-02 and EV-05 in a velocity command space (round-2 K5): the stop point may not move faster
+    than ``limit_mps``, its speed limit plus the profile's speed tolerance plus the instrument's
+    noise. Nothing in the kit maps a velocity command to the point's speed, so the room each trial
+    is given (``travel_m``), sized at the speed limit, holds only while this does; and a trial
+    faster than that is not comparable anyway."""
+
+    point: str
+    limit_mps: float
+    v_max_mps: float
+
+
+def trial_speed_trip(samples: Sequence[tuple[float, tuple]], trip: TrialSpeedTrip,
+                     window_s: float) -> str | None:
+    """The velocity-space trial speed trip, a pure function: the stop point's speed by the
+    tool-speed rule (``window_speed``) above ``trip.limit_mps`` trips. None means no trip."""
+    v = window_speed(samples, window_s)
+    if v is None or v <= trip.limit_mps:
+        return None
+    return (f"the stop point ({trip.point}) moves at {v:.2f} m/s, faster than a trial allows in a "
+            f"velocity command space ({trip.limit_mps:.3f} m/s: its {trip.v_max_mps:g} m/s speed limit "
+            "plus the speed tolerance and the instrument's noise); the room the trial was given "
+            "assumed the limit")
+
+
 # ----- escalation ------------------------------------------------------------------------------
 class Alarm:
     """The CUT POWER alarm: a banner and the terminal bell on stderr, repeated until ``stop()``."""
@@ -463,6 +491,7 @@ class Watchdog(threading.Thread):
         self._quit = threading.Event()
         self.ticks = 0
         self._trial: TrialWatch | None = None  # EV-02 / EV-05: set by the command thread
+        self.trial_speed: TrialSpeedTrip | None = None  # EV-02 / EV-05 in a velocity space (K5)
 
     # The history of valid instrument samples, per point, from successive snapshots.
     def _absorb(self, snap: FeedSnapshot) -> None:
@@ -553,6 +582,9 @@ class Watchdog(threading.Thread):
                 reason = fk_trip(states, now, self.cfg, self.envelope)
             if reason is None:
                 reason = self._trial_tick(now, states)
+            if reason is None and self.trial_speed is not None:
+                samples, _ = self._stop_samples(states, self.trial_speed.point)
+                reason = trial_speed_trip(samples, self.trial_speed, self.cfg.speed_window_s)
             if reason is not None and self.latch.trip("tripwire", reason):
                 self.log(f"*** TRIP: {reason}")
         if self.latch.tripped and not self.outcome.decided:

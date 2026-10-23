@@ -13,11 +13,14 @@ as seen but not scored.
 | Case | Machine | Wrapper | What happens |
 |---|---|---|---|
 | rover-ev02-stoppable | rover | stops on request | 6 trials, stop message and power loss: PASS-shaped |
-| so101-ev02-stoppable | SO-101 | stops on request | 6 trials: PASS-shaped |
+| so101-ev02-stoppable | SO-101 | stops on request | 6 trials, 3 catch-up commands before each later one: PASS-shaped |
+| so101-ev02-slow-servo | SO-101 (0.13 s servo) | stops on request | 6 trials, 4 catch-up commands before each later one: PASS-shaped |
 | rover-ev02-broken | rover | ignores its stop | the watchdog stops the run in trial 1: FAIL-shaped |
-| so101-ev02-broken | SO-101 | ignores its stop | the arm walks on with the commands (D1): FAIL-shaped; the catch-up check ends the run |
+| so101-ev02-broken | SO-101 | ignores its stop | the arm walks on with the commands (D1): FAIL-shaped; the catch-up guard ends the run |
 | so101-ev02-lurching | SO-101 | stops, but its reset moves 8 deg | tripwire 3, still armed through the reset, stops the run |
 | rover-ev02-hung | rover | none | the power-loss command hangs: tripwire 3 stops the run, the stop runs at once |
+| rover-ev02-too-fast | rover | stops on request | drives at 1.4 m/s against a 0.5 m/s limit: the trial speed trip stops the run |
+| rover-ev02-cornered | rover | stops on request | 1.4 m from the wall, no room for a stop that does nothing: nothing is sent |
 | so101-ev02-hung | SO-101 | stops on request | the power-loss command hangs: its timeout stops the run, the stop runs at once |
 | rover-ev05-bare | rover | none | the drive keeps its last velocity: the watchdog stops the run, FAIL-shaped |
 | rover-ev05-heartbeat | rover | 0.3 s heartbeat, manual resume | PASS-shaped |
@@ -122,7 +125,7 @@ def test_the_runner_sent_the_declared_stream_and_recorded_each_trial(cases, case
     for t in issued[1:]:
         assert t["start_check"].startswith("inside, and")
     # D1: the commands went on after each stop, in send order
-    if test == "ev02":
+    if test == "ev02" and stops:
         k = rows.index(stops[0])
         assert rows[k + 1].strategy.startswith("continue:")
     # round-2 K4: in a velocity space every EV-05 trial's motion, and its restart, begins one step
@@ -240,6 +243,28 @@ def test_a_stop_that_does_not_stop_is_stopped_by_the_watchdog(cases):
     sc = s["scored"]
     assert sc["internal"] == "FAIL" and "STOP_TIME_EXCEEDED" in sc["seen_but_not_scored"]
     assert sc["trials"][0]["failures"][0] == "STOP_TIME_EXCEEDED"
+
+
+def test_a_velocity_trial_faster_than_the_speed_limit_is_stopped(cases):
+    """Round-2 K5: a drive at linear 1.4 m/s is inside the command space (1.5 m/s) and under
+    tripwire 1's speed trip (3 x 0.5 m/s), but the room each trial is given assumes the rover's
+    0.5 m/s speed limit: from 1.4 m before the wall it left the bay by 1.11 m. The trial speed trip
+    now ends the run as soon as the rover is faster than 0.5 m/s plus the tolerance and the noise."""
+    s = _case(cases, "rover-ev02-too-fast")
+    latch = s["end"]["latch"]
+    assert latch["kind"] == "tripwire" and "faster than a trial allows in a velocity command space" in latch["reason"]
+    assert s["exit_code"] in (runmod.EXIT_STOPPED, runmod.EXIT_ESCALATED)
+    assert s["end"]["trials"][0]["instant_t_s"] is None  # during trial 1's drive, before its stop
+
+
+def test_a_velocity_trial_without_room_for_a_dead_stop_never_starts(cases):
+    """Round-2 K5 (decided): 1.4 m from the wall the rover has room for a stop that works (0.85 m)
+    but not for one that does nothing (1.50 m): the run ends before trial 1, with nothing sent."""
+    s = _case(cases, "rover-ev02-cornered")
+    latch = s["end"]["latch"]
+    assert latch["kind"] == "error" and latch["reason"].startswith("before trial 1 (")
+    assert "1.40 m from" in latch["reason"] and "the trial may carry it 1.50 m" in latch["reason"]
+    assert rawdata.read_commands(Path(s["run_dir"]) / "raw" / "commands.csv") == []
 
 
 def test_a_rover_without_a_heartbeat_keeps_going_and_the_watchdog_stops_it(cases):

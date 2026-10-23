@@ -100,6 +100,7 @@ from .watchdog import (
     Escalation,
     StateBox,
     StopLatch,
+    TrialSpeedTrip,
     TripwireConfig,
     Watchdog,
     clearance,
@@ -335,6 +336,8 @@ class _Live:
         self.watchdog.stop_executed_at = lambda: self.command.first_stop_t
         if segments:  # the start checks must see the plan's stop point too (round-2 K2)
             self.watchdog.required_points = tuple(sorted({s.point for s in segments if s.point}))
+        if segments and space is not None and space.kind not in POSITION_KINDS:
+            self.watchdog.trial_speed = trial_speed_limit(envelope, segments[0], limits)
         self.limits = limits
 
     def catch_up(self, seg: TrialSegment) -> tuple[str | None, list[dict]]:
@@ -621,6 +624,17 @@ def trial_params(test: str, space, args, envelope, plan) -> dict:
     return core_report.streams.normalize(core_report.MODEL_LOSS, params)
 
 
+def trial_speed_limit(envelope, seg: TrialSegment, limits: Limits = DEFAULT) -> TrialSpeedTrip:
+    """EV-02 and EV-05 in a velocity command space (round-2 K5): the stop point's speed limit,
+    plus the profile's speed tolerance, plus 3 x sqrt(2) x the profile's max_sigma_jitter_m over the
+    shortest span the speed rule takes (half the speed window): the noise of two measurements."""
+    point = seg.point or next(iter(envelope.points))
+    v_max = envelope.speed_limit_mps(point)
+    profile = load_profile("ev02-illustrative-0.1" if seg.kind == "stop" else "ev05-illustrative-0.1")
+    noise = 3.0 * math.sqrt(2.0) * profile["max_sigma_jitter_m"] / (0.5 * limits.speed_window_s)
+    return TrialSpeedTrip(point, v_max * (1.0 + profile["tolerance_speed_frac"]) + noise, v_max)
+
+
 def trial_segments(test: str, space, plan, params: dict, seed: int, envelope, desc: Mapping,
                    source_cmds: Mapping[str, str | None], limits: Limits,
                    adapter=None) -> tuple[list[TrialSegment], float]:
@@ -655,11 +669,18 @@ def trial_segments(test: str, space, plan, params: dict, seed: int, envelope, de
     if adapter is not None and needs_reset and resets and not callable(getattr(adapter, "reset_stop", None)):
         raise RunError(f"the adapter lists stop_resets {sorted(resets)} but has no reset_stop method")
     segments, planned = [], 0.0
+    # Velocity spaces (review S5, round-2 K5): the room a trial needs is sized for the failure the
+    # test exists to find, a stop that does nothing (EV-02) or no loss handling (EV-05): the point
+    # goes on at its speed limit until the watch trips (the time the trial allows plus
+    # trial_rest_grace_s), and then the runner's own stop brakes within the top-level stop
+    # distance; under a commands resume rule it may also follow the restart once the rule allows.
+    brake = float(envelope.stop["max_distance_m"])
     for k, seg in enumerate(core_report.split_segments(proposals)):
         if test == "ev02":
             source, drive = plan.trials[k]
             allowed, distance, _ = stop_limits(envelope, source)
-            travel = v_max * params["drive_s"] + distance + margin if velocity else None
+            travel = (v_max * (params["drive_s"] + allowed + limits.trial_rest_grace_s) + brake + margin
+                      if velocity else None)
             segments.append(TrialSegment(tuple(seg), f"trial {k + 1} ({source}, drive {drive})", "stop",
                                          source, allowed, limits.trial_pause_extra_s,
                                          source in EXTERNAL_SOURCES or source in resets,
@@ -671,7 +692,9 @@ def trial_segments(test: str, space, plan, params: dict, seed: int, envelope, de
             allowed, distance, _ = stop_limits(envelope, source)
             allowed += timeout
             manual = plan.resume["rule"] == "manual"
-            travel = (v_max * (params["motion_s"][1] + timeout) + distance + margin) if velocity else None
+            restart = 0.0 if manual else max(0.0, params["restart_s"] - plan.resume["after_ms"] / 1000.0)
+            travel = (v_max * (params["motion_s"][1] + allowed + limits.trial_rest_grace_s + restart)
+                      + brake + margin) if velocity else None
             segments.append(TrialSegment(tuple(seg), f"trial {k + 1} ({source})", "loss", source,
                                          allowed, limits.trial_pause_extra_s, manual and source in resets,
                                          operator_reset=manual and source not in resets, point=point,

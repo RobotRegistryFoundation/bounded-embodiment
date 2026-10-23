@@ -103,9 +103,10 @@ class TrialSegment:
     point       the plan's stop point, which the watch follows (None: the tool point)
     release_after_s  EV-05 under a commands resume rule: the watch ends this long after the first
                 restart command, when the rule lets the machine move; None: at the next segment
-    travel_m    velocity command spaces: the most the trial may carry the stop point (its drive or
-                motion at the speed limit, plus the stop), which must fit before its zone
-                boundaries at the segment's start; None: not checked (position spaces)
+    travel_m    velocity command spaces: the most the trial may carry the stop point if its stop
+                does nothing (its drive or motion at the speed limit, on until the watch trips, then
+                the runner's own stop), which must fit before its zone boundaries at the segment's
+                start; None: not checked (position spaces)
     """
 
     proposals: tuple[Proposal, ...]
@@ -412,8 +413,9 @@ class TrialCommandThread(CommandThread):
         clear, where = room
         if clear < seg.travel_m:
             self.latch.trip("error", f"before {seg.label}: the stop point is {clear:.2f} m from {where}, "
-                                     f"and the trial may carry it {seg.travel_m:.2f} m (drive or "
-                                     "motion at the speed limit, plus the stop and the margin)")
+                                     f"and the trial may carry it {seg.travel_m:.2f} m (at the speed "
+                                     "limit until the watch would stop a stop that does nothing, then "
+                                     "the runner's own stop, and the margin)")
             return False
         self.log(f"{seg.label}: {clear:.2f} m of room, {seg.travel_m:.2f} m needed.")
         return True

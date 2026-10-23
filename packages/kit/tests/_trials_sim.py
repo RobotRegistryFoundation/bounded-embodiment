@@ -84,6 +84,16 @@ PLANS = {
         "trials": [{"source": s, "drive": d} for s in ("stop_message", "power_loss")
                    for d in ("forward", "back", "forward")],
     },
+    "rover-ev02-fast": {
+        "stop_plan_version": "0.1", "point": "base",
+        "description": "TEST-ONLY: forward at 1.4 m/s, inside the command space's 1.5 m/s but faster "
+                       "than the bay's 0.5 m/s.",
+        "start": {"linear": 0.0, "angular": 0.0},
+        "drives": [{"id": "forward", "command": {"linear": 1.4, "angular": 0.0}},
+                   {"id": "back", "command": {"linear": -1.4, "angular": 0.0}}],
+        "sources": [{"source": "stop_message"}],
+        "trials": [{"source": "stop_message", "drive": d} for d in ("forward", "back", "forward")],
+    },
     "so101-ev02": {
         "stop_plan_version": "0.1", "point": "tool",
         "description": "TEST-ONLY: the shoulder pans toward +-60 deg from the start pose, 1.5 deg a command; "
@@ -147,7 +157,8 @@ class Case:
     power_loss_cmd: str | None = None  # instead of touching the simulated e-stop file
     hide_point: str | None = None  # a point the simulated instrument does not report ...
     hide_after_s: float = 0.0      # ... from this long after the instrument starts (round-2 K2)
-    extra: tuple[str, ...] = ()    # more be run flags (the simulated machine's)
+    extra: tuple[str, ...] = ()    # more be run flags, last (they win over the defaults above)
+    rover_start: str | None = None  # --sim-rover-start, other than the test's default
 
 
 CASES = {c.id: c for c in (
@@ -160,6 +171,10 @@ CASES = {c.id: c for c in (
     Case("so101-ev02-broken", "so101", "ev02", "_trial_gates:broken"),
     Case("so101-ev02-lurching", "so101", "ev02", "_trial_gates:lurching"),
     Case("rover-ev02-hung", "rover", "ev02", None, plan="rover-ev02-power", power_loss_cmd="sleep 10"),
+    # round-2 K5: a drive inside the command space but faster than the rover's speed limit trips
+    # the trial speed trip; and a rover started 1.4 m from the bay's wall has no room for trial 1
+    Case("rover-ev02-too-fast", "rover", "ev02", "_trial_gates:stoppable", plan="rover-ev02-fast"),
+    Case("rover-ev02-cornered", "rover", "ev02", "_trial_gates:stoppable", rover_start="10.6,3.0,0.0"),
     Case("so101-ev02-hung", "so101", "ev02", "_trial_gates:stoppable", plan="so101-ev02-power",
          power_loss_cmd="sleep 10"),
     Case("rover-ev05-bare", "rover", "ev05", None),
@@ -195,20 +210,21 @@ def be_args(case: Case, root: Path) -> tuple[argparse.Namespace, Path]:
     if case.machine == "rover":
         env = root / "rover-trials.envelope.json"
         env.write_text(json.dumps(ROVER_ENVELOPE, indent=2) + "\n", encoding="utf-8")
-        start = "3.0,3.0,0.0" if case.test == "ev02" else "2.0,4.0,0.0"
+        # EV-05's room for no loss handling is 2.25 m (round-2 K5): start 3 m from every wall
+        start = case.rover_start or ("3.0,3.0,0.0" if case.test == "ev02" else "3.0,5.0,0.0")
         argv += ["--adapter", "sim-rover", "--envelope", str(env), "--command-space", str(ROVER_SPACE),
                  "--no-fk-tripwire-i-understand", "--sim-rover-start", start, "--step-cap", "0.05"]
     else:
         argv += ["--adapter", "sim-so101", "--envelope", str(SO101["envelope"]),
                  "--command-space", str(SO101["command_space"]), "--kit-config", str(SO101["kit_config"]),
                  "--urdf", str(SO101["urdf"]), "--step-cap", "1.5"]
-    argv += list(case.extra)
     if case.test == "ev02":
         argv += (["--drive-s", "1.0", "--return-s", "0.5"] if case.machine == "rover"
                  else ["--drive-s", "0.4", "--return-s", "1.2"])
         argv += ["--power-loss-cmd", case.power_loss_cmd or f"touch {estop}"]
     else:  # motion_s: the kit's default, which spans a whole cycle of the path
         argv += ["--trials", str(case.trials)]
+    argv += list(case.extra)
     p = argparse.ArgumentParser(prog="be")
     cli.register(p.add_subparsers(dest="command"))
     return p.parse_args(argv), estop

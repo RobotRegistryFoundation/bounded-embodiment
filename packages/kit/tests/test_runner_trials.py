@@ -131,7 +131,7 @@ def test_the_next_prompt_says_who_resets_the_source(kind, source, reset, by_hand
         assert said in asked[0]
 
 
-def _segments(tmp_path: Path, test: str, plan_doc: dict, desc: dict, estop_cmd: str | None):
+def _rover_segments(tmp_path: Path, test: str, plan_doc: dict, desc: dict, estop_cmd: str | None):
     envelope = envelope_mod.load(_write(tmp_path / "env.json", ROVER_ENVELOPE))
     space = load_command_space(ROVER_SPACE)
     caps = {"linear": 0.05, "angular": 0.05}
@@ -146,7 +146,50 @@ def _segments(tmp_path: Path, test: str, plan_doc: dict, desc: dict, estop_cmd: 
             "step_cap": caps})
     cmds = {"hardwired_stop": estop_cmd, "power_loss": estop_cmd}
     segments, _ = runmod.trial_segments(test, space, plan, params, 7, envelope, desc, cmds, DEFAULT)
-    return [(s.source, s.reset, s.operator_reset) for s in segments]
+    return segments
+
+
+def _segments(tmp_path: Path, test: str, plan_doc: dict, desc: dict, estop_cmd: str | None):
+    return [(s.source, s.reset, s.operator_reset)
+            for s in _rover_segments(tmp_path, test, plan_doc, desc, estop_cmd)]
+
+
+def test_the_room_is_sized_for_a_stop_that_does_nothing(tmp_path):
+    """Round-2 K5 (decided): in a velocity space the room a trial needs is sized for the failure
+    the test is there to find. EV-02: a stop that does nothing goes on at the speed limit until the
+    watch trips, at the allowed time + trial_rest_grace_s, and the runner's own stop then brakes
+    within the top-level stop distance: 0.5 x (1.0 + 0.8 + 0.5) + 0.3 + the 0.05 margin = 1.50 m
+    (it was 0.85 m, which a dead stop outran). EV-05: no loss handling, likewise from the end of
+    the longest motion (0.5 x (1.2 + 0.5 + 0.8 + 0.5) + 0.35 = 1.85 m), and under a commands rule
+    the restart once the rule allows (+ 0.5 x (1.0 - 0.5))."""
+    both = {"stop_triggers": ["stop_message"], "stop_resets": ["stop_message", "heartbeat_loss", "power_loss"]}
+    ev02 = _rover_segments(tmp_path, "ev02", PLANS["rover-ev02"], both, "touch /tmp/estop")
+    assert {round(s.travel_m, 9) for s in ev02} == {1.5}
+    ev05 = _rover_segments(tmp_path, "ev05", PLANS["rover-ev05"], both, None)
+    assert {round(s.travel_m, 9) for s in ev05} == {1.85}
+    doc = json.loads(json.dumps(PLANS["rover-ev05"]))
+    doc["resume"] = {"rule": "commands", "after_ms": 500}
+    ruled = _rover_segments(tmp_path, "ev05", doc, both, None)
+    assert {round(s.travel_m, 9) for s in ruled} == {2.1}
+
+
+def test_a_velocity_trial_trips_on_a_stop_point_faster_than_its_limit():
+    """Round-2 K5: nothing maps a velocity command to the point's speed, so a drive inside the
+    command space but faster than the point's speed limit (linear 1.4 m/s against 0.5) passed the
+    room check, sized at the limit, and left the bay by 1.11 m. In a velocity space the watchdog now
+    trips above the limit plus the profile's tolerance plus two measurements' noise."""
+    from bounded_embodiment_kit.runner.watchdog import trial_speed_trip
+
+    envelope = envelope_mod.load(ROVER_ENVELOPE)
+    seg = TrialSegment((), "trial 1", "stop", "stop_message", 0.8, 0.5, True, point="base", travel_m=1.5)
+    trip = runmod.trial_speed_limit(envelope, seg)
+    assert trip.point == "base" and trip.v_max_mps == 0.5
+    assert trip.limit_mps == pytest.approx(0.5 * 1.05 + 3 * 2 ** 0.5 * 0.0005 / 0.1)
+    at = lambda v: _samples(0.0, 1.0, lambda t: (1.0 + v * t, 4.0, 0.0))  # noqa: E731
+    assert trial_speed_trip(at(0.5), trip, 0.2) is None
+    assert trial_speed_trip(at(0.54), trip, 0.2) is None
+    reason = trial_speed_trip(at(1.4), trip, 0.2)
+    assert reason is not None and "moves at 1.40 m/s, faster than a trial allows" in reason
 
 
 def test_each_trial_knows_who_resets_its_source(tmp_path):

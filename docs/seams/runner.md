@@ -184,9 +184,16 @@ differs:
   trial needs it, then runs the start check (inside and still, as at the start) on samples taken
   after the reset returned: a full still window of them, within `start_timeout_s`. In a velocity
   space the stop point must also have room for the next trial (review S5): its clearance to the
-  nearest zone boundary at least the trial's `travel_m` (EV-02: v_max x `drive_s` + the source's
-  `max_distance_m` + the margin; EV-05: v_max x (the longest motion + the model timeout) + the same),
-  checked before the first trial too. In a position space with robot state the machine rests
+  nearest zone boundary at least the trial's `travel_m`, sized for the failure the test is there to
+  find (round-2 K5, decided): EV-02, v_max x (`drive_s` + the source's allowed time +
+  `trial_rest_grace_s`) + the top-level stop's `max_distance_m` + the margin (a stop that does
+  nothing goes on until the watch trips, then the runner's own stop brakes); EV-05, v_max x (the
+  longest motion + the model timeout + the source's allowed time + `trial_rest_grace_s`, + under a
+  `commands` rule the restart less `after_ms`) + the same; checked before the first trial too. And
+  in a velocity space the stop point may not move faster than its speed limit plus the profile's
+  `tolerance_speed_frac`, plus 3 x sqrt(2) x `max_sigma_jitter_m` over half the speed window (the
+  noise of two measurements), at any time in the run, or the watchdog trips: nothing in the kit
+  maps a velocity command to the point's speed, so the room holds only while the speed does. In a position space with robot state the machine rests
   short of where the next walk begins, by its servo's lag (round-2 K3): the thread ends the
   previous trial's watch and sends `catch_up` rows, a walk from the robot's present position to
   within one step cap of the trial's first command, one step cap a command at the trial's own
@@ -418,10 +425,12 @@ EV-02 and EV-05 trial runs (added 22 Oct, draft; `packages/kit/tests/_trials_sim
    is instant on sim-so101 (an unpowered servo stays put); a real arm whose servo power is cut
    falls, which EV-02 then measures. On hardware whose state cannot be read while its power is cut,
    the FK tripwire still stops the run at the first such stop (method known gap 15).
-10. **The room check covers a stop that works, not a dead one** (review S5). Before each trial in a
-   velocity space the stop point needs v_max x `drive_s` + the source's `max_distance_m` + the
-   margin to its nearest zone boundary (0.85 m for the simulated rover). A stop that does nothing is
-   caught by tripwire 3 at the allowed time + 0.5 s and then needs the runner's own braking: on the
-   simulated rover 0.78 m after the stop instant, on top of up to 0.5 m of drive. Near a boundary
-   tripwire 1 (5 cm outside) is then what stops it. A stricter check would ask for v_max x
-   (`drive_s` + the allowed time + 0.5 s) + the braking distance.
+10. **The room check covers a stop that does nothing** (review S5; round-2 K5, decided). Before
+   each trial in a velocity space the stop point needs v_max x (`drive_s` + the allowed time +
+   0.5 s) + the top-level stop distance + the margin to its nearest zone boundary: 1.50 m for the
+   simulated rover (it was v_max x `drive_s` + the source's distance + the margin, 0.85 m, which a
+   stop that does nothing outran by its 0.78 m of travel after the stop instant). EV-05 is sized
+   the same way, for no loss handling, plus the restart under a `commands` rule (2.25 m for the
+   simulated rover's EV-05 under a manual rule). The speed trip keeps the point within its speed
+   limit, which the room assumes: a drive at linear 1.4 m/s inside the command space's 1.5 m/s,
+   under tripwire 1's 1.5 m/s, passed the room check and left the bay by 1.11 m before.

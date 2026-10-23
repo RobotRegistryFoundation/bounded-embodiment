@@ -166,6 +166,11 @@ Gaussian noise `--sim-sigma-m` (0.001), a fixed bias of length `--sim-bias-m` (0
   GO with `interlocks.typed_word`: input typed before the question is thrown away (`tcflush`),
   and Ctrl+C or the latch ends the question at once. Other questions (OFF at close) are asked as
   before, and simulation adapters keep the plain prompt, so piped answers still work for them.
+- **The escalation command** (`--estop-cmd`) runs without a shell, with stdin, stdout and stderr on
+  /dev/null and in a session of its own: a Ctrl+C at the bench does not reach it, and a command
+  that leaves a child behind cannot hold a pipe open until the timeout. Its record exists before it
+  runs, and the teardown waits for it (up to `estop_timeout_s` + 2 s), so `end.stop.escalation`
+  in declared.json records a slow command too.
 
 ## Modes
 

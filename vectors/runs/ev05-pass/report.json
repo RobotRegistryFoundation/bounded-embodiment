@@ -104,6 +104,7 @@
       "still_window_s": 0.3,
       "rest_radius_m": 0.001,
       "rest_sigma_factor": 3,
+      "max_sigma_jitter_m": 0.0005,
       "hold_s": 2.0,
       "restart_check_s": 2.0,
       "min_trials": 3,
@@ -156,9 +157,9 @@
     },
     "restart_check_s": 2.0,
     "loss_speed_min_mps": 0.125,
-    "sigma_jitter_m": 0.0010000000000000009,
-    "still_radius_m": 0.006000000000000005,
-    "rest_radius_m": 0.0030000000000000027,
+    "sigma_jitter_m": 0.00029999999999999705,
+    "still_radius_m": 0.005,
+    "rest_radius_m": 0.001,
     "still_window_s": 0.3,
     "hold_s": 2.0,
     "clock_uncertainty_s": 0.005,
@@ -184,9 +185,9 @@
         "speed_late_span_s": 0.08000000000000007,
         "speed": "ok",
         "still_t_s": 1.8599999999999999,
-        "rest_t_s": 1.8599999999999999,
+        "rest_t_s": 1.9,
         "settled_t_s": 2.14,
-        "stop_time_s": 0.3649999999999999,
+        "stop_time_s": 0.4049999999999999,
         "stop_distance_m": 0.09821145385117182,
         "hold_until_s": 4.495,
         "hold_displacement_m": 0.0008532530108204328,
@@ -212,15 +213,15 @@
         "speed_late_mps": 0.2514183152369938,
         "speed_late_span_s": 0.08000000000000007,
         "speed": "ok",
-        "still_t_s": 10.06,
+        "still_t_s": 10.1,
         "rest_t_s": 10.1,
-        "settled_t_s": 10.34,
+        "settled_t_s": 10.38,
         "stop_time_s": 0.384999999999999,
-        "stop_distance_m": 0.09250609616135419,
+        "stop_distance_m": 0.09281903431284218,
         "hold_until_s": 12.715,
-        "hold_displacement_m": 0.001745564706244827,
+        "hold_displacement_m": 0.0010559339404732308,
         "restart_until_s": 14.725000000000001,
-        "restart_displacement_m": 0.001535810092279121,
+        "restart_displacement_m": 0.0008643389823949464,
         "longest_spacing_s": 0.040000000000000924,
         "status": "adequate",
         "notes": [],
@@ -242,9 +243,9 @@
         "speed_late_span_s": 0.0799999999999983,
         "speed": "ok",
         "still_t_s": 19.1,
-        "rest_t_s": 19.1,
+        "rest_t_s": 19.14,
         "settled_t_s": 19.38,
-        "stop_time_s": 0.36499999999999944,
+        "stop_time_s": 0.4049999999999986,
         "stop_distance_m": 0.09772662948939186,
         "hold_until_s": 21.735000000000003,
         "hold_displacement_m": 0.00099759020090702,
@@ -340,17 +341,17 @@
       ]
     },
     "jitter": {
-      "sigma_m": 0.0010000000000000009,
+      "sigma_m": 0.00029999999999999705,
       "labels": [
         {
           "label": "j1",
           "samples": 3,
-          "sigma_m": 0.0010000000000000009
+          "sigma_m": 0.00029999999999999705
         },
         {
           "label": "j2",
           "samples": 3,
-          "sigma_m": 0.0010000000000000009
+          "sigma_m": 0.00029999999999999705
         }
       ]
     },
@@ -399,8 +400,8 @@
     },
     {
       "path": "raw/accuracy.csv",
-      "sha256": "sha256:0c86ad0c16da21c72dc8bc79f768c5e6109b62c8c2b85541116c36512cd7a481",
-      "bytes": 1331,
+      "sha256": "sha256:d46893f586baf68ce4e2752e81a0fd741cbfb7dee6684c127e901772ecb5a586",
+      "bytes": 1381,
       "role": "accuracy",
       "format": "be-accuracy-csv/1"
     },
@@ -428,7 +429,7 @@
     {
       "alg": "Ed25519",
       "kid": "JJdiTUjDxOdGPEUxDG7iofB6pXrYDw9x3jGC_j6-djc",
-      "sig": "HYkoGJJODJ4FSTs2s3Y5p4tkhnd3Ju3dqbKa8vyXc7_QBt611K4XXrhbp8P0_c65crokYbRB4rnpuRgOeRR8Aw"
+      "sig": "qd1_lK325oYPZGxVuRwFPyKJC9npexba5j2TKvWlkkI0eWX_Y8D6sc2iW1B_jLk5rzkYyC7eL1ird2hT23-8AQ"
     }
   ]
 }

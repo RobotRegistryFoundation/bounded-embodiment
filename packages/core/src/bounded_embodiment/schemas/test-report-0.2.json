@@ -1192,6 +1192,7 @@
         "still_window_s": { "$ref": "#/$defs/profile_number" },
         "rest_radius_m": { "$ref": "#/$defs/profile_number" },
         "rest_sigma_factor": { "$ref": "#/$defs/profile_number" },
+        "max_sigma_jitter_m": { "$ref": "#/$defs/profile_number" },
         "hold_s": { "$ref": "#/$defs/profile_number" },
         "dead_stop_margin_frac": { "$ref": "#/$defs/profile_number" },
         "restart_check_s": { "$ref": "#/$defs/profile_number" },

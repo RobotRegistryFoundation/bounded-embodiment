@@ -339,7 +339,9 @@ SURVEY = [
 ]
 
 
-def accuracy_rows(post: bool = True) -> list[tuple]:
+def accuracy_rows(post: bool = True, jitter_m: float = 0.001) -> list[tuple]:
+    """The accuracy rows: pre and post per surveyed point, and two jitter labels whose σ is
+    ``jitter_m`` (EV-02 and EV-05 runs use 0.3 mm, within their profiles' max_sigma_jitter_m)."""
     rows = []
     for i, ref in enumerate(SURVEY):
         meas = list(ref)
@@ -351,7 +353,7 @@ def accuracy_rows(post: bool = True) -> list[tuple]:
             )
     for j in range(2):
         base = SURVEY[j]
-        for d in (-0.001, 0.0, 0.001):
+        for d in (-jitter_m, 0.0, jitter_m):
             rows.append(
                 ("jitter", f"j{j + 1}", None, None, None, base[0] + d, base[1] + d, base[2] + d, 1)
             )
@@ -912,6 +914,11 @@ def _unit(a: Xyz, b: Xyz) -> Xyz:
     return ((b[0] - a[0]) / n, (b[1] - a[1]) / n, (b[2] - a[2]) / n)
 
 
+#: The jitter record of the EV-02 and EV-05 runs: within the profiles' max_sigma_jitter_m (0.5 mm),
+#: and the samples' own noise (0.3 mm).
+STOP_JITTER_M = 0.0003
+
+
 def ev02_files(trials: list[tuple[str, str]], slow: dict[int, float] | None = None) -> dict[str, bytes]:
     """An EV-02 run of the synthetic machine: each trial's drive followed exactly, then after the
     stop 20 ms at speed and 0.15 s of braking (``slow`` maps a trial to a longer braking time),
@@ -951,7 +958,7 @@ def ev02_files(trials: list[tuple[str, str]], slow: dict[int, float] | None = No
         "ev02-stop-plan.json": _json(stop_plan_doc(trials)),
         "raw/samples.csv": _csv(SAMPLES_HEADER, sample_rows(script, -0.5, last_t + 0.3 + hold + 0.5)),
         "raw/commands.csv": _csv(COMMANDS_HEADER, rows),
-        "raw/accuracy.csv": _csv(ACCURACY_HEADER, accuracy_rows()),
+        "raw/accuracy.csv": _csv(ACCURACY_HEADER, accuracy_rows(jitter_m=STOP_JITTER_M)),
     }
 
 
@@ -1028,7 +1035,7 @@ def ev05_files(params: dict = LOSS_PARAMS, resumes: bool = False) -> dict[str, b
         "ev05-model-loss-plan.json": _json(loss_plan_doc()),
         "raw/samples.csv": _csv(SAMPLES_HEADER, sample_rows(script, -0.5, last_t + 3.0)),
         "raw/commands.csv": _csv(COMMANDS_HEADER, rows),
-        "raw/accuracy.csv": _csv(ACCURACY_HEADER, accuracy_rows()),
+        "raw/accuracy.csv": _csv(ACCURACY_HEADER, accuracy_rows(jitter_m=STOP_JITTER_M)),
     }
 
 
@@ -1068,7 +1075,7 @@ def tamper_plan_swapped(base: Path, run: Path) -> None:
 
 
 #: How much later tamper-ev02-stop-moved records the late trial's stop (and the commands after it).
-STOP_MOVED_S = 0.1
+STOP_MOVED_S = 0.2
 
 
 def move_stop(lines: list[str], trial: int, shift_s: float) -> list[str]:

@@ -164,11 +164,12 @@ Golden runs added: `ev02-pass`, `ev02-fail`, `ev02-inconclusive-one-source`, `ev
 `ev05-fail-resumed`, `ev05-inconclusive-short-silence` (packaged profiles, no NONSTANDARD_PARAMS),
 and `tamper-ev02-plan-swapped` (FILE_HASH_MISMATCH, with STREAM_DIGEST_MISMATCH and
 STREAM_MISMATCH), `tamper-ev02-stop-moved` (ev02-fail's late stop row and the commands after it
-recorded 0.1 s later, raw_data updated and re-signed as PASS: DERIVED_MISMATCH and
+recorded 0.2 s later, raw_data updated and re-signed as PASS: DERIVED_MISMATCH and
 VERDICT_MISMATCH; a stop row more than a command spacing and 20 ms after its last drive row leaves
 its trial unmeasured, so core derives INCONCLUSIVE (`STOP_TRIAL_UNMEASURED`) however many trials
-the run has; pinned at 0.10, 0.15 and 0.25 s by `test_a_stop_recorded_late_is_caught_whatever_the_shift`,
-and with a spare trial by `test_review_round2.py::test_a_spare_trial_cannot_hide_a_stop_row_recorded_late`)
+the run has, or FAIL when the moved stop still reads too slow; pinned at 0.10 s (FAIL), 0.15 and
+0.25 s by `test_a_stop_recorded_late_is_caught_whatever_the_shift`, and with a spare trial by
+`test_review_round2.py::test_a_spare_trial_cannot_hide_a_stop_row_recorded_late`)
 and `tamper-ev05-fail-as-pass`
 (VERDICT_MISMATCH). The 19 earlier run vectors are unchanged and verify byte for byte as before.
 

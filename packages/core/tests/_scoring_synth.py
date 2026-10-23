@@ -404,6 +404,10 @@ EV02_TRIALS = (
 SPEED = 0.25  # the tool's speed limit in envelope_doc()
 
 
+#: The jitter record of the EV-02 and EV-05 inputs: within the profiles' max_sigma_jitter_m (0.5 mm).
+STOP_JITTER_M = 0.0003
+
+
 def ev02_profile(**changes) -> dict:
     profile = load_profile("ev02-illustrative-0.1")
     profile.update(changes)
@@ -532,7 +536,7 @@ def ev02_input(trials: Sequence[tuple[str, str]] = EV02_TRIALS, reaction_s: floa
         envelope=envelope(points=("tool", "elbow"), stop_sources=STOP_SOURCES),
         samples=samples,
         commands=rows,
-        accuracy=accuracy_rows(),
+        accuracy=accuracy_rows(jitter_sigma_m=STOP_JITTER_M),
         declared=declared(),
         profile=ev02_profile(),
         plan=plan or {"point": "tool",
@@ -612,7 +616,7 @@ def ev05_input(motion_s: Sequence[float] = (1.2, 1.3, 1.26), run_on_s: float = 0
         envelope=envelope(points=("tool", "elbow")),
         samples=samples,
         commands=rows,
-        accuracy=accuracy_rows(),
+        accuracy=accuracy_rows(jitter_sigma_m=STOP_JITTER_M),
         declared=declared(),
         profile=ev05_profile(),
         plan={"point": "tool", "source": "heartbeat_loss",

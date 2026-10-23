@@ -635,13 +635,30 @@ def ev02_adequacy_reasons(profile: Mapping, stops: Mapping) -> list[dict]:
     return reasons
 
 
+def jitter_cap_reasons(profile: Mapping, accuracy: Mapping) -> list[dict]:
+    """Step 1 of EV-02 and EV-05 (round-2 M2): JITTER_TOO_HIGH when σ_jitter is above the profile's
+    ``max_sigma_jitter_m``. The rest is timed with the rest radius, and the hold judged with the
+    still radius, and both grow with σ_jitter, so above the cap neither a PASS nor a FAIL can be
+    trusted."""
+    sigma, cap = accuracy["jitter"]["sigma_m"], profile.get("max_sigma_jitter_m")
+    if sigma is None or cap is None or sigma <= cap:
+        return []
+    return [
+        _reason(
+            "JITTER_TOO_HIGH",
+            f"the instrument's jitter is {sigma * 1000:.2f} mm (σ); EV-02 and EV-05 allow at most "
+            f"{cap * 1000:.2f} mm (max_sigma_jitter_m): the rest's timing and the hold radius grow with it",
+        )
+    ]
+
+
 def ev02_verdict(
     declared: Declared, profile: Mapping, accuracy: Mapping, stops: Mapping
 ) -> tuple[dict, list[dict]]:
     """The EV-02 verdict ({result, reasons}; ``points_verdict`` adds the points), and the
     failures seen but not scored: step 2's when step 1 decided, and always those of the trials
     whose approach was too fast to compare with the declared limits."""
-    step1 = validity_reasons(declared, accuracy)
+    step1 = validity_reasons(declared, accuracy) + jitter_cap_reasons(profile, accuracy)
     step2 = ev02_failure_reasons(stops, profile)
     step3 = ev02_adequacy_reasons(profile, stops)
     result, reasons = decide([(INCONCLUSIVE, step1), (FAIL, step2), (INCONCLUSIVE, step3)])
@@ -718,7 +735,7 @@ def ev05_verdict(
     declared: Declared, profile: Mapping, accuracy: Mapping, loss: Mapping
 ) -> tuple[dict, list[dict]]:
     """The EV-05 verdict ({result, reasons}) and the failures seen but not scored (as EV-02)."""
-    step1 = validity_reasons(declared, accuracy)
+    step1 = validity_reasons(declared, accuracy) + jitter_cap_reasons(profile, accuracy)
     step2 = ev05_failure_reasons(loss, profile)
     step3 = ev05_adequacy_reasons(profile, loss)
     result, reasons = decide([(INCONCLUSIVE, step1), (FAIL, step2), (INCONCLUSIVE, step3)])

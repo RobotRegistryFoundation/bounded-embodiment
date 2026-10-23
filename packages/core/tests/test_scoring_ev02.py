@@ -38,8 +38,8 @@ def test_stop_run_passes() -> None:
     stops = out["stops"]
     assert stops["point"] == "tool" and stops["speed_limit_mps"] == 0.25
     assert stops["approach_speed_min_mps"] == pytest.approx(0.2)
-    assert stops["still_radius_m"] == pytest.approx(0.006)  # 6 x the 1 mm jitter beats 5 mm
-    assert stops["rest_radius_m"] == pytest.approx(0.003)  # 3 x the 1 mm jitter beats 1 mm
+    assert stops["still_radius_m"] == pytest.approx(0.005)  # 5 mm beats 6 x the 0.3 mm jitter
+    assert stops["rest_radius_m"] == pytest.approx(0.001)  # 1 mm beats 3 x the 0.3 mm jitter
     assert stops["command_spacing_s"] == pytest.approx(0.02)
     assert [s["source"] for s in stops["sources"]] == ["stop_message", "hardwired_stop"]
     by = {s["source"]: s for s in stops["sources"]}
@@ -83,16 +83,32 @@ def test_each_source_is_judged_by_its_own_limits() -> None:
 def test_a_slow_brake_is_timed_close_to_its_rest() -> None:
     """Review finding 4: braking over 0.36 s truly rests 0.38 s after the stop (0.385 s with U),
     past the 0.30 s limit. Timed by the first measurement within r of where it then stayed, it
-    read 0.272 s and passed; timed within the rest radius r_t it is late."""
-    for accuracy, at_least in ((accuracy_rows(), 0.30), (accuracy_rows(jitter_sigma_m=0.0002), 0.33)):
-        out = run(slow={0: 0.36, 1: 0.36, 2: 0.36}, accuracy=accuracy)
+    read 0.272 s and passed; timed within the rest radius r_t of where it held, it is late, with
+    a jitter record just under max_sigma_jitter_m (0.45 mm: r_t 1.35 mm) as with a quiet one
+    (0.2 mm: r_t 1 mm). Above the cap the run is INCONCLUSIVE (test_review_round2)."""
+    for sigma, r_t in ((0.00045, 0.00135), (0.0002, 0.001)):
+        out = run(slow={0: 0.36, 1: 0.36, 2: 0.36}, accuracy=accuracy_rows(jitter_sigma_m=sigma))
+        assert out["stops"]["rest_radius_m"] == pytest.approx(r_t)
         for t in out["stops"]["trials"][:3]:
             assert t["failures"] == ["STOP_TIME_EXCEEDED"]
-            assert at_least < t["stop_time_s"] <= 0.385
+            assert 0.33 < t["stop_time_s"] <= 0.385
         assert result(out) == ("FAIL", ["STOP_TIME_EXCEEDED"] * 3)
     # r_t is never larger than the still radius
     out = run(profile=ev02_profile(rest_radius_m=0.01))
-    assert out["stops"]["rest_radius_m"] == out["stops"]["still_radius_m"] == pytest.approx(0.006)
+    assert out["stops"]["rest_radius_m"] == out["stops"]["still_radius_m"] == pytest.approx(0.005)
+
+
+def test_the_brake_once_judged_by_source_now_fails_as_either() -> None:
+    """Round-2 review note N5: this pins the scenario test_each_source_is_judged_by_its_own_limits
+    used before round 2. The same 0.35 s braking (truly at rest 0.375 s after the stop, U
+    included) passed as a stop message, timed within r; timed within r_t of where it held it fails
+    as a stop message (300 ms) and as a hardwired stop (250 ms, and 0.04 m)."""
+    out = run(noise_m=0.0005, slow={0: 0.35, 3: 0.35})
+    trials = out["stops"]["trials"]
+    assert trials[0]["failures"] == ["STOP_TIME_EXCEEDED"]
+    assert trials[3]["failures"] == ["STOP_TIME_EXCEEDED", "STOP_DISTANCE_EXCEEDED"]
+    assert 0.30 < trials[0]["stop_time_s"] <= 0.375
+    assert result(out) == ("FAIL", ["STOP_DISTANCE_EXCEEDED", "STOP_TIME_EXCEEDED", "STOP_TIME_EXCEEDED"])
 
 
 def test_a_dead_stop_fails_because_the_commands_go_on() -> None:

@@ -10,6 +10,7 @@
   "still_window_s": 0.3,
   "rest_radius_m": 0.001,
   "rest_sigma_factor": 3,
+  "max_sigma_jitter_m": 0.0005,
   "hold_s": 2.0,
   "dead_stop_margin_frac": 0.2,
   "min_trials_per_source": 3,

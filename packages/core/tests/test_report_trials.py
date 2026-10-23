@@ -226,13 +226,21 @@ def test_make_run_round_trips(tmp_path: Path) -> None:
         assert result.consistent and result.verdict["result"] == want["verdict"]
 
 
-@pytest.mark.parametrize("shift_s", [0.1, 0.15, 0.25])
-def test_a_stop_recorded_late_is_caught_whatever_the_shift(tmp_path: Path, shift_s: float) -> None:
+UNMEASURED_LATE = ("INCONCLUSIVE", ["STOP_DRIVES_TOO_FEW", "STOP_TRIALS_TOO_FEW", "STOP_TRIAL_UNMEASURED"])
+
+
+@pytest.mark.parametrize(("shift_s", "derived"), [(0.1, ("FAIL", ["STOP_TIME_EXCEEDED"])),
+                                                  (0.15, UNMEASURED_LATE), (0.25, UNMEASURED_LATE)])
+def test_a_stop_recorded_late_is_caught_whatever_the_shift(tmp_path: Path, shift_s: float,
+                                                            derived: tuple) -> None:
     """Review finding 5: moving ev02-fail's late stop row by +0.10 s or +0.15 s (rather than the
     first vector's +0.25 s) gave a consistent PASS, because the moved trial still read as at speed.
     A stop row more than a command spacing and 20 ms after its last drive row now leaves the trial
-    unmeasured (round-2 M3), so the re-signed PASS is caught at every shift, with the same derived
-    verdict, however many trials the run has (test_review_round2)."""
+    unmeasured (round-2 M3), so the re-signed PASS is caught at every shift: core derives
+    INCONCLUSIVE however many trials the run has (test_review_round2), or FAIL when the stop,
+    timed from the moved row, is still too slow (+0.10 s: 0.285 s against 0.25 s with the
+    0.3 mm jitter record the EV-02 vectors carry since round-2 M2; a failure an unmeasured trial
+    shows still counts)."""
     g = golden()
     run = copy_run("ev02-fail", tmp_path)
     report = read_report(run)
@@ -246,9 +254,7 @@ def test_a_stop_recorded_late_is_caught_whatever_the_shift(tmp_path: Path, shift
     assert not result.consistent
     codes = [f.code for f in result.findings if f.severity == "error"]
     assert codes == ["DERIVED_MISMATCH", "VERDICT_MISMATCH"]
-    assert result.verdict["result"] == "INCONCLUSIVE"
-    assert [r["code"] for r in result.verdict["reasons"]] == ["STOP_DRIVES_TOO_FEW", "STOP_TRIALS_TOO_FEW",
-                                                             "STOP_TRIAL_UNMEASURED"]
+    assert (result.verdict["result"], [r["code"] for r in result.verdict["reasons"]]) == derived
 
 
 def test_ev02_and_ev05_reports_pin_the_method_version_and_have_no_control_role(tmp_path: Path) -> None:

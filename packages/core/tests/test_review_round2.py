@@ -4,6 +4,8 @@ and parameters, and scores it with core's own scorers."""
 
 from __future__ import annotations
 
+import math
+
 import pytest
 from _report_helpers import golden, in_repo
 
@@ -13,9 +15,14 @@ from bounded_embodiment.commandspace import load_command_space
 from bounded_embodiment.envelope import load
 from bounded_embodiment.generator import encode_payload
 from bounded_embodiment.rawdata import Command
-from bounded_embodiment.scoring import ScoringInput, ev02
+from bounded_embodiment.scoring import ScoringInput, ev02, ev05
+from bounded_embodiment.scoring import stops as stops_mod
 
 pytestmark = in_repo
+
+
+def _result(out: dict) -> tuple[str, list[str]]:
+    return out["verdict"]["result"], [r["code"] for r in out["verdict"]["reasons"]]
 
 
 def _dead_stop_run(monkeypatch, drives, step_cap):
@@ -42,7 +49,8 @@ def _dead_stop_run(monkeypatch, drives, step_cap):
     script.add(pts[0][0], G._follow([t for t, _ in pts], [x for _, x in pts]))
     samples = T.sample_rows(script, -0.5, rows[-1].t_sent_s + 1.0, 100.0, ("tool",), 0.0003)
     return ev02.score(ScoringInput(envelope=load(G.stop_envelope_doc()), samples=samples, commands=rows,
-                                   accuracy=T.accuracy_rows(), declared=T.declared(), profile=T.ev02_profile(),
+                                   accuracy=T.accuracy_rows(jitter_sigma_m=T.STOP_JITTER_M),
+                                   declared=T.declared(), profile=T.ev02_profile(),
                                    plan=plan.for_scoring(space)))
 
 
@@ -68,12 +76,15 @@ def test_the_walk_rule_still_lets_a_long_walk_count(monkeypatch):
     assert all(t["walk_end_s"] - t["stop_s"] > 0.3 for t in out["stops"]["trials"])
 
 
-@pytest.mark.parametrize("shift_s", [None, 0.1, 0.25])
+@pytest.mark.parametrize("shift_s", [None, 0.1, 0.15, 0.25])
 def test_a_spare_trial_cannot_hide_a_stop_row_recorded_late(tmp_path, shift_s):
     """Finding 3: with one spare hardwired trial, ev02-fail's late, far stop recorded 0.1 s late
     read 0.245 s and 41 mm from the moved instant, its trial was only "inadequate", the spare
     trial made up the count, and the run PASSed (consistent). A late stop row now leaves its trial
-    unmeasured, so the run is INCONCLUSIVE, never PASS."""
+    unmeasured, so the run is INCONCLUSIVE, never PASS. With the 0.3 mm jitter record the EV-02
+    vectors carry since M2, the stop recorded 0.1 s late still reads too slow (0.285 s against
+    0.25 s), and a failure an unmeasured trial shows counts, so that shift FAILs; 0.15 s is now
+    the shift at which the moved stop reads inside the limits (0.235 s), as 0.1 s did."""
     G = golden()
     trials = G.EV02_TRIALS + [("hardwired_stop", "x_plus")]
     run = tmp_path / "run"
@@ -90,5 +101,80 @@ def test_a_spare_trial_cannot_hide_a_stop_row_recorded_late(tmp_path, shift_s):
     codes = [r["code"] for r in res.verdict["reasons"]]
     if shift_s is None:
         assert res.verdict["result"] == "FAIL" and codes == ["STOP_DISTANCE_EXCEEDED", "STOP_TIME_EXCEEDED"]
+    elif shift_s == 0.1:
+        assert res.verdict["result"] == "FAIL" and codes == ["STOP_TIME_EXCEEDED"]
     else:
         assert res.verdict["result"] == "INCONCLUSIVE" and "STOP_TRIAL_UNMEASURED" in codes
+
+
+# --------------------------------------------------------------------------- finding 2 (M2)
+
+
+@pytest.mark.parametrize(("brake_s", "sigma_m"), [(0.34, 0.001), (0.36, 0.002)])
+def test_a_noisy_jitter_record_cannot_pass_a_slow_stop(brake_s, sigma_m):
+    """Finding 2(a): the rest radius r_t, and with it how early the rest is timed, grow with
+    σ_jitter, and the jitter record is the lab's. The helper's 0.34 s brake (truly at rest 0.365 s
+    after the stop, U included) read 0.272 s at σ 1 mm, and round 1's 0.36 s brake read 0.238 s at
+    σ 2 mm: both PASSed the 0.30 s limit. Above max_sigma_jitter_m (0.5 mm) EV-02 is now
+    INCONCLUSIVE (JITTER_TOO_HIGH, step 1), and with a 0.3 mm record the same stops FAIL."""
+    slow = dict.fromkeys(range(3), brake_s)
+    noisy = ev02.score(T.ev02_input(slow=slow, accuracy=T.accuracy_rows(jitter_sigma_m=sigma_m)))
+    assert _result(noisy) == ("INCONCLUSIVE", ["JITTER_TOO_HIGH"])
+    assert "max_sigma_jitter_m" in noisy["verdict"]["reasons"][0]["detail"]
+    assert _result(ev02.score(T.ev02_input(slow=slow))) == ("FAIL", ["STOP_TIME_EXCEEDED"] * 3)
+
+
+def test_ev05_caps_the_jitter_too():
+    out = ev05.score(T.ev05_input(accuracy=T.accuracy_rows(jitter_sigma_m=0.001)))
+    assert _result(out) == ("INCONCLUSIVE", ["JITTER_TOO_HIGH"])
+    assert _result(ev05.score(T.ev05_input(accuracy=T.accuracy_rows(jitter_sigma_m=0.00045)))) == ("PASS", [])
+
+
+def _lcg(seed: int):
+    s = seed
+    while True:
+        s = (s * 6364136223846793005 + 1442695040888963407) % (1 << 64)
+        yield ((s >> 11) + 0.5) / float(1 << 53)
+
+
+def _braking_track(rate_hz, phase, seed, decel, sigma_m=0.0003, v0=0.25, react_s=0.02, t_end=4.0):
+    """A point at v0 along x until react_s after the instant (t = 0), then braking uniformly at
+    decel to rest, measured at rate_hz from -1 s (offset by phase spacings) with noise of σ sigma_m
+    on each axis (a sum of 12 uniform draws, reproducible everywhere). Returns the measurements and
+    the true rest time."""
+    g = _lcg(seed)
+
+    def noise() -> float:
+        return (sum(next(g) for _ in range(12)) - 6.0) * sigma_m
+
+    t_rest = react_s + v0 / decel
+    out, k = [], 0
+    while (t := -1.0 + (phase + k) / rate_hz) <= t_end:
+        if t <= react_s:
+            x = v0 * t
+        elif t <= t_rest:
+            x = v0 * react_s + v0 * (t - react_s) - 0.5 * decel * (t - react_s) ** 2
+        else:
+            x = v0 * react_s + v0 * v0 / (2 * decel)
+        out.append((t, (0.3 + x + noise(), noise(), 0.175 + noise())))
+        k += 1
+    return out, t_rest
+
+
+def test_a_low_rate_instrument_does_not_time_a_quick_stop_late():
+    """Finding 2(b): near the 10 Hz floor the still window holds three or four measurements, one of
+    them still moving, so their mean sits 1-2 mm toward it, farther than r_t (1 mm) from the point
+    at rest; the measurements at rest then missed r_t until noise brought one in. At 11 Hz and
+    σ 0.3 mm a 1.4 m/s^2 stop, truly at rest 0.199 s after the instant, read 0.323 s, past the
+    0.30 s limit (a false FAIL). Timed against the mean over the hold it reads within one spacing
+    of the truth."""
+    track, t_rest = _braking_track(11.0, 0.5, 2, decel=1.4)
+    rules = stops_mod.StopRules(clock_uncertainty_s=0.005, speed_window_s=0.2, gap_threshold_s=1.0,
+                                gap_max_s=1.0, still_radius_m=0.005, still_window_s=0.3, hold_s=2.0,
+                                speed_limit_mps=0.25, speed_min_frac=0.8, tolerance_speed_frac=0.05,
+                                sigma_m=0.0003, rest_radius_m=0.001)
+    m = stops_mod.measure_stop(stops_mod.Measurements.of(track), t_event=0.0, end_t=math.inf,
+                               allowed_time_s=0.3, rules=rules, hold_to=3.5)
+    assert m.measured
+    assert t_rest + 0.005 <= m.stop_time_s <= t_rest + 0.005 + 1 / 11.0
+    assert m.stop_time_s < 0.30 and not m.late

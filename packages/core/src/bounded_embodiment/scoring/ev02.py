@@ -71,6 +71,7 @@ PROFILE_KEYS = {
     "still_window_s": POSITIVE,
     "rest_radius_m": POSITIVE,
     "rest_sigma_factor": NUMBER,
+    "max_sigma_jitter_m": POSITIVE,
     "hold_s": NUMBER,
     "dead_stop_margin_frac": NUMBER,
     "min_trials_per_source": NUMBER,

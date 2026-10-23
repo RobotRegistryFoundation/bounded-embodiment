@@ -100,6 +100,7 @@
       "still_window_s": 0.3,
       "rest_radius_m": 0.001,
       "rest_sigma_factor": 3,
+      "max_sigma_jitter_m": 0.0005,
       "hold_s": 2.0,
       "dead_stop_margin_frac": 0.2,
       "min_trials_per_source": 3,
@@ -151,9 +152,9 @@
     "point": "tool",
     "speed_limit_mps": 0.25,
     "approach_speed_min_mps": 0.2,
-    "sigma_jitter_m": 0.0010000000000000009,
-    "still_radius_m": 0.006000000000000005,
-    "rest_radius_m": 0.0030000000000000027,
+    "sigma_jitter_m": 0.00029999999999999705,
+    "still_radius_m": 0.005,
+    "rest_radius_m": 0.001,
     "still_window_s": 0.3,
     "hold_s": 2.0,
     "clock_uncertainty_s": 0.005,
@@ -211,13 +212,13 @@
         "approach_late_speed_mps": 0.23847093055552326,
         "approach_late_span_s": 0.07999999999999996,
         "approach": "ok",
-        "still_t_s": 0.38,
+        "still_t_s": 0.42000000000000004,
         "rest_t_s": 0.42000000000000004,
-        "settled_t_s": 0.6599999999999999,
+        "settled_t_s": 0.7,
         "stop_time_s": 0.14500000000000002,
         "stop_distance_m": 0.029762128687432096,
         "hold_until_s": 4.2749999999999995,
-        "hold_displacement_m": 0.0016014810197382244,
+        "hold_displacement_m": 0.001230641620666736,
         "longest_spacing_s": 0.040000000000000036,
         "status": "adequate",
         "notes": [],
@@ -243,9 +244,9 @@
         "approach_late_span_s": 0.08000000000000007,
         "approach": "ok",
         "still_t_s": 5.38,
-        "rest_t_s": 5.38,
+        "rest_t_s": 5.42,
         "settled_t_s": 5.66,
-        "stop_time_s": 0.1250000000000001,
+        "stop_time_s": 0.16500000000000015,
         "stop_distance_m": 0.034500399418513406,
         "hold_until_s": 9.254999999999999,
         "hold_displacement_m": 0.0011723530451047222,
@@ -305,9 +306,9 @@
         "approach_late_span_s": 0.08000000000000007,
         "approach": "ok",
         "still_t_s": 15.34,
-        "rest_t_s": 15.34,
+        "rest_t_s": 15.38,
         "settled_t_s": 15.620000000000001,
-        "stop_time_s": 0.12499999999999922,
+        "stop_time_s": 0.16500000000000015,
         "stop_distance_m": 0.03415086689339021,
         "hold_until_s": 19.215,
         "hold_displacement_m": 0.0014627482885880112,
@@ -335,13 +336,13 @@
         "approach_late_speed_mps": 0.2552909103631233,
         "approach_late_span_s": 0.0799999999999983,
         "approach": "ok",
-        "still_t_s": 20.5,
-        "rest_t_s": 20.54,
-        "settled_t_s": 20.78,
-        "stop_time_s": 0.34499999999999986,
-        "stop_distance_m": 0.0596041774032089,
+        "still_t_s": 20.54,
+        "rest_t_s": 20.58,
+        "settled_t_s": 20.82,
+        "stop_time_s": 0.384999999999999,
+        "stop_distance_m": 0.05970170918172558,
         "hold_until_s": 24.195,
-        "hold_displacement_m": 0.001897875181220667,
+        "hold_displacement_m": 0.0012703512182462478,
         "longest_spacing_s": 0.0400000000000027,
         "status": "adequate",
         "notes": [],
@@ -370,9 +371,9 @@
         "approach_late_span_s": 0.08000000000000185,
         "approach": "ok",
         "still_t_s": 25.3,
-        "rest_t_s": 25.3,
+        "rest_t_s": 25.34,
         "settled_t_s": 25.58,
-        "stop_time_s": 0.125000000000001,
+        "stop_time_s": 0.16500000000000015,
         "stop_distance_m": 0.033740542826423754,
         "hold_until_s": 28.18,
         "hold_displacement_m": 0.001299901405179737,
@@ -464,17 +465,17 @@
       ]
     },
     "jitter": {
-      "sigma_m": 0.0010000000000000009,
+      "sigma_m": 0.00029999999999999705,
       "labels": [
         {
           "label": "j1",
           "samples": 3,
-          "sigma_m": 0.0010000000000000009
+          "sigma_m": 0.00029999999999999705
         },
         {
           "label": "j2",
           "samples": 3,
-          "sigma_m": 0.0010000000000000009
+          "sigma_m": 0.00029999999999999705
         }
       ]
     },
@@ -523,15 +524,15 @@
     },
     {
       "path": "raw/accuracy.csv",
-      "sha256": "sha256:0c86ad0c16da21c72dc8bc79f768c5e6109b62c8c2b85541116c36512cd7a481",
-      "bytes": 1331,
+      "sha256": "sha256:d46893f586baf68ce4e2752e81a0fd741cbfb7dee6684c127e901772ecb5a586",
+      "bytes": 1381,
       "role": "accuracy",
       "format": "be-accuracy-csv/1"
     },
     {
       "path": "raw/commands.csv",
-      "sha256": "sha256:2fb92bd88eeca5a16ba8f4f7f10d10fe6985c60d59dc2e112e488391d6b4ea06",
-      "bytes": 92913,
+      "sha256": "sha256:f740f852640e6c5789bfe726182ac2c278bb521f3ee34e35b9092d310cac2d09",
+      "bytes": 94437,
       "role": "commands",
       "format": "be-commands-csv/1"
     },
@@ -552,7 +553,7 @@
     {
       "alg": "Ed25519",
       "kid": "JJdiTUjDxOdGPEUxDG7iofB6pXrYDw9x3jGC_j6-djc",
-      "sig": "rB2d2dQgKD-sAGfXXppmaH6Gyn4NYU6G30epJ2vcHAxHNT1tRAAHIlYd4HJB9VzvR_Bab3e8kLHuBlt6vzueAQ"
+      "sig": "FvO9GSPAcWwPw9SgcfT_JbHdnqaLoUbdGHVY065ELsiESgwE6GG7uY86aip2osg-KCSJ0pvvrq0GH1hMYLBhCw"
     }
   ]
 }

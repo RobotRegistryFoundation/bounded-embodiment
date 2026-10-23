@@ -91,7 +91,12 @@ be-watchdog      every 10 ms: both tripwires; on a trip -> StopLatch.trip() -> a
 - **One bus lock** per adapter (an `RLock`), taken by `send`, `read_state`, `execute_stop`, `close`.
   The watchdog never takes it. `close()` waits at most 5 s for it, then refuses to touch the bus.
 - **Every end is a latch**: a tripwire, Ctrl+C (`operator`), an error, or the stream finishing
-  (`finished`). A cancelled start (wrong typed word, never still) sends nothing and is not latched.
+  (`finished`). A hangup (SIGHUP, as when an ssh session drops) and SIGTERM are handled as Ctrl+C
+  once the run has started (`session.STOP_SIGNALS`, round-2 review of #13): the latch trips with
+  what happened, the stop phase runs and declared.json's end is written; before, the process ended
+  at once, with no stop. The logger, and the OFF question at close, survive a terminal that is
+  gone (torque stays on). A cancelled start (wrong typed word, never still) sends nothing and is
+  not latched.
 - **Stop acknowledgement**: the tool's speed over instrument samples captured after the first
   *executed* stop (span 0.1 to 0.2 s) must drop below 20 mm/s by latch + 0.25 s. Without an
   instrument (goto-start only) the robot's own FK is used. Otherwise, and also if the stop was never
@@ -162,11 +167,16 @@ Gaussian noise `--sim-sigma-m` (0.001), a fixed bias of length `--sim-bias-m` (0
   `--no-fk-tripwire-i-understand`, gets the 0.2 s tool-unseen limit, and declares `fk_tripwire: override`.
 - **Typed words on hardware** (added 22 Oct, from the review of PR #12): with an adapter that is
   not a simulation, `be run` and `be goto-start` refuse stdin that is not a terminal before
-  anything moves (`interlocks.require_terminal`; the message names `ssh -t`), and ask for RUN and
-  GO with `interlocks.typed_word`: input typed before the question is thrown away (`tcflush`),
-  and Ctrl+C or the latch ends the question at once. Other questions (OFF at close) are asked as
-  before, and simulation adapters keep the plain prompt, so piped answers still work for them.
-- **The escalation command** (`--estop-cmd`) runs without a shell, with stdin, stdout and stderr on
+  anything moves (`interlocks.require_terminal`; the message names `ssh -t`, and tmux or screen,
+  which a dropped connection does not end), and so they do on a platform without termios, which
+  `typed_word` needs; they ask for RUN and GO with `interlocks.typed_word`: input typed before the
+  question is thrown away (`tcflush`), and Ctrl+C or the latch ends the question at once. A typed
+  word that cannot be asked (a terminal that fails) cancels, and the log says why. Other questions
+  (OFF at close) are asked as before, and simulation adapters keep the plain prompt, so piped
+  answers still work for them.
+- **The escalation command** (`--estop-cmd`) is checked before anything connects
+  (`interlocks.check_command`: it must split, and name a program on PATH), so a typo is not found
+  only when CUT POWER fires. It runs without a shell, with stdin, stdout and stderr on
   /dev/null and in a session of its own: a Ctrl+C at the bench does not reach it, and a command
   that leaves a child behind cannot hold a pipe open until the timeout. Its record exists before it
   runs, and the teardown waits for it (up to `estop_timeout_s` + 2 s), so `end.stop.escalation`

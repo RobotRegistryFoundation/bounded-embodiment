@@ -189,7 +189,7 @@ def leave_safe(bus: object, prompt: Callable[[str], str], log: Callable[[str], N
     try:
         answer = prompt("Support the arm, then type OFF and Enter to turn torque off (it goes limp), "
                         "or just Enter to leave torque on: ")
-    except EOFError:
+    except (EOFError, OSError):  # end of input, or a terminal that is gone: torque stays on
         answer = ""
     outcome = "torque_on"
     try:

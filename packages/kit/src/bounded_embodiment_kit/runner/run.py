@@ -99,7 +99,10 @@ class RunError(RuntimeError):
 
 
 def _stderr(msg: str) -> None:
-    print(msg, file=sys.stderr, flush=True)
+    try:
+        print(msg, file=sys.stderr, flush=True)
+    except OSError:  # the terminal is gone (a hangup): the stop and the records go on without it
+        pass
 
 
 def _iso(t: float | None = None) -> str:

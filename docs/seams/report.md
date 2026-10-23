@@ -148,9 +148,10 @@ findings are relayed with their own codes (PLAN_PARSE_ERROR, PLAN_NOT_OBJECT,
 PLAN_VERSION_UNSUPPORTED, PLAN_DUPLICATE_ID, PLAN_DUPLICATE_SOURCE, PLAN_UNKNOWN_DRIVE,
 PLAN_UNKNOWN_SOURCE, PLAN_COMMAND_UNKNOWN_AXIS, PLAN_COMMAND_MISSING_AXIS,
 PLAN_COMMAND_OUTSIDE_LIMITS, PLAN_RESUME_UNCHECKED for a model-loss plan that resumes on commands
-at once in a position space; schema violations SCHEMA_INVALID), as WAYPOINTS_* are. The plan's
-scoring part (`for_scoring(space)`) also carries each drive's command digest and whether the
-command space holds positions.
+in a position space at once or, against the declared profile's `min_resume_check_s`, sooner than
+that; schema violations SCHEMA_INVALID), as WAYPOINTS_* are. The plans' scoring parts
+(`for_scoring(space)`) also say whether the command space holds positions, and the stop plan's
+carries each drive's command digest.
 
 **Test report 0.2** is 0.1 with `test` EV-02 and EV-05, their generators and scorers, and the
 derived blocks `stops` (EV-02) or `model_loss` (EV-05) in place of `window`, `achieved_rates`,

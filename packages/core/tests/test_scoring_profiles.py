@@ -105,6 +105,7 @@ def test_ev05_profile_values():
         "max_sigma_jitter_m": 0.0005,
         "hold_s": 2.0,
         "restart_check_s": 2.0,
+        "min_resume_check_s": 0.3,
         "min_trials": 3,
         "gap_min_s": 0.1,
         "gap_max_s": 1.0,

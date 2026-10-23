@@ -206,7 +206,7 @@ the envelope's first point, which must have zones):
 Method §12.7 and §13.6 state the rules; `scoring/stops.py` holds what the two share. Both need
 `ScoringInput.plan`, the plan's scoring part (`StopPlan.for_scoring(space)`: `{point, sources,
 drives: {id: command digest}, position}`; `ModelLossPlan.for_scoring(space)`: `{point, source,
-resume}`), and score one point, the stop point.
+resume, position}`), and score one point, the stop point.
 
 - **Measurements**: valid samples of the stop point from the first command's `t_sent` − U on
   (no window end). The still radius is r = `max(still_radius_m, still_sigma_factor · σ_jitter)`;
@@ -250,7 +250,12 @@ resume}`), and score one point, the stop point.
 - **EV-05's restart check**: from the first restart − U for `after_ms` (resume rule `commands`)
   or `restart_check_s` (manual), the point must stay within the still radius of where it settled;
   under `commands` a move is judged only up to the restart + `after_ms` − U, and the window must
-  be measured to the restart + c + U.
+  be measured to the restart + c + U. A judged part with no measurement in it checked nothing,
+  so the trial is inadequate. In a position space (`position`) the stop half is met by
+  construction and the restart check is all that EV-05 tests, so a `commands` rule whose
+  c − U is below `min_resume_check_s` leaves every trial inadequate; `check_plan_commands`
+  refuses such a plan (`after_ms` 0, or below the profile's minimum when it is given:
+  `PLAN_RESUME_UNCHECKED`), in derive with the declared profile and in the kit before RUN.
 - **Status per trial**: `unmeasured`, `not_comparable` (faster than the speed limit allows:
   failures observed, never scored), `adequate` or `inadequate`.
 

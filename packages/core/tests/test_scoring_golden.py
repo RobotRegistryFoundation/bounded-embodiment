@@ -101,10 +101,11 @@ CASES = {
     # the first loss runs on for 1 s; the third follows the restarted commands
     "ev05-fail-late-resumed": lambda: ("ev05-model-loss/1", ev05_input(
         noise_m=0.0005, late={0: 1.0}, resumes=(2,))),
-    # resume rule "commands" after 0 ms: following the restart is allowed; two trials only
+    # resume rule "commands" after 0 ms (a velocity space): following the restart is allowed;
+    # two trials only
     "ev05-inconclusive-commands-rule": lambda: ("ev05-model-loss/1", ev05_input(
         motion_s=(1.2, 1.3), resumes=(0, 1), restart_s=1.6, noise_m=0.0005,
-        resume={"rule": "commands", "after_ms": 0})),
+        resume={"rule": "commands", "after_ms": 0}, position=False)),
 }
 
 

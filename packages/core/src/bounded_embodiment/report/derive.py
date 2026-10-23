@@ -625,7 +625,7 @@ def derive(view: View, files: RunFiles) -> Derivation:
     envelope = _envelope(files, d)
     space = _command_space(files, view, d)
     waypoints = _waypoints(files, space, d) if view.test == "EV-10" else None
-    plan = _plan(files, space, view.test, d)
+    plan = _plan(files, space, view.test, d, view.profile)
     rows = _raw(files, d)
     commands = rows.get("commands")
     declared_file_ready = (
@@ -761,10 +761,11 @@ def _waypoints(files: RunFiles, space: CommandSpace | None, d: Derivation) -> Wa
 
 
 def _plan(
-    files: RunFiles, space: CommandSpace | None, test: str, d: Derivation
+    files: RunFiles, space: CommandSpace | None, test: str, d: Derivation, profile: object = None
 ) -> StopPlan | ModelLossPlan | None:
     """The EV-02 stop plan or the EV-05 model-loss plan, loaded and checked against the command
-    space; None for other tests, or with findings when it is absent or not usable."""
+    space (and, for EV-05, the declared profile's ``min_resume_check_s``); None for other tests,
+    or with findings when it is absent or not usable."""
     loaders = {
         "EV-02": ("stop_plan", STOP_PLAN_FILE, load_stop_plan),
         "EV-05": ("model_loss_plan", MODEL_LOSS_PLAN_FILE, load_model_loss_plan),
@@ -781,11 +782,18 @@ def _plan(
         d.findings.extend(_located(e.findings, path))
         return None
     if space is not None:
-        problems = check_plan_commands(plan, space, path)
+        problems = check_plan_commands(plan, space, path, _min_resume_check(profile))
         if problems:
             d.findings.extend(problems)
             return None
     return plan
+
+
+def _min_resume_check(profile: object) -> float | None:
+    """The profile's ``min_resume_check_s`` when it is a number (the scorer refuses a profile
+    without one; a declared profile that is not an object is reported elsewhere)."""
+    value = profile.get("min_resume_check_s") if isinstance(profile, Mapping) else None
+    return float(value) if _is_number(value) else None
 
 
 _READERS = {

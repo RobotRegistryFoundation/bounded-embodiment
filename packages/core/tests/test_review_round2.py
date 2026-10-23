@@ -15,6 +15,7 @@ from bounded_embodiment.commandspace import load_command_space
 from bounded_embodiment.envelope import load
 from bounded_embodiment.generator import encode_payload
 from bounded_embodiment.rawdata import Command
+from bounded_embodiment.report.plans import check_plan_commands
 from bounded_embodiment.scoring import ScoringInput, ev02, ev05
 from bounded_embodiment.scoring import stops as stops_mod
 
@@ -178,3 +179,92 @@ def test_a_low_rate_instrument_does_not_time_a_quick_stop_late():
     assert m.measured
     assert t_rest + 0.005 <= m.stop_time_s <= t_rest + 0.005 + 1 / 11.0
     assert m.stop_time_s < 0.30 and not m.late
+
+
+# --------------------------------------------------------------------------- finding 4 (M4)
+
+
+def _loss_plan(resume: dict):
+    return rep.load_model_loss_plan(dict(golden().loss_plan_doc(), resume=resume))
+
+
+@pytest.mark.parametrize("after_ms", [0, 1, 30, 299])
+def test_a_resume_check_too_short_to_tell_is_refused_in_a_position_space(after_ms):
+    """Finding 4: on a position-commanded machine the stop half of EV-05 is met by construction,
+    so the restart check is all EV-05 tests there, and a check of c ms judges only up to the
+    restart + c - U. The plan check refused after_ms 0 and accepted 1 and 30. With the profile's
+    min_resume_check_s (0.3 s) it refuses anything shorter (PLAN_RESUME_UNCHECKED); without a
+    profile (the generator's own check) it refuses 0 as before."""
+    space = load_command_space(golden().COMMAND_SPACE)  # cartesian_position
+    plan = _loss_plan({"rule": "commands", "after_ms": after_ms, "description": "x"})
+    found = check_plan_commands(plan, space, "p", min_resume_check_s=0.3)
+    assert [(f.code, f.severity) for f in found] == [("PLAN_RESUME_UNCHECKED", "error")]
+    assert ("min_resume_check_s" in found[0].detail) == (after_ms > 0)
+    assert [f.code for f in check_plan_commands(plan, space, "p")] == (["PLAN_RESUME_UNCHECKED"] if after_ms == 0 else [])
+
+
+def test_a_resume_check_as_long_as_the_minimum_is_accepted():
+    space = load_command_space(golden().COMMAND_SPACE)
+    plan = _loss_plan({"rule": "commands", "after_ms": 300, "description": "x"})
+    assert check_plan_commands(plan, space, "p", min_resume_check_s=0.3) == []
+    velocity = dict(golden().COMMAND_SPACE, kind="velocity")
+    velocity.pop("far_targets", None)
+    plan = _loss_plan({"rule": "commands", "after_ms": 1, "description": "x"})
+    assert check_plan_commands(plan, load_command_space(velocity), "p", min_resume_check_s=0.3) == []
+
+
+def test_ev05s_scoring_plan_says_whether_the_space_holds_positions():
+    plan = _loss_plan({"rule": "manual"})
+    assert plan.for_scoring(load_command_space(golden().COMMAND_SPACE))["position"] is True
+    velocity = dict(golden().COMMAND_SPACE, kind="velocity")
+    velocity.pop("far_targets", None)
+    assert plan.for_scoring(load_command_space(velocity))["position"] is False
+
+
+@pytest.mark.parametrize("after_ms", [1, 30, 80])
+def test_a_machine_with_no_loss_handling_cannot_pass_a_short_check(after_ms):
+    """Finding 4: in a position space a machine with no loss handling settles on its last goal and
+    follows the restart when it comes, here 0.1 s after it (its tracking lag). Under manual it
+    FAILs; under a commands rule of 1, 30 or 80 ms the judged part of the check (to the restart +
+    c - U) ended before it moved, and it PASSed. A check whose judged part is shorter than
+    min_resume_check_s (0.3 s) is now incomplete, so its trials are inadequate; a move the short
+    check does see still counts."""
+    resume = {"rule": "commands", "after_ms": after_ms}
+    out = ev05.score(T.ev05_input(resumes=(0, 1, 2), resume_after_s=0.1, rate_hz=100.0, resume=resume))
+    assert _result(out) == ("INCONCLUSIVE", ["LOSS_TRIALS_TOO_FEW"])
+    for trial in out["model_loss"]["trials"]:
+        assert trial["status"] == "inadequate"
+        assert any("min_resume_check_s (0.3 s)" in n for n in trial["notes"])
+    manual = ev05.score(T.ev05_input(resumes=(0, 1, 2), resume_after_s=0.1, rate_hz=100.0))
+    assert _result(manual) == ("FAIL", ["LOSS_RESUMED_EARLY"] * 3)
+    short_but_seen = ev05.score(T.ev05_input(resumes=(0, 1, 2), resume_after_s=0.1, rate_hz=100.0,
+                                             resume={"rule": "commands", "after_ms": 300}))
+    assert _result(short_but_seen) == ("FAIL", ["LOSS_RESUMED_EARLY"] * 3)  # 300 ms less U is short
+    long_enough = ev05.score(T.ev05_input(resumes=(0, 1, 2), resume_after_s=0.1, rate_hz=100.0,
+                                          resume={"rule": "commands", "after_ms": 400}))
+    assert {t["status"] for t in long_enough["model_loss"]["trials"]} == {"adequate"}
+    assert _result(long_enough) == ("FAIL", ["LOSS_RESUMED_EARLY"] * 3)
+
+
+def test_the_reviewers_reproduction_no_longer_passes():
+    """Finding 4 as reported: the helper machine follows the restart at once, at 100 Hz. Under
+    after_ms 1 it PASSed with displacement None (nothing judged); now INCONCLUSIVE. (Under 30 ms it
+    PASSed with a 1 mm jitter record; with the 0.3 mm record the 25 ms judged part sees 5.4 mm.)"""
+    out = ev05.score(T.ev05_input(resumes=(0, 1, 2), resume_after_s=0.0, rate_hz=100.0,
+                                  resume={"rule": "commands", "after_ms": 1}))
+    assert _result(out) == ("INCONCLUSIVE", ["LOSS_TRIALS_TOO_FEW"])
+    assert {t["restart_displacement_m"] for t in out["model_loss"]["trials"]} == {None}
+
+
+def test_an_empty_judged_window_is_not_a_check():
+    """Finding 4: a restart check whose judged part holds no measurement checked nothing, so the
+    trial is inadequate, not adequate. Here a velocity space (no minimum) with after_ms 10 and a
+    12 Hz instrument: the judged part, from the restart - U to the restart + c - U, is 10 ms long."""
+    out = ev05.score(T.ev05_input(resume={"rule": "commands", "after_ms": 10}, position=False,
+                                  rate_hz=12.0, restart_s=1.0))
+    empty = [t for t in out["model_loss"]["trials"] if t["restart_displacement_m"] is None]
+    assert empty
+    for trial in empty:
+        assert trial["status"] == "inadequate"
+        assert "no measurement in the judged part of the restart window" in trial["notes"]
+    assert out["verdict"]["result"] != "PASS"

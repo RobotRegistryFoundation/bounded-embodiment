@@ -481,14 +481,16 @@ PLAN_FILES = {"ev02": core_report.STOP_PLAN_FILE, "ev05": core_report.MODEL_LOSS
 
 def load_trial_plan(test: str, space, path) -> tuple[object, bytes]:
     """The EV-02 stop plan or EV-05 model-loss plan, loaded by core and checked against the
-    command space: (plan, its bytes)."""
+    command space (EV-05: and against the profile's min_resume_check_s, as core's report will
+    be): (plan, its bytes)."""
     data = Path(path).read_bytes()
     loader = core_report.load_stop_plan if test == "ev02" else core_report.load_model_loss_plan
     try:
         plan = loader(data)
     except core_report.PlanError as e:
         raise RunError(f"--plan {path}: {e}") from None
-    bad = core_report.check_plan_commands(plan, space, PLAN_FILES[test])
+    least = None if test == "ev02" else load_profile("ev05-illustrative-0.1")["min_resume_check_s"]
+    bad = core_report.check_plan_commands(plan, space, PLAN_FILES[test], least)
     if bad:
         raise RunError(f"--plan {path}: " + "; ".join(f"{f.detail} ({f.where})" for f in bad[:3]))
     return plan, data

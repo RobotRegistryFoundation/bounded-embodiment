@@ -134,7 +134,8 @@ def test_model_loss_plan_loads() -> None:
         {"x": 0.3, "y": 0.1, "z": 0.175},
     ]
     assert dict(plan.resume) == {"rule": "manual"}  # the description is dropped
-    assert plan.for_scoring() == {"point": "tool", "source": "heartbeat_loss", "resume": {"rule": "manual"}}
+    assert plan.for_scoring() == {"point": "tool", "source": "heartbeat_loss", "resume": {"rule": "manual"},
+                                  "position": True}
     assert plan.digest == canonical.sha256_jcs(doc)
     assert [p for p, _ in plan.commands()] == ["/start", "/path/0", "/path/1"]
 

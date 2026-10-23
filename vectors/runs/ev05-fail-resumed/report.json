@@ -107,6 +107,7 @@
       "max_sigma_jitter_m": 0.0005,
       "hold_s": 2.0,
       "restart_check_s": 2.0,
+      "min_resume_check_s": 0.3,
       "min_trials": 3,
       "gap_min_s": 0.1,
       "gap_max_s": 1.0,
@@ -448,7 +449,7 @@
     {
       "alg": "Ed25519",
       "kid": "JJdiTUjDxOdGPEUxDG7iofB6pXrYDw9x3jGC_j6-djc",
-      "sig": "Vw9hGv9Yk7wqrZTcYHtgZZKZ0X5I97NayEoQlEEm1rLPg5fsxw03kPRNFBDXMhOU3545X6xfAnWMAXSXyij7AA"
+      "sig": "Q3t_zJbvxEq6pk1LqC4M6tPwzHJGozlUWb68wR1ks7nmwm3VnE6EQzFpxyADk7VYPBgdP8A9jcn3HxF-Kk4pDg"
     }
   ]
 }

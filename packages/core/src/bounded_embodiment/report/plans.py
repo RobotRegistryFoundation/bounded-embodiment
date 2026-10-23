@@ -129,8 +129,15 @@ class ModelLossPlan:
         return out
 
     def for_scoring(self, space: CommandSpace | None = None) -> dict:
-        """The scorer's ``plan`` input: ``{"point", "source", "resume"}``."""
-        return {"point": self.point, "source": self.source, "resume": dict(self.resume)}
+        """The scorer's ``plan`` input: ``{"point", "source", "resume", "position"}``;
+        ``position`` as for the stop plan (round-2 M4: in a position space the restart check is
+        all that EV-05 tests, so the scorer holds it to ``min_resume_check_s``)."""
+        return {
+            "point": self.point,
+            "source": self.source,
+            "resume": dict(self.resume),
+            "position": space is None or space.kind in POSITION_KINDS,
+        }
 
 
 def _document(src: bytes | str | dict, what: str, version_key: str) -> dict:
@@ -242,27 +249,47 @@ def load_model_loss_plan(src: bytes | str | dict) -> ModelLossPlan:
     )
 
 
-def check_plan_commands(plan: StopPlan | ModelLossPlan, space: CommandSpace, file: str) -> list[Finding]:
+def check_plan_commands(
+    plan: StopPlan | ModelLossPlan,
+    space: CommandSpace,
+    file: str,
+    min_resume_check_s: float | None = None,
+) -> list[Finding]:
     """Every command of the plan must name every axis of the command space and nothing else,
     each value within the axis's limits: a stop or model-loss test only asks for what the machine
     may do. And a model-loss plan for a position command space must not resume on commands at
-    once (``after_ms`` 0): such a machine settles on its last goal whatever it does about the
-    loss, so only the restart check tells, and with ``after_ms`` 0 there is none (PLAN_RESUME_UNCHECKED)."""
+    once (``after_ms`` 0), nor, given the profile's ``min_resume_check_s``, sooner than that
+    (round-2 M4): such a machine settles on its last goal whatever it does about the loss, so only
+    the restart check tells, and a shorter one cannot (PLAN_RESUME_UNCHECKED). The scorer also
+    needs ``after_ms`` less the clock uncertainty to reach the minimum."""
     findings = []
+    after = plan.resume.get("after_ms") if isinstance(plan, ModelLossPlan) else None
     if (
         isinstance(plan, ModelLossPlan)
         and plan.resume.get("rule") == "commands"
-        and plan.resume.get("after_ms") == 0
         and space.kind in POSITION_KINDS
+        and isinstance(after, int)
     ):
-        findings.append(
-            _err(
-                "PLAN_RESUME_UNCHECKED",
-                "a position command space with the resume rule commands after 0 ms: the machine "
-                "settles on its last goal whatever it does about the loss, and nothing is left to check",
-                f"{file} /resume",
+        if after == 0:
+            findings.append(
+                _err(
+                    "PLAN_RESUME_UNCHECKED",
+                    "a position command space with the resume rule commands after 0 ms: the machine "
+                    "settles on its last goal whatever it does about the loss, and nothing is left to check",
+                    f"{file} /resume",
+                )
             )
-        )
+        elif min_resume_check_s is not None and after / 1000.0 < min_resume_check_s:
+            findings.append(
+                _err(
+                    "PLAN_RESUME_UNCHECKED",
+                    f"a position command space with the resume rule commands after {after} ms, less "
+                    f"than the profile's min_resume_check_s ({min_resume_check_s:g} s): the machine "
+                    "settles on its last goal whatever it does about the loss, and a restart check "
+                    "that short cannot tell whether it resumed early",
+                    f"{file} /resume",
+                )
+            )
     keys = space.keys
     for pointer, command in plan.commands():
         where = f"{file} {pointer}"

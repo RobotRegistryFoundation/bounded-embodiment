@@ -293,8 +293,8 @@ hw.py's control case). **Adopted** in core: a `start=` argument to `control_stre
 **Trial plans, checked before anything moves.** Core loads the plan (`load_stop_plan`,
 `load_model_loss_plan`) and checks every command in it against the command space
 (`check_plan_commands`) before anything connects; a plan point the envelope does not declare is
-refused, and so is a model-loss plan that resumes on commands at once in a position space
-(`PLAN_RESUME_UNCHECKED`). In a joint-position space with FK, every zoned point must be inside its
+refused, and so is a model-loss plan that resumes on commands in a position space at once or
+sooner than the EV-05 profile's `min_resume_check_s` (`PLAN_RESUME_UNCHECKED`). In a joint-position space with FK, every zoned point must be inside its
 zones at every plan command (the start, each drive, each path command), and then, once the stream
 is made, at every command it will send, every walk included (`check_trial_proposals`, review S2);
 the stop point may not be commanded faster than its speed limit plus the profile's speed

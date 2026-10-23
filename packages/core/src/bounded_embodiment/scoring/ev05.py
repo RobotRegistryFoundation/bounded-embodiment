@@ -64,6 +64,7 @@ PROFILE_KEYS = {
     "max_sigma_jitter_m": POSITIVE,
     "hold_s": NUMBER,
     "restart_check_s": NUMBER,
+    "min_resume_check_s": NUMBER,
     "min_trials": NUMBER,
     "gap_min_s": NUMBER,
     "gap_max_s": NUMBER,
@@ -150,6 +151,13 @@ def score(inp: ScoringInput) -> dict:
     restart_check = (
         profile["restart_check_s"] if resume["rule"] == "manual" else resume["after_ms"] / 1000.0
     )
+    # Round-2 M4: in a position space the stop half is met by construction, so the restart check
+    # is all that EV-05 tests; under a commands rule it judges only to the restart + c - U.
+    short_check = (
+        plan["position"]
+        and resume["rule"] == "commands"
+        and restart_check - u < profile["min_resume_check_s"]
+    )
     rules = StopRules(
         clock_uncertainty_s=u,
         speed_window_s=profile["speed_window_s"],
@@ -177,6 +185,7 @@ def score(inp: ScoringInput) -> dict:
                 allowed_distance=allowed_distance,
                 restart_check=restart_check,
                 commands_rule=resume["rule"] == "commands",
+                short_check=profile["min_resume_check_s"] if short_check else None,
                 tolerance=profile["tolerance_m"],
                 run_spacing=run_spacing,
             )
@@ -237,6 +246,7 @@ def _trial(
     allowed_distance: float,
     restart_check: float,
     commands_rule: bool,
+    short_check: float | None,
     tolerance: float,
     run_spacing: float,
 ) -> dict:
@@ -267,11 +277,21 @@ def _trial(
             notes.append(f"a spacing of {longest:.3f} s between measurements in the restart window")
         elif not observed:
             notes.append("the restart window was not measured to its end")
+        elif displacement is None:  # nothing was judged, so nothing was checked (round-2 M4)
+            notes.append("no measurement in the judged part of the restart window")
+            restart_ok = False
     if restart is None:
         notes.append("the commands never restarted")
         restart_ok = restart_check == 0.0 and restart_ok
     elif restart_check > 0.0 and covered < restart_check - DURATION_TOLERANCE_S:
         notes.append("the restart commands are shorter than the restart check")
+        restart_ok = False
+    if short_check is not None:
+        notes.append(
+            f"the restart check judges {restart_check - u:.3f} s after the restart (after_ms less "
+            f"U), less than min_resume_check_s ({short_check:g} s): in a position command space "
+            "it is all that EV-05 tests"
+        )
         restart_ok = False
     status = _status(m, restart_ok)
     if m.measured and m.speed_class == "slow":
@@ -338,10 +358,14 @@ def _bad(where: str, detail: str) -> ScoringError:
 
 
 def _plan(raw: object, p: Prepared) -> dict:
-    """The plan's scoring part: {"point", "source", "resume"}; the stop point defaults to the
-    envelope's first point."""
-    if not isinstance(raw, Mapping) or set(raw) != {"point", "source", "resume"}:
-        raise _bad("plan", "EV-05 needs the model-loss plan's scoring part: {point, source, resume}")
+    """The plan's scoring part: {"point", "source", "resume", "position"}; the stop point
+    defaults to the envelope's first point."""
+    if not isinstance(raw, Mapping) or set(raw) != {"point", "source", "resume", "position"}:
+        raise _bad(
+            "plan", "EV-05 needs the model-loss plan's scoring part: {point, source, resume, position}"
+        )
+    if not isinstance(raw["position"], bool):
+        raise _bad("plan/position", "position must be true or false")
     point = raw["point"]
     if point is not None and (not isinstance(point, str) or point not in p.envelope.points):
         raise _bad("plan/point", f"{point!r} is not a point of the envelope")
@@ -364,4 +388,5 @@ def _plan(raw: object, p: Prepared) -> dict:
         "point": plan_point(raw, p.envelope),
         "source": raw["source"],
         "resume": dict(resume),
+        "position": raw["position"],
     }

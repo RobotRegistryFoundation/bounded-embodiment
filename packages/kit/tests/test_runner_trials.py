@@ -266,6 +266,24 @@ def test_ev05_refuses_a_silence_the_hold_cannot_fit_in_and_an_uncapped_walk(tmp_
     assert "none is refused" in _refused(argv, tmp_path)
 
 
+def test_ev05_in_a_position_space_needs_a_restart_check_core_can_judge(tmp_path):
+    """Round-2 M4: in a position space the restart check is all that EV-05 tests, so a commands
+    rule shorter than the profile's min_resume_check_s (0.3 s) is refused before RUN, as core's
+    report would refuse it (PLAN_RESUME_UNCHECKED); a velocity space has no such minimum."""
+    from _b6 import SO101
+
+    space = load_command_space(SO101["command_space"])  # joint positions
+    doc = json.loads(json.dumps(PLANS["so101-ev05"]))
+    doc["resume"] = {"rule": "commands", "after_ms": 100, "description": "TEST-ONLY"}
+    with pytest.raises(runmod.RunError, match=r"after 100 ms, less than the profile's min_resume_check_s \(0.3 s\)"):
+        runmod.load_trial_plan("ev05", space, _write(tmp_path / "plan.json", doc))
+    doc["resume"]["after_ms"] = 300
+    runmod.load_trial_plan("ev05", space, _write(tmp_path / "plan.json", doc))
+    rover = json.loads(json.dumps(PLANS["rover-ev05"]))
+    rover["resume"] = {"rule": "commands", "after_ms": 100, "description": "TEST-ONLY"}
+    runmod.load_trial_plan("ev05", load_command_space(ROVER_SPACE), _write(tmp_path / "rover.json", rover))
+
+
 def test_a_stop_message_needs_an_adapter_that_can_issue_one(tmp_path):
     """sim-so101 without a wrapper is LeRobot's bare follower: it has no stop request of its own."""
     from _b6 import SO101, plant_shakedown

@@ -1196,6 +1196,7 @@
         "hold_s": { "$ref": "#/$defs/profile_number" },
         "dead_stop_margin_frac": { "$ref": "#/$defs/profile_number" },
         "restart_check_s": { "$ref": "#/$defs/profile_number" },
+        "min_resume_check_s": { "$ref": "#/$defs/profile_number" },
         "min_trials": { "$ref": "#/$defs/profile_number" },
         "min_trials_per_source": { "$ref": "#/$defs/profile_number" },
         "min_drives_per_source": { "$ref": "#/$defs/profile_number" },

@@ -129,7 +129,7 @@
       "scorer": "ev05-model-loss/1",
       "result": "PASS",
       "reasons": [],
-      "sha256": "sha256:76929773d52f7a0a7a4ae8159b1fcf36c0c6f20b87c707f43bdc827adc23a521"
+      "sha256": "sha256:0a5b204ff8c37bd5f0c3c1eced9b4154830e31a56ceb6cd96968c3e1f8e0602a"
     },
     {
       "name": "ev05-fail-late-resumed",
@@ -139,7 +139,7 @@
         "LOSS_RESUMED_EARLY",
         "LOSS_STOP_TIME_EXCEEDED"
       ],
-      "sha256": "sha256:f8cb7b9c7709e13c059fcd5342d7b251dcffaf1608ff14f82704d66d5ffdfd93"
+      "sha256": "sha256:a8f8ac4c4e2acd86cd660ec8cdf98dd3f314ecf0577f314b66060aa2a390dd09"
     },
     {
       "name": "ev05-inconclusive-commands-rule",
@@ -148,7 +148,7 @@
       "reasons": [
         "LOSS_TRIALS_TOO_FEW"
       ],
-      "sha256": "sha256:ed3096c9c04145d7f749934bdd501ead2786391ebf93a0956935cfe1df3fe009"
+      "sha256": "sha256:3bf4c9b2cd788546736a51ce3025206517f93bb31651be2219ab9cb55342c011"
     }
   ]
 }

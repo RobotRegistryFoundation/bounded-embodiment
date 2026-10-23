@@ -92,8 +92,9 @@ def test_the_commands_rule_allows_resuming_after_its_delay() -> None:
     on_time = run(noise_m=0.0005, resumes=(0, 1, 2), resume=rule, resume_after_s=1.2)
     assert result(on_time) == ("PASS", [])
     assert on_time["model_loss"]["restart_check_s"] == 1.0
+    # following the commands back at once is a rule only a velocity space may have (round-2 M4)
     at_once = run(noise_m=0.0005, resumes=(0, 1, 2), resume={"rule": "commands", "after_ms": 0},
-                  restart_s=1.6)
+                  restart_s=1.6, position=False)
     assert result(at_once) == ("PASS", [])
     assert {t["restart_displacement_m"] for t in at_once["model_loss"]["trials"]} == {None}
 
@@ -162,6 +163,7 @@ def test_split_trials() -> None:
         {"point": "tool", "source": "heartbeat_loss", "resume": {"rule": "commands", "after_ms": -1}},
         {"point": "tool", "source": "heartbeat_loss", "resume": {"rule": "commands", "after_ms": True}},
         {"point": "tool", "source": "heartbeat_loss", "resume": {"rule": "commands"}},
+        {"point": "tool", "source": "heartbeat_loss", "resume": MANUAL, "position": "yes"},
     ],
 )
 def test_the_plan_is_part_of_the_contract(plan) -> None:

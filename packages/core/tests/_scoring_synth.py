@@ -564,7 +564,8 @@ def ev05_input(motion_s: Sequence[float] = (1.2, 1.3, 1.26), run_on_s: float = 0
                resumes: Sequence[int] = (), silence_s: float = 4.0, restart_s: float = 2.0,
                pause_s: float = 3.0, resume: dict | None = None, resume_after_s: float = 0.0,
                rate_hz: float = 30.0, noise_m: float = 0.0, lurch: dict[int, float] | None = None,
-               drop: Callable[[str, int, float], bool] | None = None, **changes) -> ScoringInput:
+               drop: Callable[[str, int, float], bool] | None = None, position: bool = True,
+               **changes) -> ScoringInput:
     """An EV-05 run: per trial, motion rows at 50 Hz for motion_s[k] while the tool shuttles at
     SPEED (the default lengths put every loss mid-leg, away from a turn), then silence_s without
     a command, then restart rows at 50 Hz for restart_s, then
@@ -572,7 +573,8 @@ def ev05_input(motion_s: Sequence[float] = (1.2, 1.3, 1.26), run_on_s: float = 0
     (``late`` maps a trial to a longer one) and brakes over brake_s; trials in ``resumes`` follow
     the restart commands resume_after_s after the first (shuttling on at SPEED while they
     last). ``lurch`` maps a trial to a distance the tool jumps sideways 0.5 s before its restart
-    (a move while the model is lost)."""
+    (a move while the model is lost). ``position`` is the plan's: whether the command space holds
+    positions (where EV-05 needs a restart check of at least min_resume_check_s)."""
     rows: list[Command] = []
     legs = []  # (t0, t_loss, t_restart, t_restart_end, run_on, s0)
     seq, t, s_walk = 0, 0.0, 0.0
@@ -620,6 +622,6 @@ def ev05_input(motion_s: Sequence[float] = (1.2, 1.3, 1.26), run_on_s: float = 0
         declared=declared(),
         profile=ev05_profile(),
         plan={"point": "tool", "source": "heartbeat_loss",
-              "resume": dict(resume or {"rule": "manual"})},
+              "resume": dict(resume or {"rule": "manual"}), "position": position},
     )
     return replace(inp, **changes)

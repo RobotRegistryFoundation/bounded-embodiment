@@ -171,6 +171,9 @@ def test_a_reset_that_moves_the_arm_trips_the_watch(cases):
     latch = s["end"]["latch"]
     assert latch["kind"] == "tripwire" and "from where it came to rest after trial 1" in latch["reason"]
     assert s["end"]["trials"][0]["reset"] == "done" and s["end"]["trials"][1]["instant_t_s"] is None
+    # the start check after the reset looks at the latch as often as any wait does: the runner's
+    # own stop follows the trip within one state period, as it does mid-stream
+    assert s["end"]["first_stop_t_s"] - latch["t_s"] <= runmod.DEFAULT.state_period_s
 
 
 @pytest.mark.parametrize("case_id", ["rover-ev02-hung", "so101-ev02-hung"])

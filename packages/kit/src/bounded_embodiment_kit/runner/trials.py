@@ -381,7 +381,10 @@ class TrialCommandThread(CommandThread):
             ok, why = self.watchdog.start_check(since=since)
             if ok:
                 break
-            time.sleep(0.1)
+            # look again in 0.1 s, but at the latch as often as any wait does: a machine that moves
+            # on reset trips the watch here, and the runner's stop must follow at once
+            if not self._wait_until(min(self.clock() + 0.1, end)):
+                return False
         self.trials[k]["start_check"] = why
         if not ok:
             self.latch.trip("error", f"before {self.segments[k].label}: not inside and still within "

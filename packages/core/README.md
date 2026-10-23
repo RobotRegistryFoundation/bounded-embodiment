@@ -38,11 +38,12 @@ To run the tests on a machine you also need the lab bench, the
 
 ## Links
 
+- Homepage: https://robotregistryfoundation.org/bounded-embodiment/
 - Method text (normative, CC BY 4.0): https://github.com/RobotRegistryFoundation/bounded-embodiment/blob/main/method/bounded-embodiment-method-v0.1.md
 - Requirements and test plan (informative): https://github.com/RobotRegistryFoundation/bounded-embodiment/blob/main/docs/requirements.md
 - Lab guide: https://github.com/RobotRegistryFoundation/bounded-embodiment/blob/main/docs/lab-guide.md
 - Source and issues: https://github.com/RobotRegistryFoundation/bounded-embodiment
 - Results table: https://robotregistryfoundation.org/bounded-embodiment/results/
-- Background: https://craigmerry.com/bounded-embodiment/
+- The talk: https://craigmerry.com/bounded-embodiment/
 
 Code: Apache-2.0. The packaged schemas and profiles: CC BY 4.0.

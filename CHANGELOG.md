@@ -5,7 +5,15 @@ The method text has its own version and SHA-256 (see `method/README.md`); nothin
 Generators, scorers and profiles are versioned by name (`be-hostile/1`, `ev03-tool-point/1`,
 `ev03-illustrative-0.1`), and no release below changes any of them.
 
-## Unreleased (method v0.2 draft: EV-02 and EV-05)
+## Unreleased
+
+Core and kit:
+
+- Package metadata: the Homepage link is https://robotregistryfoundation.org/bounded-embodiment/,
+  the project's one homepage (it was https://craigmerry.com/bounded-embodiment/, the talk). Both
+  package READMEs link the homepage, and core's README names the craigmerry.com page as the talk.
+
+### Method v0.2 draft: EV-02 and EV-05
 
 Nothing here changes any released generator, scorer, profile or format: EV-03 and EV-10, their
 streams, scorers, profiles, test report 0.1 and every existing vector are byte for byte as they

@@ -47,8 +47,9 @@ maintained by the same person; the method does not depend on it.
 
 Results go to [bounded-embodiment-results](https://github.com/RobotRegistryFoundation/bounded-embodiment-results),
 whose CI checks every submission with `be verify`. The merged results are listed in a table at
-<https://robotregistryfoundation.org/bounded-embodiment/results/>. The talk and where the work goes
-next are at <https://craigmerry.com/bounded-embodiment/>. Changes to the packages are in
+<https://robotregistryfoundation.org/bounded-embodiment/results/>. The homepage, which links all of
+this, is <https://robotregistryfoundation.org/bounded-embodiment/>. The talk is at
+<https://craigmerry.com/bounded-embodiment/>. Changes to the packages are in
 [CHANGELOG.md](CHANGELOG.md).
 
 ## Try it in simulation

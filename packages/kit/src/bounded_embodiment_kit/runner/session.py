@@ -113,7 +113,9 @@ def _num(value: float) -> str | None:
 
 class RawFiles:
     """raw/commands.csv (be-commands-csv/1) and raw/state.csv (be-state-csv/1). Written only by the
-    command thread; flushed every second so a crash loses at most a second."""
+    command thread; flushed every second so a crash loses at most a second. A row's seq counts the
+    rows written before it: the proposal's own seq, except in a trial run with catch_up rows
+    between its trials (round-2 K3), which core numbers with the rest."""
 
     def __init__(self, raw_dir: Path):
         raw_dir.mkdir(parents=True, exist_ok=True)
@@ -124,11 +126,13 @@ class RawFiles:
         self._cmd.writerow(COMMANDS_HEADER)
         self._state.writerow(STATE_HEADER)
         self._last_flush = time.monotonic()
+        self._rows = 0
 
     def command(self, p: Proposal, t_sent: float, t_done: float, r: SendResult) -> None:
         result = ("applied" if r.applied else "not_applied") + (f"/{r.decision}" if r.decision else "")
-        self._cmd.writerow([p.seq, f"{t_sent:.6f}", f"{t_done:.6f}", p.strategy,
+        self._cmd.writerow([self._rows, f"{t_sent:.6f}", f"{t_done:.6f}", p.strategy,
                             encode_payload(p.payload), result, r.error_kind or ""])
+        self._rows += 1
         self._maybe_flush()
 
     def state(self, s: StateSnapshot) -> None:

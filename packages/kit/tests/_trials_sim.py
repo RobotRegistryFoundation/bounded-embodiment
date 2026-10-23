@@ -147,12 +147,16 @@ class Case:
     power_loss_cmd: str | None = None  # instead of touching the simulated e-stop file
     hide_point: str | None = None  # a point the simulated instrument does not report ...
     hide_after_s: float = 0.0      # ... from this long after the instrument starts (round-2 K2)
+    extra: tuple[str, ...] = ()    # more be run flags (the simulated machine's)
 
 
 CASES = {c.id: c for c in (
     Case("rover-ev02-stoppable", "rover", "ev02", "_trial_gates:stoppable"),
     Case("rover-ev02-broken", "rover", "ev02", "_trial_gates:broken"),
     Case("so101-ev02-stoppable", "so101", "ev02", "_trial_gates:stoppable"),
+    # round-2 K3: a slower servo (time constant 0.13 s) rests farther short of where the next walk
+    # begins; the runner walks it there in catch_up rows
+    Case("so101-ev02-slow-servo", "so101", "ev02", "_trial_gates:stoppable", extra=("--sim-tau", "0.13")),
     Case("so101-ev02-broken", "so101", "ev02", "_trial_gates:broken"),
     Case("so101-ev02-lurching", "so101", "ev02", "_trial_gates:lurching"),
     Case("rover-ev02-hung", "rover", "ev02", None, plan="rover-ev02-power", power_loss_cmd="sleep 10"),
@@ -198,6 +202,7 @@ def be_args(case: Case, root: Path) -> tuple[argparse.Namespace, Path]:
         argv += ["--adapter", "sim-so101", "--envelope", str(SO101["envelope"]),
                  "--command-space", str(SO101["command_space"]), "--kit-config", str(SO101["kit_config"]),
                  "--urdf", str(SO101["urdf"]), "--step-cap", "1.5"]
+    argv += list(case.extra)
     if case.test == "ev02":
         argv += (["--drive-s", "1.0", "--return-s", "0.5"] if case.machine == "rover"
                  else ["--drive-s", "0.4", "--return-s", "1.2"])

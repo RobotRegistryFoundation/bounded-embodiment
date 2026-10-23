@@ -186,10 +186,16 @@ differs:
   space the stop point must also have room for the next trial (review S5): its clearance to the
   nearest zone boundary at least the trial's `travel_m` (EV-02: v_max x `drive_s` + the source's
   `max_distance_m` + the margin; EV-05: v_max x (the longest motion + the model timeout) + the same),
-  checked before the first trial too. In a position space with robot state, every capped axis must
-  be within `trial_catch_up_steps` step caps of the trial's first command (a stop that did not hold
-  leaves the machine where the walk does not begin). Anything but NEXT, a reset that raises, a
-  failed start check, too little room or too far to catch up trips the latch.
+  checked before the first trial too. In a position space with robot state the machine rests
+  short of where the next walk begins, by its servo's lag (round-2 K3): the thread ends the
+  previous trial's watch and sends `catch_up` rows, a walk from the robot's present position to
+  within one step cap of the trial's first command, one step cap a command at the trial's own
+  period, which core checks and skips (`streams.catch_up_problem`; seq counts every row of
+  commands.csv). It refuses instead when the machine rests more than `trial_catch_up_steps` step
+  caps from that command on any axis (its stop did not hold, or something moved it), or when a
+  catch-up command would put a zoned point outside its zones. `end.trials[k].catch_up` records
+  how many it sent. Anything but NEXT, a reset that raises, a failed start check, too little room
+  or too far to catch up trips the latch.
 - After the last trial's pause the latch trips with `finished`, as at the end of any stream; the
   end-of-run stop and its acknowledgement follow as for EV-03.
 - declared.json's `end.trials` records, per trial, its label, source, instant, how the stop was
@@ -351,7 +357,7 @@ One timebase: `time.monotonic()` at run start = 0. The runner never writes a sco
 | `trial_still_m` / `trial_still_window_s` | 0.02 / 0.5 | at rest: no sample of the last 0.5 s more than 2 cm from the newest (40 mm/s, far above 1 mm instrument noise) |
 | `trial_hold_trip_m` | 0.02 | once at rest, until the next segment (EV-05 `commands`: until the rule lets it move): no further than this from where it rested |
 | `trial_pause_extra_s` | 0.5 | EV-02: the commands go on for the allowed time + the scorer's still window and hold + this after the stop instant; EV-02 and EV-05: NEXT is asked this long after the segment's last row |
-| `trial_catch_up_steps` | 4.0 | before a trial after the first (position spaces with robot state): every capped axis within this many step caps of the trial's first command |
+| `trial_catch_up_steps` | 12.0 | before a trial after the first (position spaces with robot state): the catch-up walk covers at most this many step caps on any axis (a servo lag of 0.24 s at 50 Hz); farther, the run ends |
 
 Exit codes for `run` and `goto-start`: 0 finished and acknowledged; 1 stopped early or cancelled;
 2 refused before anything moved; 3 stop not acknowledged (CUT POWER sounded) or command thread stuck.
@@ -398,10 +404,12 @@ EV-02 and EV-05 trial runs (added 22 Oct, draft; `packages/kit/tests/_trials_sim
    sim`'s defaults: with 1 mm and 50 ms the end-of-run acknowledgement escalated now and then (note 2).
 8. **Catch-up moves.** In a position space EV-02's walk back to the start begins at the command at
    the stop instant (core), which a working stop kept the machine short of by its stop distance and
-   tracking lag; after NEXT and the reset the machine catches up to the first command at its own
-   speed. A stop that did not hold leaves the machine where the commands after the stop took it, far
-   from where the walk begins: the runner then refuses to begin the trial (`trial_catch_up_steps`)
-   rather than let the first command jump. EV-05's restart walks out along the path and back to the
+   tracking lag: 3.5 step caps with the simulated servo's 0.1 s time constant, 5 with 0.13 s. After
+   NEXT and the reset the runner walks it there in `catch_up` rows, one step cap a command (round-2
+   K3; before, the first command made up the gap at the machine's own speed, and the guard at 4
+   step caps refused a working stop on a 0.13 s servo). A stop that did not hold leaves the machine
+   where the commands after the stop took it, far from where the walk begins: the runner then
+   refuses to begin the trial (`trial_catch_up_steps`, 12) rather than walk it back. EV-05's restart walks out along the path and back to the
    last motion command for the same reason: a first version jumped back and tripped the 150 deg/s
    joint tripwire in simulation. The tripwires run throughout.
 9. **Source commands run off the command thread** (review B1). A command that hangs or leaves a

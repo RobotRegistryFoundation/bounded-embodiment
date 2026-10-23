@@ -123,10 +123,13 @@ class Limits:
     #: after_s, rounded up to 0.1 s). EV-02 and EV-05: the runner asks for NEXT this long after a
     #: segment's last row.
     trial_pause_extra_s: float = 0.5
-    #: Before a trial after the first (position command spaces with robot state), every capped axis
-    #: must be within this many step caps of the trial's first command: a stop that did not hold
-    #: leaves the machine where the walk does not begin, and the walk would begin with a jump.
-    trial_catch_up_steps: float = 4.0
+    #: Before a trial after the first (position command spaces with robot state) the runner walks
+    #: the machine from where it rests to the trial's first command, one step cap a command
+    #: (catch_up rows, round-2 K3): a servo lags its command by about hz x its time constant in
+    #: step caps on a steady walk, so it rests short of where the next walk begins. Farther than
+    #: this many step caps on any axis (a lag of 0.24 s at 50 Hz), the stop did not hold or
+    #: something moved the machine, and the run ends instead.
+    trial_catch_up_steps: float = 12.0
 
     def margin(self, mode: str) -> float:
         return self.margin_m[mode]

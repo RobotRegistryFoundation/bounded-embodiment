@@ -163,15 +163,39 @@ def test_both_ev02_sources_are_tested_through_their_own_paths(cases):
 def test_a_dead_stop_on_an_arm_fails_and_never_passes(cases):
     """Review finding 1 / B2: on a position-commanded arm, a stop that does nothing now walks on with
     the commands that continue after it (D1), too far and too late; and before the next trial the
-    catch-up check finds the arm where the walk does not begin, and ends the run without a jump."""
+    catch-up guard finds the arm where the walk does not begin (round-2 K3: 21 step caps away, more
+    than the 12 the runner walks), and ends the run there: no jump, and no catch-up walk."""
     s = _case(cases, "so101-ev02-broken")
     sc = s["scored"]
     assert sc["internal"] == "FAIL" and sc["internal"] != "PASS"
     assert set(sc["internal_reasons"]) == {"STOP_DISTANCE_EXCEEDED", "STOP_TIME_EXCEEDED"}
     assert sc["trials"][0]["stop_distance_m"] > 0.1
     latch = s["end"]["latch"]
-    assert latch["kind"] in ("error", "tripwire")
-    assert "step caps from where the trial's walk begins" in latch["reason"] or latch["kind"] == "tripwire"
+    assert latch["kind"] == "error"
+    assert latch["reason"].startswith("before trial 2 (")
+    assert "the machine rests where the trial's walk does not begin" in latch["reason"]
+    assert "at most 12 step caps are walked" in latch["reason"]
+    assert s["end"]["trials"][1]["instant_t_s"] is None and s["end"]["trials"][1]["catch_up"] is None
+    rows = rawdata.read_commands(Path(s["run_dir"]) / "raw" / "commands.csv")
+    assert not any(r.strategy == "catch_up" for r in rows)
+
+
+def test_a_slower_servo_is_walked_to_where_the_next_trial_begins(cases):
+    """Round-2 K3: with a 0.13 s servo the arm rests about 5 step caps short of where the next
+    walk begins; the guard (4 caps) used to refuse the run before trial 2 although every stop held.
+    The runner now sends catch_up rows, one step cap a command, before each later trial, and core
+    accepts them (test_the_runner_sent_the_declared_stream_and_recorded_each_trial)."""
+    s = _case(cases, "so101-ev02-slow-servo")
+    assert s["exit_code"] == runmod.EXIT_OK and s["end"]["stream_finished"]
+    assert s["scored"]["internal"] == "PASS"
+    rows = rawdata.read_commands(Path(s["run_dir"]) / "raw" / "commands.csv")
+    assert [r.seq for r in rows] == list(range(len(rows)))
+    counts = [t["catch_up"] for t in s["end"]["trials"]]
+    assert counts[0] is None and all(n >= 1 for n in counts[1:])
+    assert sum(r.strategy == "catch_up" for r in rows) == sum(counts[1:])
+    for k, r in enumerate(rows):
+        if r.strategy == "catch_up" and rows[k + 1].strategy != "catch_up":
+            assert rows[k + 1].strategy == "return"  # right before the trial's first command
 
 
 def test_a_reset_that_moves_the_arm_trips_the_watch(cases):
@@ -249,11 +273,19 @@ def _fixed_identity(monkeypatch):
         lambda cls, redact=(): Identity(("benchhost",), ("ana",), ("/home/ana",), tuple(redact))))
 
 
-def test_be_report_and_be_verify_take_the_simulated_ev02_run(cases, tmp_path, _fixed_identity):
+@pytest.mark.parametrize(("case_id", "point", "machine"), [
+    ("rover-ev02-stoppable", "base", {"make": "TEST-ONLY", "model": "simulated rover", "class": "mobile_base",
+                                      "physical_max_tool_speed_mps": 1.5}),
+    # round-2 K3: a run with catch_up rows between its trials
+    ("so101-ev02-slow-servo", "tool", {"make": "TEST-ONLY", "model": "simulated SO-101", "class": "arm",
+                                       "physical_max_tool_speed_mps": 1.0}),
+])
+def test_be_report_and_be_verify_take_the_simulated_ev02_run(cases, tmp_path, _fixed_identity, case_id,
+                                                              point, machine):
     from _b6 import accuracy_rows
     from bounded_embodiment import envelope as envelope_mod
 
-    s = _case(cases, "rover-ev02-stoppable")
+    s = _case(cases, case_id)
     run = Path(s["run_dir"])
     key, entry = sup.make_key(tmp_path / "lab.key.json", "test-trials")
     sup.write_json(tmp_path / "keys.json", [entry])
@@ -266,12 +298,11 @@ def test_be_report_and_be_verify_take_the_simulated_ev02_run(cases, tmp_path, _f
     text_sha = "sha256:" + __import__("hashlib").sha256(
         (sup.REPO / "method" / "bounded-embodiment-method-v0.2.md").read_bytes()).hexdigest()
     lab = {"format": "be-lab-config/0.1",
-           "machine": {"make": "TEST-ONLY", "model": "simulated rover", "class": "mobile_base",
-                       "physical_max_tool_speed_mps": 1.5},
+           "machine": machine,
            "gate": {"name": "TEST-ONLY trial gate", "version": "0", "placement": "in_process"},
            "instruments": [{"kind": "simulation_ground_truth", "external": False,
                             "make_model": "TEST-ONLY simulated instrument", "rate_hz": 30.0,
-                            "measures": ["base"], "calibration": {"method": "TEST-ONLY none"},
+                            "measures": [point], "calibration": {"method": "TEST-ONLY none"},
                             "accuracy_check": {"at": stamp(-dt.timedelta(hours=1)), "points": 9,
                                                "method": "TEST-ONLY simulated survey"},
                             "post_run_check": {"at": stamp(dt.timedelta(hours=1)),
@@ -282,7 +313,7 @@ def test_be_report_and_be_verify_take_the_simulated_ev02_run(cases, tmp_path, _f
                                                "text_sha256": text_sha}}
     sup.write_json(tmp_path / "lab-config.json", lab)
     envelope = envelope_mod.load(run / "envelope.json")
-    rows = accuracy_rows(envelope, "base", dict(declared["instrument_feed"]))
+    rows = accuracy_rows(envelope, point, dict(declared["instrument_feed"]))
     header = "phase,label,ref_x_m,ref_y_m,ref_z_m,meas_x_m,meas_y_m,meas_z_m,n"
     (tmp_path / "accuracy.csv").write_text(header + "\n" + "\n".join(
         ",".join("" if v is None else repr(v) if isinstance(v, float) else str(v) for v in r)

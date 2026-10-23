@@ -331,33 +331,58 @@ class _Live:
                 segments=segments, clock=clock, stop_decided=self.watchdog.decided, limits=limits,
                 log=log, watchdog=self.watchdog, external_cmds=source_cmds or {},
                 adapter_sources=[s for s in desc.get("stop_triggers") or [] if s in ADAPTER_STOP_SOURCES],
-                clearance=self.room, check_next=self.near)
+                clearance=self.room, catch_up=self.catch_up)
         self.watchdog.stop_executed_at = lambda: self.command.first_stop_t
         if segments:  # the start checks must see the plan's stop point too (round-2 K2)
             self.watchdog.required_points = tuple(sorted({s.point for s in segments if s.point}))
         self.limits = limits
 
-    def near(self, seg: TrialSegment) -> str | None:
-        """Position command spaces with robot state: why the machine is too far from the trial's
-        first command to begin it (more than ``trial_catch_up_steps`` step caps on an axis), or
-        None. After a stop that held, the machine is near the command at the stop instant, where
-        the next walk begins."""
+    def catch_up(self, seg: TrialSegment) -> tuple[str | None, list[dict]]:
+        """Position command spaces with robot state (round-2 K3): the catch_up walk from where the
+        machine rests to within one step cap of the trial's first command, one step cap a command
+        (empty when it is that near already), or why the trial may not begin from here. After a
+        stop that held the machine rests near the command at the stop instant, where the next walk
+        begins, short of it by its servo's lag; more than ``trial_catch_up_steps`` step caps from
+        it, the stop did not hold or something moved it, and the run ends. A catch-up command core
+        would not accept, or one that puts a zoned point outside its zones, ends it too."""
         space, caps = self.space, self.caps
         if space is None or space.kind not in POSITION_KINDS or not caps:
-            return None
+            return None, []
         first = next((q.payload for q in seg.proposals if q.payload), None)
         recent = [s for s in self.state_box.recent() if s.joints]
         if first is None or not recent:
-            return None
+            return None, []
         present = state_to_command(space, recent[-1])
+        keys = space.keys
+        if any(k not in present for k in keys):  # the robot does not report every axis
+            return None, []
         steps = self.limits.trial_catch_up_steps
-        far = {k: round(present[k] - first[k], 4) for k in caps
-               if k in present and k in first and abs(present[k] - first[k]) > steps * caps[k]}
-        if not far:
-            return None
-        return (f"the machine is more than {steps:g} step caps from where the trial's walk begins "
-                f"(present minus first command: {far}); a stop that did not hold leaves it so. "
-                "Run goto-start, or move the machine, before another run")
+        far = [k for k in keys if abs(present[k] - first[k]) > steps * caps[k]]
+        if far:
+            how = "; ".join(f"{k} at {present[k]:.4g}, {abs(present[k] - first[k]) / caps[k]:.1f} step caps "
+                            f"from {first[k]:.4g}" for k in far)
+            return (f"the machine rests where the trial's walk does not begin ({how}; at most {steps:g} "
+                    "step caps are walked): its stop did not hold, or something moved it. Run "
+                    "goto-start, or move the machine, before another run"), []
+        walk, current = [], dict(present)
+        while any(abs(first[k] - current[k]) > caps[k] for k in keys):
+            current = core_report.streams.walk_step(current, first, keys, caps)
+            walk.append(dict(current))
+        if not walk:
+            return None, []
+        problem = core_report.streams.catch_up_problem(space, caps, walk, first)
+        if problem:
+            return f"its catch-up walk is not one core accepts: {problem}", []
+        if self.fk is not None and space.kind == "joint_position":
+            units = {a.key.removesuffix(".pos"): a.unit for a in space.axes}
+            for command in walk:
+                joints = {k.removesuffix(".pos"): float(v) for k, v in command.items()}
+                for name, xyz in self.fk.points(joints, units).items():
+                    c = self.envelope.clearance(name, xyz)
+                    if c < 0:
+                        return (f"its catch-up walk would put {name} {-c * 100:.1f} cm outside its zones. "
+                                "Run goto-start, or move the machine, before another run"), []
+        return None, walk
 
     def room(self, point: str | None) -> tuple[float, str] | None:
         """The stop point's room now: its clearance to its nearest zone boundary, from the newest

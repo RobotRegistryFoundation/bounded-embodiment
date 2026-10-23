@@ -36,7 +36,11 @@ What is new against an EV-03 session (``session.py``), and nothing else is:
   the next segment only once the start check (inside and still) passes on samples taken after
   the reset returned: a full still window of them. In a velocity command space the stop point
   must also have room for the trial: at least the travel the trial may take (``travel_m``) to
-  its nearest zone boundary. Anything else ends the run, through the latch.
+  its nearest zone boundary. In a position command space with robot state the machine rests
+  short of where the next walk begins (a servo lags its command): ``catch_up`` rows walk it there
+  first, one step cap a command, from where it rests (round-2 K3), unless it rests more than
+  ``trial_catch_up_steps`` step caps away, which ends the run. Anything else ends the run,
+  through the latch.
 
 Everything else is the EV-03 session's, unchanged: the latch, the stop phase and the stop rule
 (``CommandThread._stop_phase``), tripwires 1 and 2, the acknowledgement and the escalation, the
@@ -72,6 +76,8 @@ __all__ = [
 ]
 
 STOP_PREFIX = "stop:"
+#: The rows that walk the machine to the next trial's first command (core's streams.CATCH_UP).
+CATCH_UP = "catch_up"
 #: A source command normally ends at once: the helper's first, plain wait for it (seconds).
 FIRST_WAIT_S = 0.5
 #: The stop sources outside the system's software: the lab's bench issues them with a command of
@@ -158,7 +164,7 @@ class TrialCommandThread(CommandThread):
                  external_cmds: Mapping[str, str | None] | None = None,
                  spawn: Callable[[str], subprocess.Popen] = spawn_source_command,
                  clearance: Callable[[str | None], tuple[float, str] | None] | None = None,
-                 check_next: Callable[[TrialSegment], str | None] | None = None, **kw):
+                 catch_up: Callable[[TrialSegment], tuple[str | None, list[dict]]] | None = None, **kw):
         proposals = [p for seg in segments for p in seg.proposals]
         super().__init__(proposals=proposals, **kw)
         self.segments = tuple(segments)
@@ -167,13 +173,15 @@ class TrialCommandThread(CommandThread):
         self.external_cmds = {k: v for k, v in (external_cmds or {}).items() if v}
         self.spawn = spawn
         self.clearance = clearance  # the stop point's room to its nearest boundary, now
-        self.check_next = check_next  # why the next segment may not begin from here, or None
+        # the walk from where the machine rests to the next segment (round-2 K3), or why the next
+        # segment may not begin from here
+        self.catch_up = catch_up
         self.asking = threading.Event()   # set by this thread: ask the operator for NEXT
         self.next_go = threading.Event()  # set by the main thread: the operator typed NEXT
         self.next_trial = 0               # the index of the trial NEXT would begin
         self.trials: list[dict] = [{"trial": k, "label": s.label, "source": s.source,
                                     "instant_t_s": None, "issued": None, "reset": None,
-                                    "start_check": None, "command": None}
+                                    "start_check": None, "command": None, "catch_up": None}
                                    for k, s in enumerate(self.segments)]
         self._pending: dict | None = None  # a stop row waiting for its source command's outcome
         self._held_rows: list[tuple] = []  # rows sent meanwhile, written after it
@@ -463,12 +471,32 @@ class TrialCommandThread(CommandThread):
             return False
         if not self._room(k):
             return False
-        far = self.check_next(self.segments[k]) if self.check_next is not None else None
-        if far:  # e.g. a stop that did not hold left the machine where the walk does not begin
-            self.latch.trip("error", f"before {self.segments[k].label}: {far}")
-            return False
+        if self.catch_up is not None:
+            far, walk = self.catch_up(self.segments[k])
+            if far:  # e.g. a stop that did not hold left the machine where the walk does not begin
+                self.latch.trip("error", f"before {self.segments[k].label}: {far}")
+                return False
+            self.trials[k]["catch_up"] = len(walk)
+            if walk and not self._send_catch_up(k, walk):
+                return False
         self.log(f"Starting {self.segments[k].label}: {why}.")
         return True
+
+    def _send_catch_up(self, k: int, walk: Sequence[Mapping[str, float]]) -> bool:
+        """Before trial k (round-2 K3): walk the machine from where it rests to within one step cap
+        of the trial's first command, one ``catch_up`` row a period of the trial's own commands.
+        The previous trial's watch ends first, since this moves the machine; tripwires 1 and 2
+        still watch it."""
+        seg = self.segments[k]
+        period = (seg.proposals[1].t_s - seg.proposals[0].t_s) if len(seg.proposals) > 1 else 0.02
+        self.watchdog.end_trial_watch()
+        self.log(f"{seg.label}: {len(walk)} catch-up command(s) to where its walk begins.")
+        t_base = self.clock()
+        for j, payload in enumerate(walk):
+            if not self._wait_until(t_base + j * period) or self.latch.tripped:
+                return False
+            self._send(Proposal(-1, j * period, CATCH_UP, dict(payload)))
+        return self._wait_until(t_base + len(walk) * period)
 
     def _send_all(self) -> None:
         for k in range(len(self.segments)):

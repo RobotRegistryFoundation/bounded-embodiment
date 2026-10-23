@@ -356,3 +356,37 @@ def test_check_against_commands() -> None:
     assert [f.code for f in streams.check("be-model-loss", "1", space(), 5, huge, [], plan=lp).findings] == [
         "STREAM_TOO_LARGE"
     ]
+
+
+def test_model_loss_in_a_velocity_space_starts_each_trial_and_restart_at_rest() -> None:
+    """Round-2 kit review K4: in a velocity space the machine is at rest after each trial's hold,
+    but the walk continued "as if the restart had not happened", so every trial after the first
+    began with a full-speed command (ten caps), and the restart began at the path's velocity. In
+    a velocity space each trial's motion, and its restart, now walk from the plan's start, and the
+    restart walks back to it."""
+    g = golden()
+    doc = g.loss_plan_doc()
+    doc["start"] = {"x": 0.0, "y": 0.0, "z": 0.0}
+    doc["path"] = [{"x": 0.0, "y": 0.2, "z": 0.0}, {"x": 0.1, "y": 0.2, "z": 0.0}]
+    plan = load_model_loss_plan(doc)
+    caps = {"x": 0.02, "y": 0.02, "z": 0.02}
+    params = {**g.LOSS_PARAMS, "motion_s": [1.0, 2.0], "step_cap": caps}
+    segments = streams.split_segments(streams.model_loss_stream(velocity_space(), plan, 5, params))
+    assert len(segments) == 3
+    rest = {"x": 0.0, "y": 0.0, "z": 0.0}
+    for seg in segments:
+        motion = [p.payload for p in seg if p.strategy == "motion"]
+        restart = [p.payload for p in seg if p.strategy == "restart"]
+        assert motion[0] == {"x": 0.0, "y": 0.02, "z": 0.0}  # one cap from rest
+        assert restart[0] == {"x": 0.0, "y": 0.02, "z": 0.0}
+        assert restart[-1] == rest
+        for walk in (motion, restart):  # each from rest (the silence lies between them)
+            previous = rest
+            for payload in walk:
+                assert all(abs(payload[k] - previous[k]) <= caps[k] + 1e-12 for k in caps)
+                previous = payload
+    # a position space keeps one walk through the whole stream (unchanged)
+    pos = streams.split_segments(streams.model_loss_stream(space(), loss_plan(), g.LOSS_SEED, g.LOSS_PARAMS))
+    last = [p.payload for p in pos[0] if p.strategy == "motion"][-1]
+    first_next = [p.payload for p in pos[1] if p.strategy == "motion"][0]
+    assert max(abs(first_next[k] - last[k]) for k in ("x", "y", "z")) <= 0.005 + 1e-12

@@ -125,6 +125,14 @@ def test_the_runner_sent_the_declared_stream_and_recorded_each_trial(cases, case
     if test == "ev02":
         k = rows.index(stops[0])
         assert rows[k + 1].strategy.startswith("continue:")
+    # round-2 K4: in a velocity space every EV-05 trial's motion, and its restart, begins one step
+    # cap from the plan's start (the machine at rest), never at the path's velocity
+    if test == "ev05" and space.kind == "velocity":
+        caps = gen["params"]["step_cap"]
+        firsts = [r for k, r in enumerate(rows) if k == 0 or rows[k - 1].strategy != r.strategy]
+        for r in firsts:
+            payload = json.loads(r.payload_json)
+            assert all(abs(payload[a] - plan.start[a]) <= caps[a] + 1e-9 for a in caps), (r.seq, payload)
 
 
 @pytest.mark.parametrize("case_id", ["rover-ev02-stoppable", "so101-ev02-stoppable",

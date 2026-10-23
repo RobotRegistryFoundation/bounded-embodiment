@@ -25,7 +25,9 @@
     The EV-05 trials (:func:`model_loss_stream`) of ``ev05-model-loss-plan.json``, one segment
     each: ``motion`` commands walking round the plan's path for a seeded time, then nothing for
     ``silence_s`` (the model is lost), then ``restart`` commands that walk on along the path for
-    half the restart and back to the last motion command for the other half. Params:
+    half the restart and back to the last motion command for the other half. In a velocity
+    command space each trial's motion, and its restart, walk from the plan's start instead, and
+    the restart back to it. Params:
     ``{"hz", "trials", "motion_s", "silence_s", "restart_s", "step_cap"}``; ``motion_s[1] -
     motion_s[0]`` is at least one cycle of the path (:func:`path_cycle_s`) and one period; in a
     position space every leg of the path moves some axis by a full step cap, and in a velocity
@@ -472,8 +474,19 @@ def _check_path(space: CommandSpace, plan: ModelLossPlan, caps: Mapping[str, flo
                     "and the restart's walk-on would not move"
                 )
         return
-    # velocity: walk one cycle from path[0], until it is back there heading for path[1] (the walk
-    # lands on every path command); the bound only guards against rounding in the step count
+    # velocity: each trial walks from the start to path[0] (K4), then round the path: walk that
+    # far, then one cycle from path[0], until it is back there heading for path[1] (the walk lands
+    # on every path command); the bounds only guard against rounding in the step counts
+    current = {k: plan.start[k] for k in keys}
+    for _ in range(max(math.ceil(abs(path[0][k] - current[k]) / caps[k]) for k in keys) + 2):
+        if current == path[0]:
+            break
+        current = walk_step(current, path[0], keys, caps)
+        if all(current[key] == 0.0 for key in keys):
+            raise ValueError(
+                f"the walk from the start to the path commands zero on every axis ({current}): a "
+                "loss there would find the machine already told to stop"
+            )
     current, cursor = dict(path[0]), 1 % len(path)
     for _ in range(round(path_cycle_s(space, plan, caps, 1.0)) + 2 * len(path) + 2):
         if all(current[key] == 0.0 for key in keys):
@@ -503,7 +516,11 @@ def model_loss_stream(
     ``step_cap`` per axis per command, toward the last motion command, which they reach by the
     last restart command. The next trial's motion continues the walk from there, as if the restart
     had not happened: the machine that held still through the restart is where the motion
-    continues, and one that followed the restart is back there too."""
+    continues, and one that followed the restart is back there too.
+
+    In a velocity command space the machine is at rest after each trial's hold (round-2 kit
+    review K4), so each trial's motion walks from the plan's start (the cursor at 0), and its
+    restart walks from the start round the path and back to the start."""
     p = normalize(MODEL_LOSS, params)
     caps = _check_caps(space, p["step_cap"])
     _check_plan(plan, space, "ev05-model-loss-plan.json")
@@ -523,24 +540,31 @@ def _losses(space: CommandSpace, plan: ModelLossPlan, seed: int, p: dict, caps) 
     hz, keys = p["hz"], space.keys
     lo, hi = p["motion_s"]
     path = [{k: c[k] for k in keys} for c in plan.path]
-    current = {k: plan.start[k] for k in keys}
+    start = {k: plan.start[k] for k in keys}
+    position = space.kind in _POSITION_KINDS
+    current = dict(start)
     cursor = 0
     n_restart = ticks(p["restart_s"], hz)
     n_out = n_restart // 2
     seq = 0
     for _ in range(p["trials"]):
+        if not position:  # a velocity machine is at rest after the hold: walk from the start (K4)
+            current, cursor = dict(start), 0
         n_motion = ticks(generator._uniform(rng, lo, hi), hz)
         for i in range(n_motion):
             current, cursor = _round(current, path, cursor, keys, caps)
             yield Proposal(seq, i / hz, MOTION, dict(current))
             seq += 1
         t0 = (n_motion - 1) / hz + p["silence_s"]
-        lost, out, out_cursor = dict(current), dict(current), cursor
+        if position:  # from where the motion ended, and back there
+            back, out, out_cursor = dict(current), dict(current), cursor
+        else:  # from the start, at rest, and back to it
+            back, out, out_cursor = dict(start), dict(start), 0
         for j in range(n_restart):
             if j < n_out:  # on round the path ...
                 out, out_cursor = _round(out, path, out_cursor, keys, caps)
-            else:  # ... and back to the last motion command (n_restart - n_out >= n_out steps)
-                out = walk_step(out, lost, keys, caps)
+            else:  # ... and back (n_restart - n_out >= n_out steps)
+                out = walk_step(out, back, keys, caps)
             yield Proposal(seq, t0 + j / hz, RESTART, dict(out))
             seq += 1
 

@@ -20,14 +20,31 @@ Core:
   `ev05-model-loss/1`, new profiles `ev02-illustrative-0.1` and `ev05-illustrative-0.1`
   (illustrative thresholds).
 - Golden runs (PASS, FAIL and INCONCLUSIVE of each, three tamper cases) and scoring goldens.
+- After review: `be-stops/1` keeps commanding the drive through each stop (`after_s`,
+  `continue:<id>` rows) and refuses a walk that lands before the stop; `be-model-loss/1` refuses a
+  `motion_s` narrower than one cycle of the path; a model-loss plan that resumes on commands at
+  once in a position space is refused (`PLAN_RESUME_UNCHECKED`). The scorers time the rest with a
+  noise-scaled rest radius, judge the approach at its end too (the late chord), hold until the next
+  trial's commands (EV-02) or the restart (EV-05), judge a `commands` resume rule only where it
+  applies, leave a trial whose stop was not issued unmeasured, check from `commands.csv` that the
+  commands could show a stop that does not act, count drives by command, and make a run with an
+  unmeasured trial INCONCLUSIVE (`STOP_TRIAL_UNMEASURED`, `LOSS_TRIAL_UNMEASURED`). Test report
+  0.2 pins an EV-02/EV-05 report's method version and refuses the `control` role.
 
 Kit (draft; line-by-line human review before any hardware use):
 
 - `be run ev02` and `be run ev05`: one trial at a time, the operator's NEXT between trials, a
   new watchdog tripwire for a stop that does not stop or let go; every EV-03 interlock applies.
 - Adapters: optional `trigger_stop` and `reset_stop` (the system's own stop request, and resuming
-  after a stop or a lost model). `sim-rover` and `sim-so101` simulate an external stop
-  (`--sim-estop-file`).
+  after a stop or a lost model), which refuse while the runner's stop is latched, under the bus
+  lock too. `sim-rover` and `sim-so101` simulate an external stop (`--sim-estop-file`).
+- After review: `--hardwired-stop-cmd` and `--power-loss-cmd` issue the external sources, one
+  command each, started off the command thread in a session of their own with every stream closed,
+  so a command that hangs never holds up the runner's own stop (`--estop-cmd` is the escalation
+  only); the trial watch is armed before a stop is issued and stays armed through the reset; the
+  start check after a reset uses only what came after it; every command of the stream is checked
+  against the zones and the speed limit before RUN; a hardware trial run takes NEXT from a terminal
+  only (`interlocks.typed_word`); a velocity-space trial needs room for its travel.
 - `be report` packages EV-02 and EV-05 runs.
 
 ## bounded-embodiment 0.1.1 and bounded-embodiment-kit 0.1.2 (2026-10-16)

@@ -140,27 +140,35 @@ report.REPORT_VERSIONS, report.SCHEMA_NAMES               # ("0.1", "0.2"), vers
 
 | name/version | test, role | params (normalized) | stream |
 |---|---|---|---|
-| `be-stops/1` | EV-02, test or rehearsal | `{hz, drive_s, return_s, step_cap}` | per trial: a `return` walk to the plan's start (position spaces, after the first trial), a `drive:<id>` walk, one `stop:<source>` proposal with payload `{}` (the bench issues the stop instead of sending it); each segment's `t_s` from 0 |
-| `be-model-loss/1` | EV-05, test or rehearsal | `{hz, trials, motion_s: [lo, hi], silence_s, restart_s, step_cap}` | per trial: `motion` round the plan's path for a seeded time, nothing for `silence_s`, then `restart` commands out along the path and back to the last motion command |
+| `be-stops/1` | EV-02, test or rehearsal | `{hz, drive_s, return_s, after_s, step_cap}` | per trial: a `return` walk to the plan's start from the command at the previous stop instant (position spaces, after the first trial), a `drive:<id>` walk, one `stop:<source>` proposal with payload `{}` (the bench issues the stop instead of sending it), then `continue:<id>` proposals for `after_s` (D1: position spaces walk on to the drive and repeat it, velocity spaces repeat the last drive command); each segment's `t_s` from 0. Refused (STREAM_PARAMS_INVALID) in a position space when a walk lands on its drive by its last drive proposal |
+| `be-model-loss/1` | EV-05, test or rehearsal | `{hz, trials, motion_s: [lo, hi], silence_s, restart_s, step_cap}` | per trial: `motion` round the plan's path for a seeded time, nothing for `silence_s`, then `restart` commands out along the path and back to the last motion command. Refused (STREAM_PARAMS_INVALID) when `hi − lo` is less than one cycle of the path (`path_cycle_s`) or one period |
 
 Their digests add one header line, the plan's digest (as be-waypoints adds the waypoints'). Plan
 findings are relayed with their own codes (PLAN_PARSE_ERROR, PLAN_NOT_OBJECT,
 PLAN_VERSION_UNSUPPORTED, PLAN_DUPLICATE_ID, PLAN_DUPLICATE_SOURCE, PLAN_UNKNOWN_DRIVE,
 PLAN_UNKNOWN_SOURCE, PLAN_COMMAND_UNKNOWN_AXIS, PLAN_COMMAND_MISSING_AXIS,
-PLAN_COMMAND_OUTSIDE_LIMITS; schema violations SCHEMA_INVALID), as WAYPOINTS_* are.
+PLAN_COMMAND_OUTSIDE_LIMITS, PLAN_RESUME_UNCHECKED for a model-loss plan that resumes on commands
+at once in a position space; schema violations SCHEMA_INVALID), as WAYPOINTS_* are. The plan's
+scoring part (`for_scoring(space)`) also carries each drive's command digest and whether the
+command space holds positions.
 
 **Test report 0.2** is 0.1 with `test` EV-02 and EV-05, their generators and scorers, and the
 derived blocks `stops` (EV-02) or `model_loss` (EV-05) in place of `window`, `achieved_rates`,
 `score`, `gaps`, `motion`/`liveness` and `coverage`; `observations` holds
 `failures_seen_but_not_scored`. An EV-03 or EV-10 report may declare 0.2 and has the same members
-as in 0.1. `schemas/test-report-0.1.json` and every 0.1 report are unchanged.
+as in 0.1. An EV-02 or EV-05 report must cite method version 0.2 and has no `control` role (the
+0.2 schema pins both, and core checks them). `schemas/test-report-0.1.json` and every 0.1 report
+are unchanged.
 
 Golden runs added: `ev02-pass`, `ev02-fail`, `ev02-inconclusive-one-source`, `ev05-pass`,
 `ev05-fail-resumed`, `ev05-inconclusive-short-silence` (packaged profiles, no NONSTANDARD_PARAMS),
 and `tamper-ev02-plan-swapped` (FILE_HASH_MISMATCH, with STREAM_DIGEST_MISMATCH and
-STREAM_MISMATCH), `tamper-ev02-stop-moved` (ev02-fail's late stop row moved 0.25 s later, raw_data
-updated and re-signed as PASS: DERIVED_MISMATCH and VERDICT_MISMATCH; the moved trial's approach is
-slow, so core derives INCONCLUSIVE) and `tamper-ev05-fail-as-pass` (VERDICT_MISMATCH).
+STREAM_MISMATCH), `tamper-ev02-stop-moved` (ev02-fail's late stop row and the commands after it
+recorded 0.1 s later, raw_data updated and re-signed as PASS: DERIVED_MISMATCH and
+VERDICT_MISMATCH; a stop row more than a command spacing and 20 ms after its last drive row leaves
+its trial inadequate, whatever the shift, so core derives INCONCLUSIVE; pinned at 0.10, 0.15 and
+0.25 s by `test_a_stop_recorded_late_is_caught_whatever_the_shift`) and `tamper-ev05-fail-as-pass`
+(VERDICT_MISMATCH). The 19 earlier run vectors are unchanged and verify byte for byte as before.
 
 ## Decisions and open questions
 

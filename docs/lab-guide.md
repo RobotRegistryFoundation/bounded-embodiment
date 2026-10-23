@@ -14,6 +14,18 @@ been validated on synthetic recordings only.
 draft for comment) adds them, and the kit has `be run ev02` and `be run ev05` as drafts exercised in
 simulation only (docs/seams/runner.md). Do not run them on hardware before that review.
 
+Once the review allows it, **rehearse each stop path at reduced speed before the first trial at
+speed** (method v0.2, known gap 17; the kit does not enforce this). The shakedown that unlocks
+`be run ev02|ev05` is EV-03's hostile stream, so without a rehearsal your `trigger_stop`,
+`reset_stop` and source commands first run at 0.8 to 1.0 times the speed limit. Make a copy of the
+envelope with a lower speed limit for the stop point (a quarter of the real one, say) and the same
+stop sources, a stop plan with one trial per source, and a step cap scaled down to match; a changed
+envelope is a new setup, so it needs its own shakedown. Run it with the operator's hand on the
+hardware stop, and check that each source command (`--hardwired-stop-cmd`, `--power-loss-cmd`)
+latches and never restores power by itself, that the reset at NEXT brings the machine back without
+moving it, and that NEXT is read from your terminal (the kit refuses piped input on hardware). The
+rehearsal is not a result: report it with `--role rehearsal`, if at all.
+
 The examples use an SO-101 arm, a Luxonis OAK-D on a tripod and the kit's markerless tracker, as on
 the reference bench. Another arm needs its own adapter, URDF and envelope; another instrument needs to
 produce `be-samples-csv/1`.

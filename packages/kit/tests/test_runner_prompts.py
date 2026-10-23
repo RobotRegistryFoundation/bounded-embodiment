@@ -43,3 +43,16 @@ def test_a_typed_word_at_a_terminal_ignores_what_was_typed_ahead_and_ends_on_the
     os.close(master)
     with pytest.raises(InterlockError, match="ssh -t"):
         require_terminal(io.StringIO("NEXT\n"))
+
+
+def test_a_typed_word_from_anything_but_a_terminal_is_refused():
+    """typed_word cannot throw away input typed ahead unless stdin is a terminal: it refuses with
+    InterlockError (the runner's refusal), not with termios.error or io.UnsupportedOperation."""
+    r, w = os.pipe()
+    with os.fdopen(r, "r") as pipe, os.fdopen(w, "w") as writer:
+        writer.write("NEXT\n")
+        writer.flush()
+        with pytest.raises(InterlockError, match="not a terminal"):
+            typed_word("NEXT", "trial 1 done.", stdin=pipe, out=io.StringIO())
+    with pytest.raises(InterlockError, match="not a terminal"):
+        typed_word("NEXT", "trial 1 done.", stdin=io.StringIO("NEXT\n"), out=io.StringIO())

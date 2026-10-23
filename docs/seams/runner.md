@@ -162,7 +162,9 @@ differs:
   closed (`no_way_to_issue`). The row's `result`: `applied/triggered`, `applied/issued`, or
   `not_applied` with `trigger_raised:<Type>`, `external_failed:<Type>`,
   `external_returncode:<n>`, `external_timeout`, `external_unfinished` or `no_way_to_issue`. Rows
-  sent while a command's outcome is unknown are written after the stop row, in order.
+  sent while a command's outcome is unknown are written after the stop row, in order, and NEXT is
+  not asked, nor anything reset, until the command has finished (a command still running might
+  cut power later).
 - After the stop row the thread goes on sending the segment's `continue:<id>` rows (method §12.5
   item 3, D1): the model keeps commanding the drive through the stop. A system that refuses them
   while stopped says so in the result, which is recorded and is not an error.

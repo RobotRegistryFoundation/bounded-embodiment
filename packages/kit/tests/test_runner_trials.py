@@ -456,6 +456,43 @@ def test_the_stop_row_waits_for_its_commands_outcome_and_keeps_the_rows_in_order
     assert thread.trials[0]["issued"] == "external_unfinished" and not thread.latch.tripped
 
 
+def test_no_next_and_no_reset_while_a_source_command_is_still_running():
+    """A source command whose outcome is unknown (here it hangs) might still cut power later: the
+    operator is not asked for NEXT, and nothing is reset, until it has finished. A timeout trips the
+    latch instead, and the run ends there."""
+    import time
+
+    from bounded_embodiment.generator import Proposal
+    from bounded_embodiment_kit.runner.trials import TrialSegment
+
+    resets = []
+
+    class Adapter:
+        def read_state(self):
+            return None
+
+        def reset_stop(self, source):
+            resets.append(source)
+
+    segs = (TrialSegment((), "trial 1", "stop", "power_loss", 0.8, 0.5, True, operator_reset=True),
+            TrialSegment((), "trial 2", "stop", "stop_message", 0.8, 0.5, True))
+    thread = _bare_thread(limits=DEFAULT.__class__(estop_timeout_s=0.6), segments=segs)
+    thread.adapter = Adapter()
+    pend, proc = _pending("sleep 10", thread)
+    pend["p"] = Proposal(5, 0.0, "stop:power_loss", {})
+    thread._pending = pend
+    helper = threading.Thread(target=thread._wait_for_command, args=(pend, proc, "trial 1", "power_loss"))
+    helper.start()
+    t0 = time.monotonic()
+    assert thread._between(1) is False
+    helper.join()
+    proc.kill()
+    assert time.monotonic() - t0 >= 0.5  # it waited for the command's outcome
+    assert not thread.asking.is_set() and resets == []
+    assert thread.latch.kind == "error" and "external_timeout" in thread.latch.reason
+    assert thread._pending is None and thread.trials[0]["issued"] == "external_timeout"
+
+
 def test_the_watch_follows_the_plans_stop_point_and_is_armed_before_issuing():
     """Review B1 and N3: watch_trial gets the plan's stop point, before trigger_stop runs."""
     from bounded_embodiment.generator import Proposal

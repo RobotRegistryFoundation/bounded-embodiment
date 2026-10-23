@@ -20,7 +20,9 @@ What is new against an EV-03 session (``session.py``), and nothing else is:
   segment's loss instant is its last motion command's send time; the watch is armed there.
 - A helper thread waits up to ``estop_timeout_s`` for a source command. If it fails or times
   out, the latch trips and the stop row records why (core then leaves the trial unmeasured).
-  Rows sent while the outcome is unknown are written after the stop row, in order.
+  Rows sent while the outcome is unknown are written after the stop row, in order, and the
+  operator is not asked for NEXT, nor anything reset, until the command has finished: a command
+  still running might cut power later.
 - The watch stays armed until the next segment begins: through the commands that continue after
   the stop, the pause, the operator's NEXT, the reset and the start check. In EV-05 under a
   ``commands`` resume rule it ends when the rule lets the machine move (that long after the
@@ -348,6 +350,22 @@ class TrialCommandThread(CommandThread):
         taken after the reset), and the room the trial needs. The previous trial's watch stays
         armed throughout."""
         prev = self.segments[k - 1]
+        # A source command whose outcome is unknown might still cut power: no NEXT, and no reset,
+        # until it has finished (its helper trips the latch on a failure or at its deadline).
+        while self._pending is not None:
+            self._settle_pending()
+            if self._pending is None:
+                break
+            if self.latch.tripped or self.abort.is_set():
+                return False
+            if self.clock() > self._pending["t_sent"] + self.limits.estop_timeout_s + 1.0:
+                self._settle_pending(final=True)  # the helper never answered: fail closed
+                self.latch.trip("error", f"{prev.label}: the {prev.source} command's outcome never came")
+                return False
+            self._state_if_due()
+            time.sleep(0.002)
+        if self.latch.tripped or self.abort.is_set():
+            return False
         self.next_trial = k
         self.asking.set()
         while not self.next_go.is_set():

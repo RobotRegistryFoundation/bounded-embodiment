@@ -172,8 +172,8 @@ least the required number of days later, and links it from this repository's Dis
 revision during the period that adds, removes or changes a requirement or rule, or changes how a
 verdict is reached, restarts it.
 
-Every decision other than an editorial, documentation or code merge is recorded in a comment on the
-pull request or issue. The record gives the kind of change and the rule applied; the dates of the
+Every decision other than a merge of editorial, documentation, code or result-submission changes is
+recorded in a comment on the pull request or issue. The record gives the kind of change and the rule applied; the dates of the
 comment period; who supported it, who recused and who was absent; and each objection, with how it
 was answered. A decision made under section 4 says "interim rule".
 

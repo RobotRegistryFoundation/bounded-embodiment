@@ -64,8 +64,6 @@ def test_the_kit_adapters_look_at_the_latch_again_under_the_bus_lock(tmp_path):
 
 def test_resume_is_told_the_source_when_it_takes_one():
     """Review N5: resume(source) when the wrapper's resume takes it, else resume()."""
-    from bounded_embodiment_kit.adapters.base import call_resume
-
     seen = []
 
     class Plain:

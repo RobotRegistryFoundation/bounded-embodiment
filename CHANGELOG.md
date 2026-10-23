@@ -13,6 +13,65 @@ Core and kit:
   the project's one homepage (it was https://craigmerry.com/bounded-embodiment/, the talk). Both
   package READMEs link the homepage, and core's README names the craigmerry.com page as the talk.
 
+### Method v0.2 draft: EV-02 and EV-05
+
+Nothing here changes any released generator, scorer, profile or format: EV-03 and EV-10, their
+streams, scorers, profiles, test report 0.1 and every existing vector are byte for byte as they
+were. The method text v0.2 is a new file (`method/README.md`); v0.1 is unchanged.
+
+Core:
+
+- New formats: stop plan 0.1 and model-loss plan 0.1 (`ev02-stop-plan.json`,
+  `ev05-model-loss-plan.json` in a run directory), and test report 0.2 (test report 0.1 plus
+  EV-02 and EV-05; an EV-02 or EV-05 report is always 0.2). `be verify` reads 0.1 and 0.2.
+- New streams `be-stops/1` and `be-model-loss/1`, new scorers `ev02-stop/1` and
+  `ev05-model-loss/1`, new profiles `ev02-illustrative-0.1` and `ev05-illustrative-0.1`
+  (illustrative thresholds).
+- Golden runs (PASS, FAIL and INCONCLUSIVE of each, three tamper cases) and scoring goldens.
+- After review: `be-stops/1` keeps commanding the drive through each stop (`after_s`,
+  `continue:<id>` rows) and refuses a walk that lands before the stop; `be-model-loss/1` refuses a
+  `motion_s` narrower than one cycle of the path; a model-loss plan that resumes on commands at
+  once in a position space is refused (`PLAN_RESUME_UNCHECKED`). The scorers time the rest with a
+  noise-scaled rest radius, judge the approach at its end too (the late chord), hold until the next
+  trial's commands (EV-02) or the restart (EV-05), judge a `commands` resume rule only where it
+  applies, leave a trial whose stop was not issued unmeasured, check from `commands.csv` that the
+  commands could show a stop that does not act, count drives by command, and make a run with an
+  unmeasured trial INCONCLUSIVE (`STOP_TRIAL_UNMEASURED`, `LOSS_TRIAL_UNMEASURED`). Test report
+  0.2 pins an EV-02/EV-05 report's method version and refuses the `control` role.
+- After the second review: the dead-stop walk rule follows the axes that were moving at the stop;
+  the rest is timed against the mean over the hold, and a jitter record above the new profile
+  value `max_sigma_jitter_m` makes EV-02 and EV-05 INCONCLUSIVE (`JITTER_TOO_HIGH`); a stop row
+  recorded late, or commands that hide the hold, leave the trial unmeasured (failures it shows
+  still count); in a position space EV-05 needs a restart check of at least the new
+  `min_resume_check_s` (`PLAN_RESUME_UNCHECKED` below it), and an empty judged window checks
+  nothing; the EV-05 path's cycle counts every leg, and dwells and standstill commands are refused;
+  in a velocity space every EV-05 trial and restart start at rest; `catch_up` rows between trials
+  are checked and skipped (`STREAM_CATCH_UP_INVALID`).
+
+Kit (draft; line-by-line human review before any hardware use):
+
+- `be run ev02` and `be run ev05`: one trial at a time, the operator's NEXT between trials, a
+  new watchdog tripwire for a stop that does not stop or let go; every EV-03 interlock applies.
+- Adapters: optional `trigger_stop` and `reset_stop` (the system's own stop request, and resuming
+  after a stop or a lost model), which refuse while the runner's stop is latched, under the bus
+  lock too. `sim-rover` and `sim-so101` simulate an external stop (`--sim-estop-file`).
+- After review: `--hardwired-stop-cmd` and `--power-loss-cmd` issue the external sources, one
+  command each, started off the command thread in a session of their own with every stream closed,
+  so a command that hangs never holds up the runner's own stop (`--estop-cmd` is the escalation
+  only); the trial watch is armed before a stop is issued and stays armed through the reset; the
+  start check after a reset uses only what came after it; every command of the stream is checked
+  against the zones and the speed limit before RUN; a hardware trial run takes NEXT from a terminal
+  only (`interlocks.typed_word`); a velocity-space trial needs room for its travel.
+- After the second review: a source command still running at its deadline, or when the run ends,
+  is ended (its process group) and the record says it may have acted; tripwire 3 trips when the
+  instrument stops reporting the plan's stop point, and the start check requires it; a position
+  machine is walked to each later trial in `catch_up` rows; the room a velocity-space trial needs
+  is sized for a stop that does nothing, and the run stops when the stop point outruns its speed
+  limit; a wrapper's `resume` is told the source by name only; source commands are checked before
+  RUN (`interlocks.check_command`); a terminal that fails at NEXT cancels the run cleanly; EV-05's
+  watch is armed again after the restart under a `commands` rule.
+- `be report` packages EV-02 and EV-05 runs.
+
 ## bounded-embodiment 0.1.1 and bounded-embodiment-kit 0.1.2 (2026-10-16)
 
 Core and kit:

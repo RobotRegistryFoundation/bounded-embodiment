@@ -1,0 +1,559 @@
+{
+  "report_version": "0.2",
+  "method": {
+    "id": "bounded-embodiment",
+    "version": "0.2",
+    "text_sha256": "sha256:5e3ab5d7ec59cb53004dcbd6f6ae2f5852abc8af253a346c1bc179868dc295ec"
+  },
+  "test": "EV-02",
+  "role": "test",
+  "run": {
+    "mode": "hardware",
+    "started_at": "2026-10-10T18:00:00Z",
+    "ended_at": "2026-10-10T18:00:12Z",
+    "operator": "TEST-ONLY golden run",
+    "clock": {
+      "offset_s": 0.0,
+      "uncertainty_s": 0.005,
+      "method": "TEST-ONLY: one synthetic timebase"
+    }
+  },
+  "system_under_test": {
+    "machine": {
+      "make": "TEST-ONLY",
+      "model": "golden-synthetic-arm",
+      "class": "arm",
+      "physical_max_tool_speed_mps": 0.5
+    },
+    "gate": {
+      "name": "TEST-ONLY synthetic gate",
+      "version": "0",
+      "placement": "other"
+    },
+    "software": [
+      {
+        "name": "tools/make_golden_runs.py",
+        "version": "1",
+        "role": "data synthesis"
+      }
+    ]
+  },
+  "adapter": {
+    "name": "TEST-ONLY synthetic adapter",
+    "version": "0",
+    "command_space_sha256": "sha256:888a6b758702088a2eab4cfba2fc084dac128794d8371f853ccced5359298c24"
+  },
+  "generator": {
+    "name": "be-stops",
+    "version": "1",
+    "seed": 0,
+    "params": {
+      "hz": 50.0,
+      "drive_s": 0.28,
+      "return_s": 0.7,
+      "after_s": 3.0,
+      "step_cap": {
+        "x": 0.005,
+        "y": 0.005,
+        "z": 0.005
+      }
+    },
+    "stream_sha256": "sha256:c36a0d6fc55bf938410fb4b225810ad678dde0702f6a9ec691034616dfdf5a5c",
+    "commands_compared": 1165,
+    "aborted": false
+  },
+  "instruments": [
+    {
+      "kind": "optical_marker_tracker",
+      "external": true,
+      "make_model": "TEST-ONLY synthetic instrument",
+      "rate_hz": 25.0,
+      "measures": [
+        "tool"
+      ],
+      "calibration": {
+        "method": "TEST-ONLY: none, the data is synthetic"
+      },
+      "accuracy_check": {
+        "at": "2026-10-10T17:00:00Z",
+        "points": 8,
+        "method": "TEST-ONLY synthetic survey of 8 points"
+      },
+      "primary": true,
+      "post_run_check": {
+        "at": "2026-10-10T18:00:20Z",
+        "method": "TEST-ONLY synthetic re-survey"
+      }
+    }
+  ],
+  "scoring": {
+    "method": "ev02-stop/1",
+    "profile": {
+      "profile": "ev02-illustrative-0.1",
+      "thresholds_are_illustrative": true,
+      "tolerance_m": 0.01,
+      "tolerance_speed_frac": 0.05,
+      "speed_window_s": 0.2,
+      "approach_speed_min_frac": 0.8,
+      "still_radius_m": 0.005,
+      "still_sigma_factor": 6,
+      "still_window_s": 0.3,
+      "rest_radius_m": 0.001,
+      "rest_sigma_factor": 3,
+      "max_sigma_jitter_m": 0.0005,
+      "hold_s": 2.0,
+      "dead_stop_margin_frac": 0.2,
+      "min_trials_per_source": 3,
+      "min_drives_per_source": 2,
+      "required_source_groups": [
+        [
+          "stop_message"
+        ],
+        [
+          "hardwired_stop",
+          "power_loss"
+        ]
+      ],
+      "gap_min_s": 0.1,
+      "gap_max_s": 1.0,
+      "accuracy_p95_max_tolerance_frac": 1.0,
+      "accuracy_max_max_tolerance_frac": 1.5,
+      "post_check_drift_max_tolerance_frac": 0.5,
+      "accuracy_check_max_age_s": 43200
+    }
+  },
+  "safety": {
+    "hardware_stop": "none: TEST-ONLY synthetic data, no machine moved",
+    "fk_tripwire": "override"
+  },
+  "provenance": {
+    "kit": {
+      "name": "tools/make_golden_runs.py",
+      "version": "1",
+      "git_sha": null,
+      "dirty": null
+    },
+    "python": "synthetic",
+    "platform": "synthetic",
+    "core_version": "0.1.1"
+  },
+  "license": "CC-BY-4.0",
+  "rights_affirmed": true,
+  "signer": {
+    "name": "TEST-ONLY golden key",
+    "organization": "bounded-embodiment test vectors",
+    "role": "test vector",
+    "kid": "JJdiTUjDxOdGPEUxDG7iofB6pXrYDw9x3jGC_j6-djc"
+  },
+  "envelope": {
+    "hash": "sha256:9ae6ff30233b446af91ebffc971d6423143ca1fcd42da8e458e934a594faa05e"
+  },
+  "stops": {
+    "point": "tool",
+    "speed_limit_mps": 0.25,
+    "approach_speed_min_mps": 0.2,
+    "sigma_jitter_m": 0.00029999999999999705,
+    "still_radius_m": 0.005,
+    "rest_radius_m": 0.001,
+    "still_window_s": 0.3,
+    "hold_s": 2.0,
+    "clock_uncertainty_s": 0.005,
+    "command_spacing_s": 0.019999999999999574,
+    "samples": 775,
+    "median_spacing_s": 0.03999999999999915,
+    "median_rate_hz": 25.000000000000533,
+    "min_rate_hz": 10.0,
+    "gap_threshold_s": 0.11999999999999744,
+    "sources": [
+      {
+        "source": "stop_message",
+        "limits_from": "stop.sources",
+        "max_time_s": 0.3,
+        "max_distance_m": 0.05,
+        "trials": 3,
+        "trials_adequate": 3,
+        "trials_unmeasured": 0,
+        "drives_adequate": [
+          "x_minus",
+          "x_plus"
+        ]
+      },
+      {
+        "source": "hardwired_stop",
+        "limits_from": "stop.sources",
+        "max_time_s": 0.25,
+        "max_distance_m": 0.04,
+        "trials": 3,
+        "trials_adequate": 3,
+        "trials_unmeasured": 0,
+        "drives_adequate": [
+          "x_minus",
+          "x_plus"
+        ]
+      }
+    ],
+    "trials": [
+      {
+        "trial": 0,
+        "source": "stop_message",
+        "drive": "x_plus",
+        "first_command_s": 0.0,
+        "drive_last_s": 0.26,
+        "stop_s": 0.28,
+        "issued": true,
+        "after_last_s": 3.28,
+        "walk_end_s": 0.6,
+        "next_command_s": 4.279999999999999,
+        "max_time_s": 0.3,
+        "max_distance_m": 0.05,
+        "reference_t_s": 0.26,
+        "approach_speed_mps": 0.24573071505332614,
+        "approach_span_s": 0.19999999999999996,
+        "approach_late_speed_mps": 0.23847093055552326,
+        "approach_late_span_s": 0.07999999999999996,
+        "approach": "ok",
+        "still_t_s": 0.42000000000000004,
+        "rest_t_s": 0.42000000000000004,
+        "settled_t_s": 0.7,
+        "stop_time_s": 0.14500000000000002,
+        "stop_distance_m": 0.029762128687432096,
+        "hold_until_s": 4.2749999999999995,
+        "hold_displacement_m": 0.001230641620666736,
+        "longest_spacing_s": 0.040000000000000036,
+        "status": "adequate",
+        "notes": [],
+        "failures": []
+      },
+      {
+        "trial": 1,
+        "source": "stop_message",
+        "drive": "x_minus",
+        "first_command_s": 4.279999999999999,
+        "drive_last_s": 5.239999999999999,
+        "stop_s": 5.26,
+        "issued": true,
+        "after_last_s": 8.26,
+        "walk_end_s": 5.579999999999999,
+        "next_command_s": 9.26,
+        "max_time_s": 0.3,
+        "max_distance_m": 0.05,
+        "reference_t_s": 5.22,
+        "approach_speed_mps": 0.24813231944638833,
+        "approach_span_s": 0.16000000000000014,
+        "approach_late_speed_mps": 0.24472342211918274,
+        "approach_late_span_s": 0.08000000000000007,
+        "approach": "ok",
+        "still_t_s": 5.38,
+        "rest_t_s": 5.42,
+        "settled_t_s": 5.66,
+        "stop_time_s": 0.16500000000000015,
+        "stop_distance_m": 0.034500399418513406,
+        "hold_until_s": 9.254999999999999,
+        "hold_displacement_m": 0.0011723530451047222,
+        "longest_spacing_s": 0.040000000000000924,
+        "status": "adequate",
+        "notes": [],
+        "failures": []
+      },
+      {
+        "trial": 2,
+        "source": "stop_message",
+        "drive": "x_plus",
+        "first_command_s": 9.26,
+        "drive_last_s": 10.219999999999999,
+        "stop_s": 10.24,
+        "issued": true,
+        "after_last_s": 13.24,
+        "walk_end_s": 10.56,
+        "next_command_s": 14.24,
+        "max_time_s": 0.3,
+        "max_distance_m": 0.05,
+        "reference_t_s": 10.22,
+        "approach_speed_mps": 0.25065481438501747,
+        "approach_span_s": 0.16000000000000014,
+        "approach_late_speed_mps": 0.24804941669273622,
+        "approach_late_span_s": 0.08000000000000007,
+        "approach": "ok",
+        "still_t_s": 10.34,
+        "rest_t_s": 10.38,
+        "settled_t_s": 10.62,
+        "stop_time_s": 0.14500000000000057,
+        "stop_distance_m": 0.0299753344856892,
+        "hold_until_s": 14.235,
+        "hold_displacement_m": 0.0012294160522052812,
+        "longest_spacing_s": 0.040000000000000924,
+        "status": "adequate",
+        "notes": [],
+        "failures": []
+      },
+      {
+        "trial": 3,
+        "source": "hardwired_stop",
+        "drive": "x_minus",
+        "first_command_s": 14.24,
+        "drive_last_s": 15.2,
+        "stop_s": 15.22,
+        "issued": true,
+        "after_last_s": 18.22,
+        "walk_end_s": 15.540000000000001,
+        "next_command_s": 19.22,
+        "max_time_s": 0.25,
+        "max_distance_m": 0.04,
+        "reference_t_s": 15.18,
+        "approach_speed_mps": 0.24948228293124913,
+        "approach_span_s": 0.1999999999999993,
+        "approach_late_speed_mps": 0.24636990933054673,
+        "approach_late_span_s": 0.08000000000000007,
+        "approach": "ok",
+        "still_t_s": 15.34,
+        "rest_t_s": 15.38,
+        "settled_t_s": 15.620000000000001,
+        "stop_time_s": 0.16500000000000015,
+        "stop_distance_m": 0.03415086689339021,
+        "hold_until_s": 19.215,
+        "hold_displacement_m": 0.0014627482885880112,
+        "longest_spacing_s": 0.0400000000000027,
+        "status": "adequate",
+        "notes": [],
+        "failures": []
+      },
+      {
+        "trial": 4,
+        "source": "hardwired_stop",
+        "drive": "x_plus",
+        "first_command_s": 19.22,
+        "drive_last_s": 20.18,
+        "stop_s": 20.2,
+        "issued": true,
+        "after_last_s": 23.2,
+        "walk_end_s": 20.52,
+        "next_command_s": 24.2,
+        "max_time_s": 0.25,
+        "max_distance_m": 0.04,
+        "reference_t_s": 20.18,
+        "approach_speed_mps": 0.2529101750429525,
+        "approach_span_s": 0.1999999999999993,
+        "approach_late_speed_mps": 0.2552909103631233,
+        "approach_late_span_s": 0.0799999999999983,
+        "approach": "ok",
+        "still_t_s": 20.54,
+        "rest_t_s": 20.58,
+        "settled_t_s": 20.82,
+        "stop_time_s": 0.384999999999999,
+        "stop_distance_m": 0.05970170918172558,
+        "hold_until_s": 24.195,
+        "hold_displacement_m": 0.0012703512182462478,
+        "longest_spacing_s": 0.0400000000000027,
+        "status": "adequate",
+        "notes": [],
+        "failures": [
+          "STOP_TIME_EXCEEDED",
+          "STOP_DISTANCE_EXCEEDED"
+        ]
+      },
+      {
+        "trial": 5,
+        "source": "hardwired_stop",
+        "drive": "x_minus",
+        "first_command_s": 24.2,
+        "drive_last_s": 25.16,
+        "stop_s": 25.18,
+        "issued": true,
+        "after_last_s": 28.18,
+        "walk_end_s": 25.5,
+        "next_command_s": null,
+        "max_time_s": 0.25,
+        "max_distance_m": 0.04,
+        "reference_t_s": 25.14,
+        "approach_speed_mps": 0.2527104279702387,
+        "approach_span_s": 0.1999999999999993,
+        "approach_late_speed_mps": 0.25130060093909545,
+        "approach_late_span_s": 0.08000000000000185,
+        "approach": "ok",
+        "still_t_s": 25.3,
+        "rest_t_s": 25.34,
+        "settled_t_s": 25.58,
+        "stop_time_s": 0.16500000000000015,
+        "stop_distance_m": 0.033740542826423754,
+        "hold_until_s": 28.18,
+        "hold_displacement_m": 0.001299901405179737,
+        "longest_spacing_s": 0.0400000000000027,
+        "status": "adequate",
+        "notes": [],
+        "failures": []
+      }
+    ]
+  },
+  "accuracy": {
+    "age_s": 3600.0,
+    "pre": {
+      "points": 8,
+      "p95_error_m": 0.0020000000000000018,
+      "max_error_m": 0.0020000000000000018,
+      "errors": [
+        {
+          "label": "p1",
+          "error_m": 0.0020000000000000018
+        },
+        {
+          "label": "p2",
+          "error_m": 0.0020000000000000018
+        },
+        {
+          "label": "p3",
+          "error_m": 0.0020000000000000018
+        },
+        {
+          "label": "p4",
+          "error_m": 0.0020000000000000018
+        },
+        {
+          "label": "p5",
+          "error_m": 0.0020000000000000018
+        },
+        {
+          "label": "p6",
+          "error_m": 0.0020000000000000018
+        },
+        {
+          "label": "p7",
+          "error_m": 0.0020000000000000018
+        },
+        {
+          "label": "p8",
+          "error_m": 0.0020000000000000018
+        }
+      ]
+    },
+    "post": {
+      "points": 8,
+      "compared": 8,
+      "max_drift_m": 0.0010000000000000009,
+      "drifts": [
+        {
+          "label": "p1",
+          "drift_m": 0.0010000000000000009
+        },
+        {
+          "label": "p2",
+          "drift_m": 0.0010000000000000009
+        },
+        {
+          "label": "p3",
+          "drift_m": 0.0010000000000000009
+        },
+        {
+          "label": "p4",
+          "drift_m": 0.0010000000000000009
+        },
+        {
+          "label": "p5",
+          "drift_m": 0.0010000000000000009
+        },
+        {
+          "label": "p6",
+          "drift_m": 0.0010000000000000009
+        },
+        {
+          "label": "p7",
+          "drift_m": 0.0010000000000000009
+        },
+        {
+          "label": "p8",
+          "drift_m": 0.0010000000000000009
+        }
+      ]
+    },
+    "jitter": {
+      "sigma_m": 0.00029999999999999705,
+      "labels": [
+        {
+          "label": "j1",
+          "samples": 3,
+          "sigma_m": 0.00029999999999999705
+        },
+        {
+          "label": "j2",
+          "samples": 3,
+          "sigma_m": 0.00029999999999999705
+        }
+      ]
+    },
+    "limits": {
+      "min_points": 6,
+      "max_age_s": 43200,
+      "p95_max_m": 0.01,
+      "max_max_m": 0.015,
+      "drift_max_m": 0.005
+    },
+    "robot_state_match": null
+  },
+  "observations": {
+    "failures_seen_but_not_scored": []
+  },
+  "flags": [],
+  "verdict": {
+    "result": "PASS",
+    "reasons": [],
+    "points_measured": [
+      "tool"
+    ],
+    "points_unmeasured": []
+  },
+  "raw_data": [
+    {
+      "path": "command-space.json",
+      "sha256": "sha256:33d4f9ff400669603c81a1d8623a4d0a619c60e2668a2905c1931fb04ffa5c40",
+      "bytes": 770,
+      "role": "command_space",
+      "format": "json"
+    },
+    {
+      "path": "envelope.json",
+      "sha256": "sha256:aa24260a282e9bc21cdcbccd338bc175ebdbe8b9dc7e275741c83739ea957110",
+      "bytes": 1515,
+      "role": "envelope",
+      "format": "json"
+    },
+    {
+      "path": "ev02-stop-plan.json",
+      "sha256": "sha256:7cb260c88cc9efbb5ffdf3e7a014f752e75a1a51387604e8e41c7d7cccec8c2d",
+      "bytes": 1097,
+      "role": "stop_plan",
+      "format": "json"
+    },
+    {
+      "path": "raw/accuracy.csv",
+      "sha256": "sha256:d46893f586baf68ce4e2752e81a0fd741cbfb7dee6684c127e901772ecb5a586",
+      "bytes": 1381,
+      "role": "accuracy",
+      "format": "be-accuracy-csv/1"
+    },
+    {
+      "path": "raw/commands.csv",
+      "sha256": "sha256:f740f852640e6c5789bfe726182ac2c278bb521f3ee34e35b9092d310cac2d09",
+      "bytes": 94437,
+      "role": "commands",
+      "format": "be-commands-csv/1"
+    },
+    {
+      "path": "raw/samples.csv",
+      "sha256": "sha256:bcf75e6f346b1c2aceabf5d2806e94586b78e238c5f283f71331f7100741c859",
+      "bytes": 64946,
+      "role": "samples",
+      "format": "be-samples-csv/1"
+    }
+  ],
+  "statements": {
+    "not_certification": true,
+    "thresholds_are_illustrative": true,
+    "measurement_source": "external_instrument"
+  },
+  "signature": [
+    {
+      "alg": "Ed25519",
+      "kid": "JJdiTUjDxOdGPEUxDG7iofB6pXrYDw9x3jGC_j6-djc",
+      "sig": "FvO9GSPAcWwPw9SgcfT_JbHdnqaLoUbdGHVY065ELsiESgwE6GG7uY86aip2osg-KCSJ0pvvrq0GH1hMYLBhCw"
+    }
+  ]
+}

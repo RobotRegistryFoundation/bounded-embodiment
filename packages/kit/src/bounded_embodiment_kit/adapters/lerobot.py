@@ -22,6 +22,15 @@ already-connected robot to the lab's ``--wrapper module:factory``, called as
 ``context`` is plain data: ``mode``, ``speed_factor`` (0.5 in a shakedown, else None: "use your own
 default"), and the paths of the envelope, command space, kit config and URDF.
 
+EV-02 and EV-05. ``trigger_stop("stop_message")`` calls the lab wrapper's own ``stop()`` and
+``reset_stop`` its ``resume()``, under the bus lock; without a wrapper that has both, the adapter
+declares no stop source (``describe()["stop_triggers"]``) and ``be run ev02`` refuses a plan with a
+stop message. A hardwired stop or a loss of power is never reset here: an SO-101 whose servo power
+was cut comes back with torque off and its goal registers at power-up values, and only
+``connect_safely`` brings it back without a jump, which this adapter does not run mid-session. So
+``be run ev02`` refuses a plan with those sources on this adapter (the lab writes a ``python``
+adapter that can).
+
 Other LeRobot robots (Dynamixel, Damiao, Robstride, Reachy 2 buses) are refused in v0.1: their
 connect path and their stop differ. A lab with one writes a ``python`` adapter with its own connect
 path, and runs with ``--estop-cmd``.
@@ -38,7 +47,14 @@ from pathlib import Path
 
 from bounded_embodiment.commandspace import CommandSpace, load_command_space
 
-from .base import AdapterError, SendResult, State, clean_text, load_callable
+from .base import (
+    AdapterError,
+    SendResult,
+    State,
+    call_resume,
+    clean_text,
+    load_callable,
+)
 from .feetech import (
     BODY_JOINT_SPEED_TRIP_DPS,
     check_bus_is_ours,
@@ -219,7 +235,17 @@ class LeRobotAdapter:
                              "inner bus, not through the wrapper"},
             "joint_speed_trip_per_s": {m: BODY_JOINT_SPEED_TRIP_DPS for m in body},
             "refuse_while_active": list(self.refuse_while_active),
+            "stop_triggers": ["stop_message"] if self._wrapper_has("stop", "resume") else [],
+            "stop_resets": (["stop_message", "heartbeat_loss", "comms_loss"]
+                            if self._wrapper_has("resume") else []),
         }
+
+    def _wrapper_has(self, *names: str) -> bool:
+        """Whether the lab's wrapper (never the bare robot) defines these methods on its class: a
+        wrapper that forwards unknown attributes to the robot must not lend it the robot's."""
+        target = self._target
+        return (target is not None and target is not self._robot
+                and all(callable(getattr(type(target), n, None)) for n in names))
 
     # ----- commands ----------------------------------------------------------------------------
     def send(self, cmd: dict) -> SendResult:
@@ -270,6 +296,33 @@ class LeRobotAdapter:
                 self._stop_goals = choose_stop_goals(present)
                 self.log("Stop: every joint held where it was; later stops re-send these goals.")
             bus.sync_write("Goal_Position", dict(self._stop_goals), normalize=False)
+
+    # ----- EV-02 / EV-05 (adapters.base: optional) ----------------------------------------------
+    def trigger_stop(self, source: str) -> None:
+        """Command thread only. The system under test's own stop: the lab wrapper's ``stop()``,
+        under the bus lock. Never the runner's stop (nothing is latched here)."""
+        if source != "stop_message" or not self._wrapper_has("stop", "resume"):
+            raise AdapterError(f"this adapter cannot issue {source}: it needs a --wrapper with "
+                               "stop() and resume()")
+        if self._latched.is_set():
+            raise AdapterError("the runner's stop is latched")
+        with self._bus_lock:
+            if self._latched.is_set():  # again under the lock: the watchdog may have tripped meanwhile
+                raise AdapterError("the runner's stop is latched")
+            self._target.stop()
+
+    def reset_stop(self, source: str) -> None:
+        """Command thread only, after the operator's NEXT: the lab wrapper's ``resume(source=...)``
+        (or ``resume()``, ``base.call_resume``), which must not move the arm. Hardwired stops and
+        power loss are refused (module docstring)."""
+        if source not in ("stop_message", "heartbeat_loss", "comms_loss") or not self._wrapper_has("resume"):
+            raise AdapterError(f"this adapter cannot reset {source}")
+        if self._latched.is_set():
+            raise AdapterError("the runner's stop is latched")
+        with self._bus_lock:
+            if self._latched.is_set():
+                raise AdapterError("the runner's stop is latched")
+            call_resume(self._target, source)
 
     # ----- close -------------------------------------------------------------------------------
     def close(self) -> None:

@@ -25,6 +25,16 @@ Tripwires, checked every watchdog tick (limits.py has the numbers):
 The two share no data: either one alone stops the run. Every check is a pure function of its
 inputs (below the ``Watchdog`` class's helpers), so tests drive them without threads.
 
+3. EV-02 and EV-05 trials (``be run ev02|ev05``): at a trial's stop instant (before the stop is
+   issued) or loss instant the command thread tells the watchdog what the trial allows and which
+   point to watch, the plan's stop point (``watch_trial``). Once that time plus 0.5 s has passed,
+   the point must be at rest (no sample of the last 0.5 s more than 2 cm from the newest), and it
+   must then stay within 2 cm of where it came to rest until the command thread ends the watch
+   (``end_trial_watch``): when the next trial begins, through the commands that go on after a stop,
+   the pause, NEXT, the reset and the start check; in EV-05 under a ``commands`` resume rule, when
+   the rule lets the machine move. Otherwise the latch trips like any other tripwire. This only
+   adds trips: tripwires 1 and 2 run unchanged throughout.
+
 What the watchdog does not do: score, judge the system under test, or touch the bus.
 """
 from __future__ import annotations
@@ -48,6 +58,8 @@ __all__ = [
     "StateSnapshot",
     "StopLatch",
     "StopOutcome",
+    "TrialSpeedTrip",
+    "TrialWatch",
     "TripwireConfig",
     "Watchdog",
     "clearance",
@@ -55,6 +67,8 @@ __all__ = [
     "inside_and_still",
     "instrument_trip",
     "stop_speed",
+    "trial_speed_trip",
+    "trial_trip",
     "window_speed",
 ]
 
@@ -268,11 +282,15 @@ def fk_trip(states: Sequence[StateSnapshot], now: float, cfg: TripwireConfig, en
 
 
 def inside_and_still(histories: Mapping[str, Sequence[tuple[float, tuple]]], envelope, tool_point: str,
-                     now: float, window_s: float, still_m: float, fresh_s: float) -> tuple[bool, str]:
+                     now: float, window_s: float, still_m: float, fresh_s: float,
+                     since: float | None = None, required: Sequence[str] = ()) -> tuple[bool, str]:
     """Whether a run may start: over the last ``window_s`` of samples, the instrument saw the tool
     point within ``still_m`` of its per-axis median, and every sample of every zoned point it saw
-    inside its zones. Returns (ok, why)."""
-    tool = list(histories.get(tool_point, ()))
+    inside its zones. With ``since`` (EV-02/EV-05, the moment a reset returned) only samples taken
+    at or after it count, so a full window after it is needed. Each ``required`` point (EV-02/EV-05:
+    the plan's stop point, round-2 K2) must also have a recent sample, inside its zones. Returns
+    (ok, why)."""
+    tool = [s for s in histories.get(tool_point, ()) if since is None or s[0] >= since]
     if not tool or now - tool[-1][0] > fresh_s:
         return False, f"no recent sample of {tool_point!r}"
     t_n = tool[-1][0]
@@ -283,13 +301,102 @@ def inside_and_still(histories: Mapping[str, Sequence[tuple[float, tuple]]], env
     worst = max(_dist(p, med) for _, p in window)
     if worst >= still_m:
         return False, f"{tool_point!r} not still: {worst * 1000:.1f} mm from its median (limit {still_m * 1000:.0f} mm)"
+    for point in required:
+        seen = [s for s in histories.get(point, ()) if since is None or s[0] >= since]
+        if not seen or now - seen[-1][0] > fresh_s:
+            return False, f"no recent sample of {point!r}, the plan's stop point (does the instrument report it?)"
+        if point in envelope.points and envelope.clearance(point, seen[-1][1]) < 0:
+            return False, f"{point!r} outside its zones"
     for point, hist in histories.items():
         if point not in envelope.points:
             continue
         for t, p in hist:
-            if t >= t_n - window_s and envelope.clearance(point, p) < 0:
+            if t >= t_n - window_s and (since is None or t >= since) and envelope.clearance(point, p) < 0:
                 return False, f"{point!r} outside its zones"
     return True, f"inside, and {tool_point!r} within {worst * 1000:.1f} mm for {window_s:.0f} s"
+
+
+# ----- EV-02 and EV-05 trials --------------------------------------------------------------------
+@dataclass
+class TrialWatch:
+    """What a trial allows after its stop instant (EV-02) or loss instant (EV-05), on the run's
+    timebase: plain data, set by the command thread through ``Watchdog.watch_trial``.
+    ``rested_at`` is where the tool point came to rest, once the watchdog has seen it at rest."""
+
+    label: str
+    t_event: float
+    allowed_s: float
+    point: str | None = None  # the plan's stop point; None: the tool point
+    rested_at: tuple | None = None
+
+
+def trial_trip(samples: Sequence[tuple[float, tuple]], now: float, watch: TrialWatch,
+               limits: Limits = DEFAULT) -> tuple[str | None, tuple | None]:
+    """The trial tripwire, a pure function: (the reason to trip or None, where the point rested).
+    ``samples`` are the watched point's (the plan's stop point, or the tool point).
+
+    Before ``t_event + allowed_s + trial_rest_grace_s`` it never trips. After that, until the point
+    has been seen at rest: trip when a sample of the last ``trial_still_window_s`` (the samples
+    spanning at least half of it) lies more than ``trial_still_m`` from the newest, and otherwise
+    the newest sample is where it rested. Once it has rested: trip when the newest sample lies more
+    than ``trial_hold_trip_m`` from there. And after that time, trip when there is no sample of the
+    point since the instant, or its newest sample is older than ``feed_silent_s`` (round-2 K2): the
+    watched point may be one tripwires 1 and 2 do not watch, so its silence is judged here."""
+    if now < watch.t_event + watch.allowed_s + limits.trial_rest_grace_s:
+        return None, watch.rested_at
+    if not samples or samples[-1][0] < watch.t_event:  # round-2 K2: nothing to judge is a trip
+        return (f"no sample of the {_watched(watch)} since {watch.label}'s instant "
+                f"({now - watch.t_event:.2f} s ago): the watch cannot see whether it stopped"), watch.rested_at
+    t_n, p_n = samples[-1]
+    if now - t_n > limits.feed_silent_s:
+        return (f"the newest sample of the {_watched(watch)} is {now - t_n:.2f} s old (more than "
+                f"{limits.feed_silent_s:g} s), {now - watch.t_event:.2f} s after {watch.label}"), watch.rested_at
+    if watch.rested_at is None:
+        recent = [(t, p) for t, p in samples if t >= t_n - limits.trial_still_window_s]
+        if t_n - recent[0][0] < 0.5 * limits.trial_still_window_s:
+            return None, None  # too few samples yet to judge
+        worst = max(_dist(p, p_n) for _, p in recent)
+        if worst > limits.trial_still_m:
+            return (f"the {_watched(watch)} is not at rest {now - watch.t_event:.2f} s after {watch.label} "
+                    f"(the trial allows {watch.allowed_s:.2f} s, plus {limits.trial_rest_grace_s} s): "
+                    f"it moved {worst * 100:.1f} cm in the last {limits.trial_still_window_s} s"), None
+        return None, tuple(p_n)
+    d = _dist(p_n, watch.rested_at)
+    if d > limits.trial_hold_trip_m:
+        return (f"the {_watched(watch)} moved {d * 100:.1f} cm from where it came to rest after "
+                f"{watch.label}, while the trial's watch was armed (limit "
+                f"{limits.trial_hold_trip_m * 100:.0f} cm)"), watch.rested_at
+    return None, watch.rested_at
+
+
+def _watched(watch: TrialWatch) -> str:
+    return "tool point" if watch.point is None else f"stop point ({watch.point})"
+
+
+@dataclass(frozen=True)
+class TrialSpeedTrip:
+    """EV-02 and EV-05 in a velocity command space (round-2 K5): the stop point may not move faster
+    than ``limit_mps``, its speed limit plus the profile's speed tolerance plus the instrument's
+    noise. Nothing in the kit maps a velocity command to the point's speed, so the room each trial
+    is given (``travel_m``), sized at the speed limit, holds only while this does; and a trial
+    faster than that is not comparable anyway."""
+
+    point: str
+    limit_mps: float
+    v_max_mps: float
+
+
+def trial_speed_trip(samples: Sequence[tuple[float, tuple]], trip: TrialSpeedTrip,
+                     window_s: float) -> str | None:
+    """The velocity-space trial speed trip, a pure function: the stop point's speed by the
+    tool-speed rule (``window_speed``) above ``trip.limit_mps`` trips. None means no trip."""
+    v = window_speed(samples, window_s)
+    if v is None or v <= trip.limit_mps:
+        return None
+    return (f"the stop point ({trip.point}) moves at {v:.2f} m/s, faster than a trial allows in a "
+            f"velocity command space ({trip.limit_mps:.3f} m/s: its {trip.v_max_mps:g} m/s speed limit "
+            "plus the speed tolerance and the instrument's noise); the room the trial was given "
+            "assumed the limit")
 
 
 # ----- escalation ------------------------------------------------------------------------------
@@ -373,6 +480,8 @@ class Watchdog(threading.Thread):
         self.latch, self.cfg, self.envelope, self.feed = latch, cfg, envelope, feed
         self.state_box, self.escalation, self.clock = state_box, escalation, clock
         self.limits, self.log = limits, log
+        #: points the start check must also see, recent and inside (EV-02/EV-05: the plan's stop point)
+        self.required_points: tuple[str, ...] = ()
         self.outcome = StopOutcome()
         # When the command thread first executed the stop (runner time), or None. Set by the
         # runner to the command thread's own record; it carries a time, never a bus handle.
@@ -381,6 +490,8 @@ class Watchdog(threading.Thread):
         self._hist: dict[str, deque] = {}
         self._quit = threading.Event()
         self.ticks = 0
+        self._trial: TrialWatch | None = None  # EV-02 / EV-05: set by the command thread
+        self.trial_speed: TrialSpeedTrip | None = None  # EV-02 / EV-05 in a velocity space (K5)
 
     # The history of valid instrument samples, per point, from successive snapshots.
     def _absorb(self, snap: FeedSnapshot) -> None:
@@ -396,10 +507,11 @@ class Watchdog(threading.Thread):
         with self._lock:
             return list(self._hist.get(point, ()))
 
-    def start_check(self) -> tuple[bool, str]:
+    def start_check(self, since: float | None = None) -> tuple[bool, str]:
         """For the runner: may the run start (inside and still)? Judged from the instrument; in a
         run declared without a live instrument (``--instrument none``), from the robot's own
-        forward kinematics, which is then all the bench has (method §6 item 6 is a SHOULD)."""
+        forward kinematics, which is then all the bench has (method §6 item 6 is a SHOULD).
+        ``since``: only samples from then on count (EV-02/EV-05, after a reset)."""
         lim = self.limits
         if self.feed is None:
             hist: dict[str, list] = {}
@@ -407,12 +519,44 @@ class Watchdog(threading.Thread):
                 for p, xyz in (s.fk or {}).items():
                     hist.setdefault(p, []).append((s.t_s, tuple(xyz)))
             ok, why = inside_and_still(hist, self.envelope, self.cfg.tool_point, self.clock(),
-                                       lim.still_window_s, lim.still_m, lim.state_stale_s)
+                                       lim.still_window_s, lim.still_m, lim.state_stale_s, since,
+                                       self.required_points)
             return ok, f"{why} (robot state: no live instrument)"
         with self._lock:
             hist = {p: list(h) for p, h in self._hist.items()}
         return inside_and_still(hist, self.envelope, self.cfg.tool_point, self.clock(),
-                                lim.still_window_s, lim.still_m, lim.feed_silent_s)
+                                lim.still_window_s, lim.still_m, lim.feed_silent_s, since,
+                                self.required_points)
+
+    def watch_trial(self, label: str, t_event: float, allowed_s: float, point: str | None = None) -> None:
+        """Command thread, EV-02 / EV-05: a trial's stop or loss instant has passed; from
+        ``t_event + allowed_s`` (plus the grace) the plan's stop point (``point``; the tool point
+        when None) must be at rest and stay there until ``end_trial_watch``."""
+        with self._lock:
+            self._trial = TrialWatch(label, float(t_event), float(allowed_s), point)
+
+    def end_trial_watch(self) -> None:
+        """Command thread: the next trial begins (or, in EV-05 under a ``commands`` rule, the
+        rule lets the machine move), so the point may move again."""
+        with self._lock:
+            self._trial = None
+
+    def trial_watch(self) -> TrialWatch | None:
+        with self._lock:
+            return self._trial
+
+    def _trial_tick(self, now: float, states: list[StateSnapshot]) -> str | None:
+        with self._lock:
+            watch = self._trial
+        if watch is None:
+            return None
+        samples, _ = self._stop_samples(states, watch.point)
+        reason, rested = trial_trip(samples, now, watch, self.limits)
+        if rested is not None and watch.rested_at is None:
+            with self._lock:
+                if self._trial is watch:
+                    watch.rested_at = rested
+        return reason
 
     def run(self) -> None:
         while not self._quit.is_set():
@@ -436,17 +580,22 @@ class Watchdog(threading.Thread):
                                          self.envelope)
             if reason is None and self.cfg.fk:
                 reason = fk_trip(states, now, self.cfg, self.envelope)
+            if reason is None:
+                reason = self._trial_tick(now, states)
+            if reason is None and self.trial_speed is not None:
+                samples, _ = self._stop_samples(states, self.trial_speed.point)
+                reason = trial_speed_trip(samples, self.trial_speed, self.cfg.speed_window_s)
             if reason is not None and self.latch.trip("tripwire", reason):
                 self.log(f"*** TRIP: {reason}")
         if self.latch.tripped and not self.outcome.decided:
             self._judge_stop(now, states)
 
-    def _stop_samples(self, states: Iterable[StateSnapshot]) -> tuple[list, str]:
+    def _stop_samples(self, states: Iterable[StateSnapshot], point: str | None = None) -> tuple[list, str]:
+        point = point or self.cfg.tool_point
         if self.feed is not None:
-            return self.history(self.cfg.tool_point), "instrument"
+            return self.history(point), "instrument"
         # No instrument (goto-start without one): the robot's own FK is all there is.
-        pts = [(s.t_s, s.fk[self.cfg.tool_point]) for s in states
-               if s.fk is not None and self.cfg.tool_point in s.fk]
+        pts = [(s.t_s, s.fk[point]) for s in states if s.fk is not None and point in s.fk]
         return pts, "fk (no instrument)"
 
     def _judge_stop(self, now: float, states: list[StateSnapshot]) -> None:

@@ -10,6 +10,58 @@ finding about one run, never a certification. The kit's runner and watchdog are 
 line-by-line human review before it drives hardware (method, known gap 7). The markerless tracker has
 been validated on synthetic recordings only.
 
+**EV-02 and EV-05 are not covered here.** Method v0.2 (`method/bounded-embodiment-method-v0.2.md`, a
+draft for comment) adds them, and the kit has `be run ev02` and `be run ev05` as drafts exercised in
+simulation only (docs/seams/runner.md). Do not run them on hardware before that review.
+
+Once the review allows it, **rehearse each stop path at reduced speed before the first trial at
+speed** (method v0.2, known gap 17; the kit does not enforce this). The shakedown that unlocks
+`be run ev02|ev05` is EV-03's hostile stream, so without a rehearsal your `trigger_stop`,
+`reset_stop` and source commands first run at 0.8 to 1.0 times the speed limit. Make a copy of the
+envelope with a lower speed limit for the stop point (a quarter of the real one, say) and the same
+stop sources, a stop plan with one trial per source, and a step cap scaled down to match; a changed
+envelope is a new setup, so it needs its own shakedown. Run it with the operator's hand on the
+hardware stop, and check that each source command (`--hardwired-stop-cmd`, `--power-loss-cmd`)
+latches and never restores power by itself, that the reset at NEXT brings the machine back without
+moving it, and that NEXT is read from your terminal (the kit refuses piped input on hardware). The
+rehearsal is not a result: report it with `--role rehearsal`, if at all.
+
+Some EV-02 and EV-05 rules turn a run INCONCLUSIVE, or refuse it, where a less careful rule would
+have passed it. None of them is a false PASS, but plan for them:
+
+- **The instrument's jitter is capped** at `max_sigma_jitter_m` (0.5 mm in the illustrative
+  profiles; `JITTER_TOO_HIGH`). EV-03's instrument checks are much looser, so an instrument good
+  enough for EV-03 can be capped out of EV-02 and EV-05: check σ_jitter in your jitter record first.
+- **Near the 10 Hz rate floor, trials go unmeasured.** At exactly 10 Hz the speed rule's spans are
+  lost to rounding (one of three trials of a test run was unmeasured, and a 0.8 s run-on read
+  INCONCLUSIVE instead of FAIL); near it (10.2 Hz) the first EV-02 trial, with `drive_s` 0.28 s, can
+  have no span, because measurements before the first command do not count. Measure at 30 Hz or
+  faster.
+- **The hold spans the pause and the reset.** An occlusion of the stop point longer than the gap
+  threshold (0.1 s at 30 Hz or faster) while you reset a source, for example as you reach for the
+  e-stop, leaves the trial unmeasured. Keep out of the camera's line to the stop point.
+- **The dead-stop rule needs a fast enough servo.** In a position space the commands after each
+  stop must carry a stop that does nothing clearly past the allowed distance at the measured
+  approach speed; a slower servo reaches the margins of the default plans and its trials become
+  inadequate. Use farther drives or a shorter `--drive-s`.
+- **EV-05 on an arm needs a long enough resume rule.** In a position space a `commands` resume
+  rule with `after_ms` below `min_resume_check_s` (0.3 s) is refused, and `after_ms` less the clock
+  uncertainty below it leaves every trial inadequate: there the restart check is all that EV-05
+  tests. Choose `after_ms` at least 0.3 s plus your clock uncertainty, or a manual rule.
+- **EV-05's path must keep moving.** A path that repeats a command, moves less than a step cap on a
+  leg, or (velocity) commands zero velocity anywhere on its walk is refused.
+- **A rover needs room for a stop that does nothing.** In a velocity space each trial needs the
+  stop point's speed limit times (`drive_s` + the allowed stop time + 0.5 s), plus the top-level stop
+  distance and 5 cm, to its nearest zone boundary (EV-05: from the end of the longest motion, and
+  the restart under a `commands` rule); and the run stops if the stop point goes faster than its
+  speed limit plus 5 % and the instrument's noise.
+- **The trial's commands must not pause.** A pause after a stop longer than one command spacing
+  plus 20 ms (40 ms at 50 Hz) leaves the trial unmeasured (method §12.7.4 item 3). In real-time
+  simulation on a busy two-core computer, the kit's command thread paused for 49 to 80 ms in one
+  or two of six trials, and those runs were INCONCLUSIVE. Run the kit where nothing else competes
+  for the processor (the markerless tracker too, if it runs on the same computer), and look for
+  such notes in a rehearsal's report.
+
 The examples use an SO-101 arm, a Luxonis OAK-D on a tripod and the kit's markerless tracker, as on
 the reference bench. Another arm needs its own adapter, URDF and envelope; another instrument needs to
 produce `be-samples-csv/1`.

@@ -33,11 +33,40 @@ Stop rule (lesson 3 of the plan): the goals a stop holds are chosen ONCE per lat
 present positions, read at the first stop, because a joint may be moving) and re-sent unchanged
 on every later stop. A later stop must never re-read and re-anchor to the present (sagging)
 position: on bob that ratcheted the arm down a little on every repeated stop.
+
+EV-02 and EV-05 (``be run ev02|ev05``) use two OPTIONAL methods more, and two describe() keys.
+An adapter without them can run EV-03 and EV-10 exactly as before; the runner refuses an EV-02 or
+EV-05 plan that needs what an adapter does not declare.
+
+=====================  =====================  ===================================================
+method                 called from            what it may do
+=====================  =====================  ===================================================
+``trigger_stop(src)``  command thread         EV-02: issue the system under test's OWN stop
+                                              through ``src`` (only "stop_message"; the external
+                                              sources go through the lab's own commands,
+                                              --hardwired-stop-cmd and --power-loss-cmd). It is
+                                              the system's stop, never the runner's: it does not
+                                              latch, and it must return promptly.
+``reset_stop(src)``    command thread         after the operator typed NEXT: let the system under
+                                              test accept commands again after a stop or loss
+                                              through ``src``. It must not move the machine.
+=====================  =====================  ===================================================
+
+``describe()["stop_triggers"]`` lists the sources ``trigger_stop`` issues, and
+``describe()["stop_resets"]`` those ``reset_stop`` can reset (both read after ``open()``). The
+runner looks at its latch just before each call, but the watchdog may trip it in between, so an
+adapter MUST refuse both while latched: look at the latch before taking the bus lock and again
+under it, as ``send`` does. After a ``hardwired_stop`` or ``power_loss`` a reset MUST bring the
+machine back the way ``connect_safely`` connects it: every goal register set to the present
+position and read back, and only then torque on, so that nothing moves when power returns.
+``call_resume`` calls a wrapper's ``resume(source=...)`` when its ``resume`` has a parameter named
+``source``, or takes ``**kwargs`` (it should then clear only that stop), else ``resume()``.
 """
 from __future__ import annotations
 
 import importlib
 import importlib.util
+import inspect
 import math
 import sys
 from collections.abc import Callable, Mapping
@@ -49,11 +78,14 @@ from bounded_embodiment.commandspace import CommandSpace
 
 __all__ = [
     "ADAPTER_METHODS",
+    "ADAPTER_STOP_SOURCES",
+    "TRIAL_METHODS",
     "Adapter",
     "AdapterContext",
     "AdapterError",
     "SendResult",
     "State",
+    "call_resume",
     "check_adapter",
     "clean_text",
     "load_callable",
@@ -61,6 +93,27 @@ __all__ = [
 
 #: Every method the runner calls. ``check_adapter`` refuses an object that lacks one.
 ADAPTER_METHODS = ("open", "describe", "send", "read_state", "latch_stop", "execute_stop", "close")
+#: The optional EV-02 / EV-05 methods (module docstring).
+TRIAL_METHODS = ("trigger_stop", "reset_stop")
+#: The stop sources an adapter may issue itself; the others are outside the system's software.
+ADAPTER_STOP_SOURCES = ("stop_message",)
+
+
+def call_resume(target, source: str) -> None:
+    """``target.resume(source=source)`` when its ``resume`` has a parameter named ``source``, or
+    takes ``**kwargs``; else ``target.resume()`` (review N5, round-2 K7): a gate that knows which
+    stop to clear is told, by name, so that no other first parameter is ever handed the source, and
+    a gate written for the plain ``resume()`` keeps working unchanged."""
+    fn = target.resume
+    try:
+        params = inspect.signature(fn).parameters.values()
+    except (TypeError, ValueError):
+        params = ()
+    named = any(p.name == "source" and p.kind in (p.POSITIONAL_OR_KEYWORD, p.KEYWORD_ONLY) for p in params)
+    if named or any(p.kind == p.VAR_KEYWORD for p in params):
+        fn(source=source)
+    else:
+        fn()
 
 
 class AdapterError(RuntimeError):

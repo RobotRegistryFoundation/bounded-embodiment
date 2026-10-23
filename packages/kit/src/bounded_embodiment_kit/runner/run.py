@@ -2,8 +2,9 @@
 # SPDX-License-Identifier: Apache-2.0
 """DRAFT — requires line-by-line human review before use on hardware.
 
-``be run ev03 --mode shakedown|full|control``, ``be run ev10 --mode full --waypoints W`` and
-``be goto-start``: from the command line to a session (``session.py``) and a run directory.
+``be run ev03 --mode shakedown|full|control``, ``be run ev10 --mode full --waypoints W``,
+``be run ev02|ev05 --mode full --plan P`` and ``be goto-start``: from the command line to a
+session (``session.py``, ``trials.py``) and a run directory.
 
 The run directory (``--out``), written here and by the command thread::
 
@@ -14,6 +15,8 @@ The run directory (``--out``), written here and by the command thread::
     raw/state.csv         be-state-csv/1, encoder rows and fk rows (<point>.x|y|z, metres)
     raw/samples.csv       be-samples-csv/1, only with the simulated instrument (it is the instrument)
     ev10-waypoints.json   EV-10 only: the waypoints file exactly as used (byte copy)
+    ev02-stop-plan.json   EV-02 only: the stop plan exactly as used (byte copy)
+    ev05-model-loss-plan.json  EV-05 only: the model-loss plan exactly as used (byte copy)
 
 It never computes a score or a verdict.
 
@@ -25,6 +28,15 @@ Modes:
 - control: ``control_stream`` toward a lab far target (``--target``) with ``--step-cap``; 1.5 cm.
 - ev10 (``--mode full``): core's ``be-waypoints/1`` tour of ``--waypoints`` (cycles, commands per
   visit, hz); margin 5 cm; needs a ledger shakedown like any full run; seed 0 unless given.
+- ev02 and ev05 (``--mode full``): core's ``be-stops/1`` / ``be-model-loss/1`` stream of ``--plan``,
+  one trial at a time (``trials.py``); margin 5 cm; needs a ledger shakedown like any full run;
+  every plan command is checked against the command space, and (joint positions, with FK) every
+  zoned point must be inside its zones at each of them; a step-capped walk must start within one
+  step of the plan's start; a source the adapter cannot issue, or (hardwired stop, power loss)
+  that has no command of its own (--hardwired-stop-cmd, --power-loss-cmd; --estop-cmd is the CUT
+  POWER escalation only), whose command names no program, or that the adapter cannot reset after,
+  is refused before anything connects or before anything moves. Seed 0 (ev02) or 7 (ev05) unless
+  given.
 
 Live supervision. ``--instrument udp:PORT`` (or ``sim``) feeds the external tripwire. A lab whose
 instrument works offline (the markerless tracker records, and `be fit` scores afterwards) runs with
@@ -43,7 +55,7 @@ import platform
 import shutil
 import sys
 import time
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
 
 from bounded_embodiment import __version__ as core_version
@@ -59,26 +71,39 @@ from bounded_embodiment.generator import (
     hostile_stream,
     normalize_params,
 )
+from bounded_embodiment.profiles import load_profile
+from bounded_embodiment.scoring.stops import stop_limits
 
 from .. import __version__ as kit_version
 from ..adapters import AdapterContext, AdapterError, adapter_module
+from ..adapters.base import ADAPTER_STOP_SOURCES
 from .feeds import SimFeed, UDPFeed, parse_instrument
 from .interlocks import (
     InterlockError,
     Ledger,
+    check_command,
     default_ledger_path,
     file_sha256,
     require_run_flags,
+    require_terminal,
     setup_hash,
+    typed_word,
 )
 from .kin import ArmFK, FKError
 from .limits import DEFAULT, Limits
 from .session import CommandThread, RawFiles, SessionResult, make_clock, run_session
+from .trials import (
+    EXTERNAL_SOURCES,
+    TrialCommandThread,
+    TrialSegment,
+    run_trial_session,
+)
 from .watchdog import (
     Alarm,
     Escalation,
     StateBox,
     StopLatch,
+    TrialSpeedTrip,
     TripwireConfig,
     Watchdog,
     clearance,
@@ -280,8 +305,12 @@ class _Live:
     """The threads and helpers of one session, and the order they are torn down in."""
 
     def __init__(self, *, adapter, envelope, fk, fk_tripwire: bool, feed, mode: str, tool_point: str,
-                 proposals, files, clock, estop_cmd: str | None, limits: Limits, log):
+                 proposals, files, clock, estop_cmd: str | None, limits: Limits, log,
+                 segments: list[TrialSegment] | None = None,
+                 source_cmds: Mapping[str, str | None] | None = None, ask=None, space=None,
+                 caps: Mapping[str, float] | None = None):
         desc = adapter.describe()
+        self.envelope, self.fk, self.ask, self.space, self.caps = envelope, fk, ask, space, caps
         self.adapter, self.feed, self.files, self.log = adapter, feed, files, log
         self.latch = StopLatch(clock)
         self.latch.on_trip(adapter.latch_stop)  # a flag in the adapter: no bus
@@ -295,14 +324,92 @@ class _Live:
         self.watchdog = Watchdog(latch=self.latch, cfg=self.cfg, envelope=envelope, feed=feed,
                                  state_box=self.state_box, escalation=self.escalation, clock=clock,
                                  limits=limits, log=log)
-        self.command = CommandThread(adapter=adapter, latch=self.latch, state_box=self.state_box,
-                                     fk=fk, files=files, proposals=proposals, clock=clock,
-                                     stop_decided=self.watchdog.decided, limits=limits, log=log)
+        self.segments = segments
+        if segments is None:
+            self.command = CommandThread(adapter=adapter, latch=self.latch, state_box=self.state_box,
+                                         fk=fk, files=files, proposals=proposals, clock=clock,
+                                         stop_decided=self.watchdog.decided, limits=limits, log=log)
+        else:  # EV-02 / EV-05: one trial at a time (trials.py)
+            self.command = TrialCommandThread(
+                adapter=adapter, latch=self.latch, state_box=self.state_box, fk=fk, files=files,
+                segments=segments, clock=clock, stop_decided=self.watchdog.decided, limits=limits,
+                log=log, watchdog=self.watchdog, external_cmds=source_cmds or {},
+                adapter_sources=[s for s in desc.get("stop_triggers") or [] if s in ADAPTER_STOP_SOURCES],
+                clearance=self.room, catch_up=self.catch_up)
         self.watchdog.stop_executed_at = lambda: self.command.first_stop_t
+        if segments:  # the start checks must see the plan's stop point too (round-2 K2)
+            self.watchdog.required_points = tuple(sorted({s.point for s in segments if s.point}))
+        if segments and space is not None and space.kind not in POSITION_KINDS:
+            self.watchdog.trial_speed = trial_speed_limit(envelope, segments[0], limits)
         self.limits = limits
+
+    def catch_up(self, seg: TrialSegment) -> tuple[str | None, list[dict]]:
+        """Position command spaces with robot state (round-2 K3): the catch_up walk from where the
+        machine rests to within one step cap of the trial's first command, one step cap a command
+        (empty when it is that near already), or why the trial may not begin from here. After a
+        stop that held the machine rests near the command at the stop instant, where the next walk
+        begins, short of it by its servo's lag; more than ``trial_catch_up_steps`` step caps from
+        it, the stop did not hold or something moved it, and the run ends. A catch-up command core
+        would not accept, or one that puts a zoned point outside its zones, ends it too."""
+        space, caps = self.space, self.caps
+        if space is None or space.kind not in POSITION_KINDS or not caps:
+            return None, []
+        first = next((q.payload for q in seg.proposals if q.payload), None)
+        recent = [s for s in self.state_box.recent() if s.joints]
+        if first is None or not recent:
+            return None, []
+        present = state_to_command(space, recent[-1])
+        keys = space.keys
+        if any(k not in present for k in keys):  # the robot does not report every axis
+            return None, []
+        steps = self.limits.trial_catch_up_steps
+        far = [k for k in keys if abs(present[k] - first[k]) > steps * caps[k]]
+        if far:
+            how = "; ".join(f"{k} at {present[k]:.4g}, {abs(present[k] - first[k]) / caps[k]:.1f} step caps "
+                            f"from {first[k]:.4g}" for k in far)
+            return (f"the machine rests where the trial's walk does not begin ({how}; at most {steps:g} "
+                    "step caps are walked): its stop did not hold, or something moved it. Run "
+                    "goto-start, or move the machine, before another run"), []
+        walk, current = [], dict(present)
+        while any(abs(first[k] - current[k]) > caps[k] for k in keys):
+            current = core_report.streams.walk_step(current, first, keys, caps)
+            walk.append(dict(current))
+        if not walk:
+            return None, []
+        problem = core_report.streams.catch_up_problem(space, caps, walk, first)
+        if problem:
+            return f"its catch-up walk is not one core accepts: {problem}", []
+        if self.fk is not None and space.kind == "joint_position":
+            units = {a.key.removesuffix(".pos"): a.unit for a in space.axes}
+            for command in walk:
+                joints = {k.removesuffix(".pos"): float(v) for k, v in command.items()}
+                for name, xyz in self.fk.points(joints, units).items():
+                    c = self.envelope.clearance(name, xyz)
+                    if c < 0:
+                        return (f"its catch-up walk would put {name} {-c * 100:.1f} cm outside its zones. "
+                                "Run goto-start, or move the machine, before another run"), []
+        return None, walk
+
+    def room(self, point: str | None) -> tuple[float, str] | None:
+        """The stop point's room now: its clearance to its nearest zone boundary, from the newest
+        instrument sample (or, without an instrument, the robot's FK). None without a sample."""
+        point = point or self.cfg.tool_point
+        if self.feed is not None:
+            hist = self.watchdog.history(point)
+            xyz = hist[-1][1] if hist else None
+        else:
+            recent = self.state_box.recent()
+            xyz = (recent[-1].fk or {}).get(point) if recent else None
+        if xyz is None:
+            return None
+        return self.envelope.clearance(point, xyz), f"its nearest zone boundary ({point})"
 
     def run(self, prompt, word: str, text: str, wait_still: bool) -> SessionResult:
         try:
+            if self.segments is not None:
+                return run_trial_session(adapter=self.adapter, latch=self.latch, watchdog=self.watchdog,
+                                         command=self.command, feed=self.feed, prompt=prompt,
+                                         limits=self.limits, log=self.log, ask=self.ask)
             return run_session(adapter=self.adapter, latch=self.latch, watchdog=self.watchdog,
                                command=self.command, feed=self.feed, prompt=prompt,
                                confirm_word=word, confirm_text=text,
@@ -357,7 +464,9 @@ def _end_block(result: SessionResult | None, live: _Live, closed: str) -> dict:
             "commands_applied": c.applied, "error_kinds": dict(c.error_kinds),
             "stream_finished": c.stream_finished, "first_command_t_s": c.first_t,
             "last_command_t_s": c.last_t, "stop_calls": c.stop_calls,
-            "stop_errors": list(c.stop_errors), "adapter_close": closed}
+            "stop_errors": list(c.stop_errors), "adapter_close": closed,
+            **({"trials": [dict(t) for t in c.trials], "first_stop_t_s": c.first_stop_t}
+               if isinstance(c, TrialCommandThread) else {})}
 
 
 # ----- be run ev03 -----------------------------------------------------------------------------
@@ -396,12 +505,268 @@ def waypoint_proposals(space, args):
     return stream, block, seconds
 
 
+# ----- be run ev02 | ev05 ------------------------------------------------------------------------
+TRIAL_TESTS = ("ev02", "ev05")
+PLAN_FILES = {"ev02": core_report.STOP_PLAN_FILE, "ev05": core_report.MODEL_LOSS_PLAN_FILE}
+
+
+def load_trial_plan(test: str, space, path) -> tuple[object, bytes]:
+    """The EV-02 stop plan or EV-05 model-loss plan, loaded by core and checked against the
+    command space (EV-05: and against the profile's min_resume_check_s, as core's report will
+    be): (plan, its bytes)."""
+    data = Path(path).read_bytes()
+    loader = core_report.load_stop_plan if test == "ev02" else core_report.load_model_loss_plan
+    try:
+        plan = loader(data)
+    except core_report.PlanError as e:
+        raise RunError(f"--plan {path}: {e}") from None
+    least = None if test == "ev02" else load_profile("ev05-illustrative-0.1")["min_resume_check_s"]
+    bad = core_report.check_plan_commands(plan, space, PLAN_FILES[test], least)
+    if bad:
+        raise RunError(f"--plan {path}: " + "; ".join(f"{f.detail} ({f.where})" for f in bad[:3]))
+    return plan, data
+
+
+def check_plan_poses(fk: ArmFK, envelope, space, plan) -> None:
+    """Joint-position plans, with FK: at every command of the plan (the start, each drive or path
+    command) every zoned point must be inside its zones. A drive is where the walk heads, so a
+    stop that fails leaves the arm short of it, never past it."""
+    if space.kind != "joint_position":
+        return
+    units = {a.key.removesuffix(".pos"): a.unit for a in space.axes}
+    for where, command in plan.commands():
+        joints = {k.removesuffix(".pos"): float(v) for k, v in command.items()}
+        for point, xyz in fk.points(joints, units).items():
+            c = envelope.clearance(point, xyz)
+            if c < 0:
+                raise RunError(f"the plan's {where} puts {point} {-c * 100:.1f} cm outside its zones")
+
+
+def check_trial_start(space, caps: Mapping[str, float] | None, present: Mapping[str, float] | None,
+                      start: Mapping[str, float]) -> None:
+    """A step-capped walk from the plan's start is a step limit only if the machine is there: each
+    capped axis must be within one cap of the start now (velocity spaces start from rest, so
+    there is nothing to check). Without a cap the first command is the drive itself."""
+    if space.kind not in ("joint_position", "cartesian_position") or caps is None:
+        return
+    if present is None:
+        raise RunError("a step-capped plan needs the robot's state to check where it starts")
+    far = {k: present[k] - start[k] for k in caps
+           if k in present and abs(present[k] - start[k]) > caps[k] + 1e-9}
+    if far:
+        raise RunError(f"the plan's walk starts at its start command, and these axes are more than "
+                       f"one step from it now: {far}. Run goto-start (or move the machine) first.")
+
+
+def _float_pair(text: str, flag: str) -> list[float]:
+    try:
+        lo, hi = (float(v) for v in text.split(","))
+    except ValueError:
+        raise RunError(f"{flag} takes SHORTEST,LONGEST in seconds, not {text!r}") from None
+    return [lo, hi]
+
+
+POSITION_KINDS = ("joint_position", "cartesian_position")
+#: The command line flag that gives each external stop source's command (D2).
+SOURCE_FLAGS = {"hardwired_stop": "--hardwired-stop-cmd", "power_loss": "--power-loss-cmd"}
+
+
+def source_cmds(args) -> dict[str, str | None]:
+    """The lab's command for each external stop source (D2; never --estop-cmd)."""
+    return {"hardwired_stop": getattr(args, "hardwired_stop_cmd", None),
+            "power_loss": getattr(args, "power_loss_cmd", None)}
+
+
+def _stop_point(plan, envelope) -> str:
+    return plan.point if plan.point is not None else next(iter(envelope.points))
+
+
+def trial_params(test: str, space, args, envelope, plan) -> dict:
+    """The be-stops/1 or be-model-loss/1 params from the command line, normalized by core."""
+    if args.step_cap is None:
+        raise RunError(f"{test} needs --step-cap: the largest change per command (a number, or JSON per "
+                       "axis; none only in a velocity command space)")
+    caps = parse_step_cap(args.step_cap, space)
+    if caps is None and space.kind in POSITION_KINDS:
+        raise RunError(f"--step-cap none in a position command space: every walk would be one jump to "
+                       f"its target at whatever speed the machine moves; {test} walks at most --step-cap "
+                       "per command")
+    hz = float(args.hz or 50.0)
+    if test == "ev02":
+        profile = load_profile("ev02-illustrative-0.1")
+        longest = max(stop_limits(envelope, s)[0] for s in plan.sources)
+        # D1: the model goes on commanding the drive until the hold can have ended, and a little more
+        after = longest + profile["still_window_s"] + profile["hold_s"] + DEFAULT.trial_pause_extra_s
+        params = {"hz": hz, "drive_s": float(args.drive_s or 1.0),
+                  "return_s": float(args.return_s if args.return_s is not None else 2.0),
+                  "after_s": math.ceil(after * 10) / 10, "step_cap": caps}
+        return core_report.streams.normalize(core_report.STOPS, params)
+    if caps is None:
+        raise RunError("ev05 walks round the plan's path at most --step-cap per command; none is refused")
+    profile = load_profile("ev05-illustrative-0.1")
+    allowed = envelope.heartbeat["model_timeout_ms"] / 1000.0 + stop_limits(envelope, plan.source)[0]
+    least_silence = allowed + profile["still_window_s"] + profile["hold_s"] + DEFAULT.trial_pause_extra_s
+    check = (profile["restart_check_s"] if plan.resume["rule"] == "manual"
+             else plan.resume["after_ms"] / 1000.0)
+    silence = float(args.silence_s) if args.silence_s is not None else math.ceil(least_silence * 10) / 10
+    restart = float(args.restart_s) if args.restart_s is not None else max(1.0, check + 0.5)
+    if silence < least_silence:
+        raise RunError(f"--silence-s {silence:g} is shorter than the model timeout plus the stop time "
+                       f"plus the scorer's still window and hold plus {DEFAULT.trial_pause_extra_s} s "
+                       f"({least_silence:.2f} s): no trial could be adequate")
+    if restart < check:
+        raise RunError(f"--restart-s {restart:g} is shorter than the restart check ({check:g} s): "
+                       "no trial could be adequate")
+    if args.motion_s:
+        motion = _float_pair(args.motion_s, "--motion-s")
+    else:  # the loss must be able to land anywhere on the path: span a whole cycle of it
+        cycle = core_report.streams.path_cycle_s(space, plan, caps, hz)
+        motion = [1.0, 1.0 + max(1.0, math.ceil(cycle * 10) / 10)]
+    params = {"hz": hz, "trials": int(args.trials or 3), "motion_s": motion,
+              "silence_s": silence, "restart_s": restart, "step_cap": caps}
+    return core_report.streams.normalize(core_report.MODEL_LOSS, params)
+
+
+def trial_speed_limit(envelope, seg: TrialSegment, limits: Limits = DEFAULT) -> TrialSpeedTrip:
+    """EV-02 and EV-05 in a velocity command space (round-2 K5): the stop point's speed limit,
+    plus the profile's speed tolerance, plus 3 x sqrt(2) x the profile's max_sigma_jitter_m over the
+    shortest span the speed rule takes (half the speed window): the noise of two measurements."""
+    point = seg.point or next(iter(envelope.points))
+    v_max = envelope.speed_limit_mps(point)
+    profile = load_profile("ev02-illustrative-0.1" if seg.kind == "stop" else "ev05-illustrative-0.1")
+    noise = 3.0 * math.sqrt(2.0) * profile["max_sigma_jitter_m"] / (0.5 * limits.speed_window_s)
+    return TrialSpeedTrip(point, v_max * (1.0 + profile["tolerance_speed_frac"]) + noise, v_max)
+
+
+def trial_segments(test: str, space, plan, params: dict, seed: int, envelope, desc: Mapping,
+                   source_cmds: Mapping[str, str | None], limits: Limits,
+                   adapter=None) -> tuple[list[TrialSegment], float]:
+    """The stream cut into its trials, with what each allows and needs; refuses a source the
+    bench cannot issue or the adapter cannot reset after. Returns (segments, planned seconds)."""
+    triggers = set(desc.get("stop_triggers") or [])
+    resets = set(desc.get("stop_resets") or [])
+    point = _stop_point(plan, envelope)
+    v_max = envelope.speed_limit_mps(point)
+    velocity = space.kind not in POSITION_KINDS
+    margin = limits.margin("full")
+    if adapter is not None and triggers & set(ADAPTER_STOP_SOURCES) and not callable(
+            getattr(adapter, "trigger_stop", None)):
+        raise RunError(f"the adapter lists stop_triggers {sorted(triggers)} but has no trigger_stop method")
+    if test == "ev02":
+        for source in plan.sources:
+            if source in ADAPTER_STOP_SOURCES and source not in triggers:
+                raise RunError(f"the plan tests {source}, which this adapter cannot issue "
+                               f"(describe()['stop_triggers'] = {sorted(triggers)})")
+            if source in EXTERNAL_SOURCES and not source_cmds.get(source):
+                raise RunError(f"the plan tests {source}: give the command that issues it with "
+                               f"{SOURCE_FLAGS[source]} (it must latch and never restore power itself: "
+                               "restoring is the reset, done by the operator at NEXT; --estop-cmd is "
+                               "the CUT POWER escalation only)")
+            if source in EXTERNAL_SOURCES and source not in resets:
+                raise RunError(f"the plan tests {source}, and this adapter cannot resume after it "
+                               f"(describe()['stop_resets'] = {sorted(resets)})")
+        proposals = list(core_report.stop_stream(space, plan, params))
+    else:
+        proposals = list(core_report.model_loss_stream(space, plan, seed, params))
+    needs_reset = test == "ev02" or plan.resume["rule"] == "manual"
+    if adapter is not None and needs_reset and resets and not callable(getattr(adapter, "reset_stop", None)):
+        raise RunError(f"the adapter lists stop_resets {sorted(resets)} but has no reset_stop method")
+    segments, planned = [], 0.0
+    # Velocity spaces (review S5, round-2 K5): the room a trial needs is sized for the failure the
+    # test exists to find, a stop that does nothing (EV-02) or no loss handling (EV-05): the point
+    # goes on at its speed limit until the watch trips (the time the trial allows plus
+    # trial_rest_grace_s), and then the runner's own stop brakes within the top-level stop
+    # distance; under a commands resume rule it may also follow the restart once the rule allows.
+    brake = float(envelope.stop["max_distance_m"])
+    for k, seg in enumerate(core_report.split_segments(proposals)):
+        if test == "ev02":
+            source, drive = plan.trials[k]
+            allowed, _, _ = stop_limits(envelope, source)
+            travel = (v_max * (params["drive_s"] + allowed + limits.trial_rest_grace_s) + brake + margin
+                      if velocity else None)
+            segments.append(TrialSegment(tuple(seg), f"trial {k + 1} ({source}, drive {drive})", "stop",
+                                         source, allowed, limits.trial_pause_extra_s,
+                                         source in EXTERNAL_SOURCES or source in resets,
+                                         operator_reset=source in EXTERNAL_SOURCES, point=point,
+                                         travel_m=travel))
+        else:
+            source = plan.source
+            timeout = envelope.heartbeat["model_timeout_ms"] / 1000.0
+            allowed, _, _ = stop_limits(envelope, source)
+            allowed += timeout
+            manual = plan.resume["rule"] == "manual"
+            restart = 0.0 if manual else max(0.0, params["restart_s"] - plan.resume["after_ms"] / 1000.0)
+            travel = (v_max * (params["motion_s"][1] + allowed + limits.trial_rest_grace_s + restart)
+                      + brake + margin) if velocity else None
+            segments.append(TrialSegment(tuple(seg), f"trial {k + 1} ({source})", "loss", source,
+                                         allowed, limits.trial_pause_extra_s, manual and source in resets,
+                                         operator_reset=manual and source not in resets, point=point,
+                                         release_after_s=None if manual else plan.resume["after_ms"] / 1000.0,
+                                         travel_m=travel))
+        planned += seg[-1].t_s + segments[-1].pause_s
+    return segments, planned
+
+
+def check_trial_proposals(fk: ArmFK, envelope, space, plan, segments: Sequence[TrialSegment],
+                          test: str, hz: float) -> None:
+    """Joint-position spaces with FK, before RUN (review S2, B2): at every command the stream will
+    send (every walk included, not only the plan's own commands) every zoned point must be inside
+    its zones; the stop point may not be commanded faster than its speed limit allows; and in EV-02
+    the commands that go on after each stop must carry the stop point clearly further than the
+    source's stop distance (with the profile's tolerance and margin), so that a stop that does
+    nothing fails rather than passes."""
+    if space.kind != "joint_position":
+        return
+    point = _stop_point(plan, envelope)
+    v_max = envelope.speed_limit_mps(point)
+    units = {a.key.removesuffix(".pos"): a.unit for a in space.axes}
+    profile = load_profile("ev02-illustrative-0.1" if test == "ev02" else "ev05-illustrative-0.1")
+    fastest = v_max * (1.0 + profile["tolerance_speed_frac"])
+
+    def at(command: Mapping[str, float]) -> dict:
+        return fk.points({k.removesuffix(".pos"): float(v) for k, v in command.items()}, units)
+
+    for seg in segments:
+        previous = None
+        for prop in seg.proposals:
+            if not prop.payload:
+                continue  # a stop row
+            pts = at(prop.payload)
+            for name, xyz in pts.items():
+                c = envelope.clearance(name, xyz)
+                if c < 0:
+                    raise RunError(f"{seg.label}: command {prop.seq} ({prop.strategy}) puts {name} "
+                                   f"{-c * 100:.1f} cm outside its zones")
+            if previous is not None and point in pts:
+                v = math.dist(pts[point], previous) * hz
+                if v > fastest:
+                    raise RunError(f"{seg.label}: command {prop.seq} moves {point} at {v:.3f} m/s, faster "
+                                   f"than its speed limit allows ({v_max:g} m/s plus "
+                                   f"{profile['tolerance_speed_frac'] * 100:g} %): a smaller --step-cap")
+            previous = pts.get(point)
+        if test == "ev02":
+            stop = next(i for i, q in enumerate(seg.proposals) if not q.payload)
+            last = at(seg.proposals[stop - 1].payload).get(point) if stop else None
+            target = at(plan.drive(plan.trials[segments.index(seg)][1]).command).get(point)
+            if last is None or target is None:
+                continue
+            _, distance, _ = stop_limits(envelope, seg.source)
+            need = (distance + profile["tolerance_m"]) * (1.0 + profile["dead_stop_margin_frac"])
+            left = math.dist(last, target)
+            if left < need:
+                raise RunError(f"{seg.label}: after the stop the commands carry {point} only {left:.3f} m "
+                               f"further, to the drive; a stop that does nothing must travel clearly "
+                               f"more than the allowed {distance + profile['tolerance_m']:.3f} m "
+                               f"({need:.3f} m): a farther drive or a shorter --drive-s")
+
+
 def execute_run(args, *, prompt: Callable[[str], str] = _ask, log: Callable[[str], None] = _stderr,
                 limits: Limits = DEFAULT) -> int:
     mode = args.mode
     test = getattr(args, "test", "ev03")
     if getattr(args, "seed", None) is None:
-        args.seed = 0 if test == "ev10" else 7
+        args.seed = 0 if test in ("ev10", "ev02") else 7
+    trial = test in TRIAL_TESTS
     try:
         require_run_flags(args, mode)
         if test == "ev10" and (mode != "full" or not getattr(args, "waypoints", None)):
@@ -409,9 +774,32 @@ def execute_run(args, *, prompt: Callable[[str], str] = _ask, log: Callable[[str
         if test == "ev10" and getattr(args, "seconds", None):
             raise RunError("--seconds is for ev03; an EV-10 tour lasts cycles x waypoints x commands per "
                            "visit / hz (--cycles, --commands-per-visit, --hz)")
+        if test not in ("ev10", *TRIAL_TESTS) and getattr(args, "hz", None):
+            raise RunError("--hz is for be run ev10, ev02 and ev05")
         if test != "ev10" and (getattr(args, "waypoints", None) or getattr(args, "cycles", None)
-                               or getattr(args, "commands_per_visit", None) or getattr(args, "hz", None)):
+                               or getattr(args, "commands_per_visit", None)):
             raise RunError("--waypoints, --cycles, --commands-per-visit and --hz are for be run ev10")
+        trial_flags = [f for f, a in (("--plan", "plan"), ("--drive-s", "drive_s"), ("--return-s", "return_s"),
+                                      ("--trials", "trials"), ("--motion-s", "motion_s"),
+                                      ("--silence-s", "silence_s"), ("--restart-s", "restart_s"))
+                       if getattr(args, a, None) is not None]
+        if not trial and trial_flags:
+            raise RunError(f"{', '.join(trial_flags)}: for be run ev02 and ev05")
+        if trial and (mode != "full" or not getattr(args, "plan", None)):
+            raise RunError(f"{test.upper().replace('EV', 'EV-')} runs one plan's trials: --mode full --plan FILE")
+        if trial and (getattr(args, "seconds", None) or getattr(args, "target", None)):
+            raise RunError(f"--seconds and --target are for ev03; {test} runs its plan's trials")
+        if test == "ev02" and any(getattr(args, a, None) is not None
+                                  for a in ("trials", "motion_s", "silence_s", "restart_s")):
+            raise RunError("--trials, --motion-s, --silence-s and --restart-s are for ev05")
+        if test == "ev05" and any(getattr(args, a, None) is not None for a in ("drive_s", "return_s")):
+            raise RunError("--drive-s and --return-s are for ev02")
+        cmds = [f for f, a in (("--hardwired-stop-cmd", "hardwired_stop_cmd"), ("--power-loss-cmd", "power_loss_cmd"))
+                if getattr(args, a, None)]
+        if cmds and test != "ev02":
+            raise RunError(f"{', '.join(cmds)}: for be run ev02 (they issue its external stop sources)")
+        for source, flag in SOURCE_FLAGS.items():  # a typo is found now, not at its trial's stop (N-b)
+            check_command(getattr(args, f"{source}_cmd", None), flag)
         out = Path(args.out)
         if out.exists() and any(out.iterdir()):
             raise RunError(f"{out} exists and is not empty; a run directory is written once")
@@ -430,6 +818,8 @@ def execute_run(args, *, prompt: Callable[[str], str] = _ask, log: Callable[[str
         desc = adapter.describe()
         if kind == "sim" and not desc.get("simulation"):
             raise RunError("--instrument sim is for simulation adapters only")
+        if trial and not desc.get("simulation"):  # NEXT asserts a reset: from a terminal only (S3)
+            require_terminal()
         fk = ArmFK.build(args.urdf, kit_config.get("joint_map"), envelope) if args.urdf else None
         override = bool(args.no_fk_tripwire_i_understand)
         if fk is None and not override:
@@ -444,6 +834,14 @@ def execute_run(args, *, prompt: Callable[[str], str] = _ask, log: Callable[[str
         file_space = load_command_space(args.command_space)
         if test == "ev10":
             load_tour(file_space, args.waypoints)   # refuse a bad tour before anything connects
+        plan = plan_bytes = trial_args = None
+        if trial:  # refuse a bad plan, or bad params, before anything connects
+            plan, plan_bytes = load_trial_plan(test, file_space, args.plan)
+            if plan.point is not None and plan.point not in envelope.points:
+                raise RunError(f"--plan names the point {plan.point!r}, which the envelope does not declare")
+            if fk is not None:
+                check_plan_poses(fk, envelope, file_space, plan)
+            trial_args = trial_params(test, file_space, args, envelope, plan)
         setup = setup_hash(envelope_hash=envelope.hash, command_space_digest=file_space.digest,
                            adapter_config=desc.get("config", {}), kit_config=kit_config,
                            urdf_sha256=urdf_sha)
@@ -476,9 +874,21 @@ def execute_run(args, *, prompt: Callable[[str], str] = _ask, log: Callable[[str
                 raise RunError("the adapter returned no state, so the FK tripwire cannot run")
             fk.points(st.joints, st.units)
         present = state_to_command(space, st) if st is not None else None
-        proposals, generator, planned_s = build_proposals(
-            mode, space, args, kit_config, limits, adapter_config=desc.get("config", {}),
-            present=present)
+        segments = None
+        if trial:
+            segments, planned_s = trial_segments(test, space, plan, trial_args, int(args.seed), envelope,
+                                                 adapter.describe(), source_cmds(args), limits, adapter)
+            check_trial_start(space, trial_args["step_cap"], present, plan.start)
+            if fk is not None:
+                check_trial_proposals(fk, envelope, space, plan, segments, test, trial_args["hz"])
+            proposals = [p for seg in segments for p in seg.proposals]
+            generator = {"name": core_report.STOPS if test == "ev02" else core_report.MODEL_LOSS,
+                         "version": "1", "seed": int(args.seed), "params": trial_args,
+                         "command_space_digest": space.digest, "plan_digest": plan.digest}
+        else:
+            proposals, generator, planned_s = build_proposals(
+                mode, space, args, kit_config, limits, adapter_config=desc.get("config", {}),
+                present=present)
     except (RunError, FKError, ValueError, KeyError) as e:
         log(f"Refused: {e}")
         adapter.close()
@@ -494,13 +904,18 @@ def execute_run(args, *, prompt: Callable[[str], str] = _ask, log: Callable[[str
         shutil.copyfile(args.command_space, out / "command-space.json")
         if test == "ev10":
             shutil.copyfile(args.waypoints, out / "ev10-waypoints.json")
+        if trial:
+            (out / PLAN_FILES[test]).write_bytes(plan_bytes)  # the bytes that were checked
         feed, feed_block = _make_feed(kind, host, port, clock=clock, envelope=envelope, adapter=adapter,
                                       fk=fk, args=args,
                                       samples_csv=(out / "raw" / "samples.csv") if kind == "sim" else None)
         tool = tool_point_of(envelope)
         live = _Live(adapter=adapter, envelope=envelope, fk=fk, fk_tripwire=fk_tripwire, feed=feed,
                      mode=mode, tool_point=tool, proposals=proposals, files=RawFiles(out / "raw"),
-                     clock=clock, estop_cmd=args.estop_cmd, limits=limits, log=log)
+                     clock=clock, estop_cmd=args.estop_cmd, limits=limits, log=log, segments=segments,
+                     source_cmds=source_cmds(args) if trial else None,
+                     ask=typed_word if trial and not desc.get("simulation") else None,
+                     space=space if trial else None, caps=trial_args["step_cap"] if trial else None)
         if kind == "none":
             feed_block = {"kind": "none", "live_supervision": "robot_state_only",
                           "why": "--no-live-instrument-i-understand: the instrument records and is scored "
@@ -511,6 +926,8 @@ def execute_run(args, *, prompt: Callable[[str], str] = _ask, log: Callable[[str
             "generator": generator, "planned_seconds": planned_s,
             "command_space": {"path": "command-space.json", "digest": space.digest},
             "envelope": {"path": "envelope.json", "hash": envelope.hash},
+            **({"plan": {"path": PLAN_FILES[test], "digest": plan.digest,
+                         "trials": [s.label for s in segments]}} if trial else {}),
             "kit_config": {"path": str(args.kit_config) if args.kit_config else None,
                            "sha256": sha256_jcs(kit_config), "document": kit_config},
             "urdf": {"path": str(args.urdf), "sha256": urdf_sha} if args.urdf else None,
@@ -518,6 +935,7 @@ def execute_run(args, *, prompt: Callable[[str], str] = _ask, log: Callable[[str
             "safety": {"hardware_stop": args.hardware_stop.strip(),
                        "fk_tripwire": "on" if fk_tripwire else "override",
                        "estop_cmd": args.estop_cmd, "tool_point": tool,
+                       **({"source_cmds": source_cmds(args)} if trial else {}),
                        "tripwires": {"margin_m": live.cfg.margin_m,
                                      "tool_speed_trip_mps": live.cfg.tool_speed_trip_mps,
                                      "tool_unseen_s": live.cfg.tool_unseen_s,
@@ -530,6 +948,7 @@ def execute_run(args, *, prompt: Callable[[str], str] = _ask, log: Callable[[str
         }
         _write_json(out / "declared.json", declared)
         what = (f"{test} {mode}: {planned_s:.0f} s, {generator['name']}"
+                + (f", {len(segments)} trials (NEXT between them)" if trial else "")
                 + (f" seed {args.seed}" if mode != "control" else f" toward {args.target}")
                 + f", stop margin {live.cfg.margin_m * 100:.1f} cm, FK tripwire "
                 + ("on" if fk_tripwire else "OFF") + f", hardware stop: {args.hardware_stop.strip()}"
@@ -555,7 +974,26 @@ def execute_run(args, *, prompt: Callable[[str], str] = _ask, log: Callable[[str
                        "ended_wall": time.time(), "run_dir": str(out.resolve())})
     code = _exit_code(result, live)
     log(f"Run ended ({live.latch.kind}: {live.latch.reason}); exit {code}. Run directory: {out}")
+    for warning in _source_command_warnings(live):
+        log(warning)
     return code
+
+
+def _source_command_warnings(live: _Live | None) -> list[str]:
+    """Round-2 K1: a source command the kit had to end may have acted before it was (cut power,
+    opened the stop circuit); the end of the run says so, trial by trial."""
+    c = live.command if live is not None else None
+    if not isinstance(c, TrialCommandThread):
+        return []
+    out = []
+    for t in c.trials:
+        how = t.get("command")
+        if how in ("SIGTERM", "SIGKILL", "survived"):
+            what = ("could not be ended and may still be running" if how == "survived"
+                    else f"was ended ({how})")
+            out.append(f"*** {t['label']}: the {t['source']} command did not finish and {what}. It may have "
+                       "acted: check the machine (its power, its stop circuit) before you touch it.")
+    return out
 
 
 # ----- be goto-start ---------------------------------------------------------------------------

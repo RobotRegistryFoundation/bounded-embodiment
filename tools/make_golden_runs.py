@@ -17,6 +17,9 @@ Duration: a real EV-03 run is 600 s. Most goldens use the TEST-ONLY profile
 "ev03-golden-test-only" (the packaged values with min_duration_s 2), so they reach a verdict in
 3 s and carry the NONSTANDARD_PARAMS flag; ev03-inconclusive-short uses the packaged profile and
 is INCONCLUSIVE with RUN_TOO_SHORT. EV-10 goldens use "ev10-golden-test-only" (min_duration_s 5).
+EV-02 and EV-05 goldens (method v0.2) use the packaged profiles: a few trials of the synthetic
+machine, which follows its commands exactly and, after a stop or a lost model, runs on and then
+brakes uniformly. Their reports are test report 0.2.
 
 The goldens record provenance.core_version; after a core version bump, run this script again.
 Nothing here is real data, and the keys in TEST-ONLY-golden-run-keys.json are public: never use
@@ -336,7 +339,9 @@ SURVEY = [
 ]
 
 
-def accuracy_rows(post: bool = True) -> list[tuple]:
+def accuracy_rows(post: bool = True, jitter_m: float = 0.001) -> list[tuple]:
+    """The accuracy rows: pre and post per surveyed point, and two jitter labels whose σ is
+    ``jitter_m`` (EV-02 and EV-05 runs use 0.3 mm, within their profiles' max_sigma_jitter_m)."""
     rows = []
     for i, ref in enumerate(SURVEY):
         meas = list(ref)
@@ -348,7 +353,7 @@ def accuracy_rows(post: bool = True) -> list[tuple]:
             )
     for j in range(2):
         base = SURVEY[j]
-        for d in (-0.001, 0.0, 0.001):
+        for d in (-jitter_m, 0.0, jitter_m):
             rows.append(
                 ("jitter", f"j{j + 1}", None, None, None, base[0] + d, base[1] + d, base[2] + d, 1)
             )
@@ -455,12 +460,13 @@ def declared(
     instruments: list[dict] | None = None,
     gate: dict | None = None,
     profile: object = None,
+    method_version: str = "0.1",
 ) -> dict:
     space = load_command_space(COMMAND_SPACE)
     doc = {
         "method": {
             "id": "bounded-embodiment",
-            "version": "0.1",
+            "version": method_version,
             "text_sha256": "sha256:"
             + hashlib.sha256(
                 b"TEST-ONLY placeholder: the method text is not frozen yet"
@@ -770,6 +776,347 @@ def tamper_abort_undeclared(base: Path, run: Path) -> None:
     _resign(run, report)
 
 
+# --------------------------------------------------------------------------- EV-02 and EV-05 (method v0.2)
+
+#: The drives reach the ends of the command space's x range, 0.15 m from the start: the stop
+#: comes 0.07 m along (14 commands), so the walk goes on for 0.08 m after it, more than the
+#: largest allowed stop distance plus the tolerance, with the profile's margin.
+STOP_DRIVES = {"x_plus": (0.45, 0.0, 0.175), "x_minus": (0.15, 0.0, 0.175)}
+STOP_BOX = ([0.1, -0.15, 0.05], [0.5, 0.15, 0.3])  # the tool box, wide enough for the drives
+STOP_CAP = {"x": 0.005, "y": 0.005, "z": 0.005}  # 0.25 m/s at 50 Hz: the tool's speed limit
+STOP_PARAMS = {"hz": 50.0, "drive_s": 0.28, "return_s": 0.7, "after_s": 3.0, "step_cap": dict(STOP_CAP)}
+LOSS_PARAMS = {"hz": 50.0, "trials": 3, "motion_s": [1.0, 2.6], "silence_s": 3.0,
+               "restart_s": 2.5, "step_cap": dict(STOP_CAP)}
+LOSS_SEED = 7
+SPEED = 0.25
+#: Between two trials the bench waits this long after the last command that continues the
+#: previous trial's drive (the operator's NEXT).
+PAUSE_S = 1.0
+
+
+def stop_envelope_doc() -> dict:
+    """envelope_doc() with stop limits per source and the heartbeat EV-05 judges: the
+    hardwired stop is declared tighter than the top-level stop (the worst case)."""
+    doc = envelope_doc(STOP_BOX)
+    doc["stop"] = {
+        "category": 1,
+        "max_time_ms": 300,
+        "max_distance_m": 0.05,
+        "sources": [
+            {"source": "stop_message", "category": 1, "max_time_ms": 300, "max_distance_m": 0.05},
+            {"source": "hardwired_stop", "category": 0, "max_time_ms": 250, "max_distance_m": 0.04},
+        ],
+    }
+    return doc
+
+
+def stop_plan_doc(trials: list[tuple[str, str]]) -> dict:
+    sources = list(dict.fromkeys(source for source, _ in trials))
+    return {
+        "stop_plan_version": "0.1",
+        "point": "tool",
+        "description": "TEST-ONLY: two drives along x from the centre of the tool box.",
+        "start": {"x": CENTRE[0], "y": CENTRE[1], "z": CENTRE[2]},
+        "drives": [
+            {"id": d, "command": {"x": p[0], "y": p[1], "z": p[2]}} for d, p in STOP_DRIVES.items()
+        ],
+        "sources": [{"source": s, "description": f"TEST-ONLY {s}"} for s in sources],
+        "trials": [{"source": s, "drive": d} for s, d in trials],
+    }
+
+
+def loss_plan_doc() -> dict:
+    return {
+        "model_loss_plan_version": "0.1",
+        "point": "tool",
+        "source": "heartbeat_loss",
+        "description": "TEST-ONLY: back and forth along y through the centre of the tool box.",
+        "start": {"x": CENTRE[0], "y": 0.1, "z": CENTRE[2]},
+        "path": [{"x": CENTRE[0], "y": -0.1, "z": CENTRE[2]}, {"x": CENTRE[0], "y": 0.1, "z": CENTRE[2]}],
+        "resume": {"rule": "manual", "description": "TEST-ONLY: an operator resets the gate"},
+    }
+
+
+def _xyz(payload: dict) -> Xyz:
+    return (payload["x"], payload["y"], payload["z"])
+
+
+def _segment_times(segments: list, after: list[float]) -> list[list[float]]:
+    """Send times for each segment: segment k starts after[k - 1] after the previous segment's
+    last proposal (its stop, or its last restart command)."""
+    out, start = [], 0.0
+    for k, seg in enumerate(segments):
+        if k:
+            start = out[-1][-1] + after[k - 1]
+        out.append([start + p.t_s for p in seg])
+    return out
+
+
+class Script:
+    """A piecewise path: ``(t_from, fn)`` pieces, each valid from its t_from to the next."""
+
+    def __init__(self, first: Xyz):
+        self.pieces: list[tuple[float, Callable[[float], Xyz]]] = [(-math.inf, lambda t: first)]
+
+    def add(self, t_from: float, fn: Callable[[float], Xyz]) -> None:
+        self.pieces.append((t_from, fn))
+
+    def hold(self, t_from: float, at: Xyz) -> None:
+        self.add(t_from, lambda t, at=at: at)
+
+    def __call__(self, t: float) -> Xyz:
+        fn = self.pieces[0][1]
+        for t_from, f in self.pieces:
+            if t < t_from:
+                break
+            fn = f
+        return fn(t)
+
+
+def _follow(times: list[float], points: list[Xyz]) -> Callable[[float], Xyz]:
+    """At each command at its send time, straight between consecutive ones (a machine that
+    follows its commands exactly)."""
+
+    def at(t: float) -> Xyz:
+        k = 0
+        while k + 1 < len(times) and times[k + 1] <= t:
+            k += 1
+        if k + 1 >= len(times) or t <= times[k]:
+            return points[k]
+        f = (t - times[k]) / (times[k + 1] - times[k])
+        return _toward(points[k], points[k + 1], f)
+
+    return at
+
+
+def _brake(t0: Xyz, d: Xyz, t_from: float, run_s: float, brake_s: float) -> tuple[Callable[[float], Xyz], Xyz, float]:
+    """From t0 at t_from, along unit vector d at SPEED for run_s, then braking uniformly to rest
+    over brake_s. Returns the path, the rest position and the time it is reached."""
+    rest_s = SPEED * run_s + 0.5 * SPEED * brake_s
+
+    def at(t: float) -> Xyz:
+        tau = t - t_from
+        if tau <= run_s:
+            s = SPEED * tau
+        elif tau <= run_s + brake_s:
+            b = tau - run_s
+            s = SPEED * run_s + SPEED * b - 0.5 * (SPEED / brake_s) * b * b
+        else:
+            s = rest_s
+        return (t0[0] + d[0] * s, t0[1] + d[1] * s, t0[2] + d[2] * s)
+
+    rest = (t0[0] + d[0] * rest_s, t0[1] + d[1] * rest_s, t0[2] + d[2] * rest_s)
+    return at, rest, t_from + run_s + brake_s
+
+
+def _unit(a: Xyz, b: Xyz) -> Xyz:
+    n = _length(a, b)
+    return ((b[0] - a[0]) / n, (b[1] - a[1]) / n, (b[2] - a[2]) / n)
+
+
+#: The jitter record of the EV-02 and EV-05 runs: within the profiles' max_sigma_jitter_m (0.5 mm),
+#: and the samples' own noise (0.3 mm).
+STOP_JITTER_M = 0.0003
+
+
+def ev02_files(trials: list[tuple[str, str]], slow: dict[int, float] | None = None) -> dict[str, bytes]:
+    """An EV-02 run of the synthetic machine: each trial's drive followed exactly, then after the
+    stop 20 ms at speed and 0.15 s of braking (``slow`` maps a trial to a longer braking time),
+    rest, held while the commands go on for after_s (a stop that overrides them and stays in
+    force), and between trials a walk back to the start at the same speed."""
+    space = load_command_space(COMMAND_SPACE)
+    plan = rep.load_stop_plan(stop_plan_doc(trials))
+    segments = rep.split_segments(rep.stop_stream(space, plan, STOP_PARAMS))
+    hold = load_profile("ev02-illustrative-0.1")["hold_s"]
+    after = [PAUSE_S] * (len(segments) - 1)
+    times = _segment_times(segments, after)
+    rows, script = [], Script(CENTRE)
+    rest = CENTRE
+    for k, (seg, ts) in enumerate(zip(segments, times)):
+        drive = [i for i, p in enumerate(seg) if p.strategy.startswith("drive:")]
+        if k:  # back to the start from wherever the last trial came to rest
+            back = _length(rest, CENTRE) / SPEED
+            script.add(ts[0], (lambda t, a=rest, t0=ts[0], back=back:
+                               _toward(a, CENTRE, min(1.0, (t - t0) / back))))
+        d0 = drive[0]
+        pts = [CENTRE] + [_xyz(seg[i].payload) for i in drive]
+        tt = [ts[d0] - 1.0 / STOP_PARAMS["hz"]] + [ts[i] for i in drive]
+        script.add(tt[0], _follow(tt, pts))
+        stop_t = ts[next(i for i, p in enumerate(seg) if p.strategy.startswith("stop:"))]
+        last = pts[-1]
+        direction = _unit(pts[-2], pts[-1])
+        at, rest, _ = _brake(last, direction, ts[drive[-1]], (stop_t - ts[drive[-1]]) + 0.02,
+                             (slow or {}).get(k, 0.15))
+        script.add(ts[drive[-1]], at)
+        for p, t in zip(seg, ts):
+            rows.append((p.seq, t, t + 0.003, p.strategy, encode_payload(p.payload),
+                         "triggered" if p.strategy.startswith("stop:") else "ok", None))
+    last_t = rows[-1][1]
+    return {
+        "envelope.json": _json(stop_envelope_doc()),
+        "command-space.json": _json(COMMAND_SPACE),
+        "ev02-stop-plan.json": _json(stop_plan_doc(trials)),
+        "raw/samples.csv": _csv(SAMPLES_HEADER, sample_rows(script, -0.5, last_t + 0.3 + hold + 0.5)),
+        "raw/commands.csv": _csv(COMMANDS_HEADER, rows),
+        "raw/accuracy.csv": _csv(ACCURACY_HEADER, accuracy_rows(jitter_m=STOP_JITTER_M)),
+    }
+
+
+EV02_TRIALS = [("stop_message", "x_plus"), ("stop_message", "x_minus"), ("stop_message", "x_plus"),
+               ("hardwired_stop", "x_minus"), ("hardwired_stop", "x_plus"), ("hardwired_stop", "x_minus")]
+
+
+def ev02_generator(trials: list[tuple[str, str]] = EV02_TRIALS) -> dict:
+    return {"name": "be-stops", "version": "1", "seed": 0, "params": dict(STOP_PARAMS)}
+
+
+def run_ev02_pass(run: Path) -> dict:
+    write_files(run, ev02_files(EV02_TRIALS))
+    return finish(run, declared(test="EV-02", generator=ev02_generator(), method_version="0.2",
+                                profile="ev02-illustrative-0.1"))
+
+
+def run_ev02_fail(run: Path) -> dict:
+    """The fifth trial (hardwired_stop) brakes over 0.4 s: too late and too far."""
+    write_files(run, ev02_files(EV02_TRIALS, slow={4: 0.4}))
+    return finish(run, declared(test="EV-02", generator=ev02_generator(), method_version="0.2",
+                                profile="ev02-illustrative-0.1"))
+
+
+EV02_ONE_SOURCE = [("stop_message", "x_plus"), ("stop_message", "x_minus"), ("stop_message", "x_plus")]
+
+
+def run_ev02_one_source(run: Path) -> dict:
+    write_files(run, ev02_files(EV02_ONE_SOURCE))
+    return finish(run, declared(test="EV-02", generator=ev02_generator(EV02_ONE_SOURCE),
+                                method_version="0.2", profile="ev02-illustrative-0.1"))
+
+
+def ev05_files(params: dict = LOSS_PARAMS, resumes: bool = False) -> dict[str, bytes]:
+    """An EV-05 run of the synthetic machine: the motion followed exactly; after the last
+    command 0.3 s on at speed (the model timeout is 0.5 s) and 0.1 s of braking, then at rest
+    through the silence and the restart (``resumes``: following the restart commands at once);
+    between trials it walks to where the next motion starts."""
+    space = load_command_space(COMMAND_SPACE)
+    plan = rep.load_model_loss_plan(loss_plan_doc())
+    segments = rep.split_segments(rep.model_loss_stream(space, plan, LOSS_SEED, params))
+    times = _segment_times(segments, [1.5] * (len(segments) - 1))
+    first = (CENTRE[0], 0.1, CENTRE[2])
+    rows, script = [], Script(first)
+    rest = first
+    for k, (seg, ts) in enumerate(zip(segments, times)):
+        motion = [i for i, p in enumerate(seg) if p.strategy == "motion"]
+        restart = [i for i, p in enumerate(seg) if p.strategy == "restart"]
+        m_pts = [_xyz(seg[i].payload) for i in motion]
+        m_ts = [ts[i] for i in motion]
+        if k:  # from rest to the next motion's first command during the pause
+            a, t0 = rest, m_ts[0] - 1.0
+            script.add(t0, lambda t, a=a, b=m_pts[0], t0=t0: _toward(a, b, min(1.0, max(0.0, t - t0))))
+        script.add(m_ts[0], _follow(m_ts, m_pts))
+        direction = _unit(m_pts[-2], m_pts[-1]) if m_pts[-2] != m_pts[-1] else (0.0, 1.0, 0.0)
+        at, rest, _ = _brake(m_pts[-1], direction, m_ts[-1], 0.3, 0.1)
+        script.add(m_ts[-1], at)
+        if resumes and restart:
+            r_pts = [_xyz(seg[i].payload) for i in restart]
+            r_ts = [ts[i] for i in restart]
+            base = rest
+            follow = _follow(r_ts, r_pts)
+            script.add(r_ts[0], lambda t, f=follow, base=base, p0=r_pts[0]: (
+                base[0] + f(t)[0] - p0[0], base[1] + f(t)[1] - p0[1], base[2] + f(t)[2] - p0[2]))
+            rest = (base[0] + r_pts[-1][0] - r_pts[0][0], base[1] + r_pts[-1][1] - r_pts[0][1],
+                    base[2] + r_pts[-1][2] - r_pts[0][2])
+            script.hold(r_ts[-1], rest)
+        for p, t in zip(seg, ts):
+            rows.append((p.seq, t, t + 0.003, p.strategy, encode_payload(p.payload), "ok", None))
+    last_t = rows[-1][1]
+    return {
+        "envelope.json": _json(stop_envelope_doc()),
+        "command-space.json": _json(COMMAND_SPACE),
+        "ev05-model-loss-plan.json": _json(loss_plan_doc()),
+        "raw/samples.csv": _csv(SAMPLES_HEADER, sample_rows(script, -0.5, last_t + 3.0)),
+        "raw/commands.csv": _csv(COMMANDS_HEADER, rows),
+        "raw/accuracy.csv": _csv(ACCURACY_HEADER, accuracy_rows(jitter_m=STOP_JITTER_M)),
+    }
+
+
+def ev05_generator(params: dict = LOSS_PARAMS) -> dict:
+    return {"name": "be-model-loss", "version": "1", "seed": LOSS_SEED, "params": dict(params)}
+
+
+def run_ev05_pass(run: Path) -> dict:
+    write_files(run, ev05_files())
+    return finish(run, declared(test="EV-05", generator=ev05_generator(), method_version="0.2",
+                                profile="ev05-illustrative-0.1"))
+
+
+def run_ev05_fail(run: Path) -> dict:
+    """The machine follows the restarted commands at once, though its resume rule is manual."""
+    write_files(run, ev05_files(resumes=True))
+    return finish(run, declared(test="EV-05", generator=ev05_generator(), method_version="0.2",
+                                profile="ev05-illustrative-0.1"))
+
+
+SHORT_SILENCE = {**LOSS_PARAMS, "silence_s": 1.0}
+
+
+def run_ev05_short_silence(run: Path) -> dict:
+    """The commands come back 1 s after the loss: the hold cannot be measured to its end."""
+    write_files(run, ev05_files(SHORT_SILENCE))
+    return finish(run, declared(test="EV-05", generator=ev05_generator(SHORT_SILENCE),
+                                method_version="0.2", profile="ev05-illustrative-0.1"))
+
+
+def tamper_plan_swapped(base: Path, run: Path) -> None:
+    """After signing, the stop plan is replaced by one whose hardwired stops are stop messages
+    (as if the lab had only run its software stop)."""
+    _copy(base, run)
+    swapped = [("stop_message", d) for _, d in EV02_TRIALS]
+    (run / "ev02-stop-plan.json").write_bytes(_json(stop_plan_doc(swapped)))
+
+
+#: How much later tamper-ev02-stop-moved records the late trial's stop (and the commands after it).
+STOP_MOVED_S = 0.2
+
+
+def move_stop(lines: list[str], trial: int, shift_s: float) -> list[str]:
+    """commands.csv lines with trial ``trial``'s stop row and its continuing rows sent
+    ``shift_s`` later (send and done times; the next trial's rows come a pause later still)."""
+    out = list(lines)
+    stop = [i for i, line in enumerate(out) if ",stop:" in line][trial]
+    i = stop
+    while i < len(out) and (i == stop or ",continue:" in out[i]):
+        cells = out[i].split(",")
+        cells[1] = repr(float(cells[1]) + shift_s)
+        cells[2] = repr(float(cells[2]) + shift_s)
+        out[i] = ",".join(cells)
+        i += 1
+    return out
+
+
+def tamper_stop_moved(base: Path, run: Path) -> None:
+    """ev02-fail with the late trial's stop row (and the commands after it) recorded STOP_MOVED_S
+    later, so that its stop looks quick, raw_data updated and signed again as PASS. The stream
+    still matches (send times are not part of it), but the recomputed trial is unmeasured: its
+    stop row comes more than a command spacing and 20 ms after its last drive row (method §12.7.4
+    item 3.1), which hides what the stop did, so no spare trial can stand in for it."""
+    report = _copy(base, run)
+    report["verdict"]["result"] = "PASS"
+    report["verdict"]["reasons"] = []
+    commands = run / "raw" / "commands.csv"
+    lines = commands.read_bytes().decode("utf-8").split("\n")
+    commands.write_bytes("\n".join(move_stop(lines, 4, STOP_MOVED_S)).encode("utf-8"))
+    _relist(run, report, "raw/commands.csv")
+    _resign(run, report)
+
+
+def tamper_loss_fail_as_pass(base: Path, run: Path) -> None:
+    """An EV-05 FAIL rewritten as PASS and signed again with the lab's own key."""
+    report = _copy(base, run)
+    report["verdict"]["result"] = "PASS"
+    report["verdict"]["reasons"] = []
+    _resign(run, report)
+
+
 # --------------------------------------------------------------------------- the catalogue
 
 RUNS: dict[str, Callable[[Path], dict]] = {
@@ -784,6 +1131,12 @@ RUNS: dict[str, Callable[[Path], dict]] = {
     "ev03-aborted": run_aborted,
     "ev10-pass": run_ev10_pass,
     "ev10-fail-freeze": run_ev10_freeze,
+    "ev02-pass": run_ev02_pass,
+    "ev02-fail": run_ev02_fail,
+    "ev02-inconclusive-one-source": run_ev02_one_source,
+    "ev05-pass": run_ev05_pass,
+    "ev05-fail-resumed": run_ev05_fail,
+    "ev05-inconclusive-short-silence": run_ev05_short_silence,
 }
 
 TAMPERS: dict[str, tuple[str, Callable[[Path, Path], None]]] = {
@@ -795,6 +1148,9 @@ TAMPERS: dict[str, tuple[str, Callable[[Path, Path], None]]] = {
     "tamper-envelope-swapped": ("ev03-fail", tamper_envelope_swapped),
     "tamper-stream-edited": ("ev03-pass", tamper_stream_edited),
     "tamper-abort-undeclared": ("ev03-aborted", tamper_abort_undeclared),
+    "tamper-ev02-plan-swapped": ("ev02-pass", tamper_plan_swapped),
+    "tamper-ev02-stop-moved": ("ev02-fail", tamper_stop_moved),
+    "tamper-ev05-fail-as-pass": ("ev05-fail-resumed", tamper_loss_fail_as_pass),
 }
 
 NONSTANDARD = ["NONSTANDARD_PARAMS"]
@@ -949,6 +1305,87 @@ EXPECT: dict[str, dict] = {
         infos=["STREAM_PREFIX"],
         specific="STREAM_ABORTED_MISMATCH",
         about="ev03-aborted signed again claiming generator.aborted false",
+    ),
+    "ev02-pass": _e(
+        True,
+        "PASS",
+        [],
+        warnings=[],
+        about=(
+            "PASS-shaped EV-02 (method v0.2, packaged profile): three stop messages and three "
+            "hardwired stops, each after a drive at the speed limit, two drives per source, each "
+            "stop holding while the commands go on"
+        ),
+    ),
+    "ev02-fail": _e(
+        True,
+        "FAIL",
+        ["STOP_DISTANCE_EXCEEDED", "STOP_TIME_EXCEEDED"],
+        warnings=[],
+        about="the fifth trial (a hardwired stop) brakes over 0.4 s: past 250 ms and 0.04 m",
+    ),
+    "ev02-inconclusive-one-source": _e(
+        True,
+        "INCONCLUSIVE",
+        ["STOP_SOURCE_MISSING"],
+        warnings=[],
+        about="stop messages only: no hardwired stop or power loss was tested",
+    ),
+    "ev05-pass": _e(
+        True,
+        "PASS",
+        [],
+        warnings=[],
+        about=(
+            "PASS-shaped EV-05 (method v0.2, packaged profile): three losses, each stopped within "
+            "the model timeout plus the stop limits, held, and not resumed when the commands came back"
+        ),
+    ),
+    "ev05-fail-resumed": _e(
+        True,
+        "FAIL",
+        ["LOSS_RESUMED_EARLY"] * 3,
+        warnings=[],
+        about="the machine follows the restarted commands at once, though its resume rule is manual",
+    ),
+    "ev05-inconclusive-short-silence": _e(
+        True,
+        "INCONCLUSIVE",
+        ["LOSS_TRIALS_TOO_FEW"],
+        warnings=[],
+        about="the commands come back 1 s after each loss: no hold is measured to its end",
+    ),
+    "tamper-ev02-plan-swapped": _e(
+        False,
+        "PASS",
+        [],
+        ["FILE_HASH_MISMATCH", "STREAM_DIGEST_MISMATCH", "STREAM_MISMATCH"],
+        warnings=[],
+        specific="FILE_HASH_MISMATCH",
+        about="ev02-pass with a stop plan of stop messages only swapped in after signing",
+    ),
+    "tamper-ev02-stop-moved": _e(
+        False,
+        "INCONCLUSIVE",
+        ["STOP_DRIVES_TOO_FEW", "STOP_TRIALS_TOO_FEW", "STOP_TRIAL_UNMEASURED"],
+        ["DERIVED_MISMATCH", "VERDICT_MISMATCH"],
+        warnings=[],
+        specific="VERDICT_MISMATCH",
+        about=(
+            "ev02-fail with the late trial's stop row and the commands after it recorded later, "
+            "raw_data updated and signed again as PASS: a stop row more than a command spacing "
+            "and 20 ms after its last drive row leaves its trial unmeasured, so the run is "
+            "INCONCLUSIVE however many trials it has"
+        ),
+    ),
+    "tamper-ev05-fail-as-pass": _e(
+        False,
+        "FAIL",
+        ["LOSS_RESUMED_EARLY"] * 3,
+        ["VERDICT_MISMATCH"],
+        warnings=[],
+        specific="VERDICT_MISMATCH",
+        about="ev05-fail-resumed rewritten as PASS and signed again with the lab key",
     ),
 }
 

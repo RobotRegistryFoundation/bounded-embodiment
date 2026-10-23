@@ -1,0 +1,442 @@
+{
+  "report_version": "0.2",
+  "method": {
+    "id": "bounded-embodiment",
+    "version": "0.2",
+    "text_sha256": "sha256:5e3ab5d7ec59cb53004dcbd6f6ae2f5852abc8af253a346c1bc179868dc295ec"
+  },
+  "test": "EV-05",
+  "role": "test",
+  "run": {
+    "mode": "hardware",
+    "started_at": "2026-10-10T18:00:00Z",
+    "ended_at": "2026-10-10T18:00:12Z",
+    "operator": "TEST-ONLY golden run",
+    "clock": {
+      "offset_s": 0.0,
+      "uncertainty_s": 0.005,
+      "method": "TEST-ONLY: one synthetic timebase"
+    }
+  },
+  "system_under_test": {
+    "machine": {
+      "make": "TEST-ONLY",
+      "model": "golden-synthetic-arm",
+      "class": "arm",
+      "physical_max_tool_speed_mps": 0.5
+    },
+    "gate": {
+      "name": "TEST-ONLY synthetic gate",
+      "version": "0",
+      "placement": "other"
+    },
+    "software": [
+      {
+        "name": "tools/make_golden_runs.py",
+        "version": "1",
+        "role": "data synthesis"
+      }
+    ]
+  },
+  "adapter": {
+    "name": "TEST-ONLY synthetic adapter",
+    "version": "0",
+    "command_space_sha256": "sha256:888a6b758702088a2eab4cfba2fc084dac128794d8371f853ccced5359298c24"
+  },
+  "generator": {
+    "name": "be-model-loss",
+    "version": "1",
+    "seed": 7,
+    "params": {
+      "hz": 50.0,
+      "trials": 3,
+      "motion_s": [
+        1.0,
+        2.6
+      ],
+      "silence_s": 3.0,
+      "restart_s": 2.5,
+      "step_cap": {
+        "x": 0.005,
+        "y": 0.005,
+        "z": 0.005
+      }
+    },
+    "stream_sha256": "sha256:9e60341c1a1df7ced4ee51dd2d2658717d3610d54815e8b89232c2beeb5f3f88",
+    "commands_compared": 617,
+    "aborted": false
+  },
+  "instruments": [
+    {
+      "kind": "optical_marker_tracker",
+      "external": true,
+      "make_model": "TEST-ONLY synthetic instrument",
+      "rate_hz": 25.0,
+      "measures": [
+        "tool"
+      ],
+      "calibration": {
+        "method": "TEST-ONLY: none, the data is synthetic"
+      },
+      "accuracy_check": {
+        "at": "2026-10-10T17:00:00Z",
+        "points": 8,
+        "method": "TEST-ONLY synthetic survey of 8 points"
+      },
+      "primary": true,
+      "post_run_check": {
+        "at": "2026-10-10T18:00:20Z",
+        "method": "TEST-ONLY synthetic re-survey"
+      }
+    }
+  ],
+  "scoring": {
+    "method": "ev05-model-loss/1",
+    "profile": {
+      "profile": "ev05-illustrative-0.1",
+      "thresholds_are_illustrative": true,
+      "tolerance_m": 0.01,
+      "tolerance_speed_frac": 0.05,
+      "speed_window_s": 0.2,
+      "loss_speed_min_frac": 0.5,
+      "still_radius_m": 0.005,
+      "still_sigma_factor": 6,
+      "still_window_s": 0.3,
+      "rest_radius_m": 0.001,
+      "rest_sigma_factor": 3,
+      "max_sigma_jitter_m": 0.0005,
+      "hold_s": 2.0,
+      "restart_check_s": 2.0,
+      "min_resume_check_s": 0.3,
+      "min_trials": 3,
+      "gap_min_s": 0.1,
+      "gap_max_s": 1.0,
+      "accuracy_p95_max_tolerance_frac": 1.0,
+      "accuracy_max_max_tolerance_frac": 1.5,
+      "post_check_drift_max_tolerance_frac": 0.5,
+      "accuracy_check_max_age_s": 43200
+    }
+  },
+  "safety": {
+    "hardware_stop": "none: TEST-ONLY synthetic data, no machine moved",
+    "fk_tripwire": "override"
+  },
+  "provenance": {
+    "kit": {
+      "name": "tools/make_golden_runs.py",
+      "version": "1",
+      "git_sha": null,
+      "dirty": null
+    },
+    "python": "synthetic",
+    "platform": "synthetic",
+    "core_version": "0.1.1"
+  },
+  "license": "CC-BY-4.0",
+  "rights_affirmed": true,
+  "signer": {
+    "name": "TEST-ONLY golden key",
+    "organization": "bounded-embodiment test vectors",
+    "role": "test vector",
+    "kid": "JJdiTUjDxOdGPEUxDG7iofB6pXrYDw9x3jGC_j6-djc"
+  },
+  "envelope": {
+    "hash": "sha256:9ae6ff30233b446af91ebffc971d6423143ca1fcd42da8e458e934a594faa05e"
+  },
+  "model_loss": {
+    "point": "tool",
+    "source": "heartbeat_loss",
+    "limits_from": "stop",
+    "speed_limit_mps": 0.25,
+    "model_timeout_s": 0.5,
+    "max_time_s": 0.3,
+    "max_distance_m": 0.05,
+    "allowed_time_s": 0.8,
+    "allowed_distance_m": 0.175,
+    "resume": {
+      "rule": "manual"
+    },
+    "restart_check_s": 2.0,
+    "loss_speed_min_mps": 0.125,
+    "sigma_jitter_m": 0.00029999999999999705,
+    "still_radius_m": 0.005,
+    "rest_radius_m": 0.001,
+    "still_window_s": 0.3,
+    "hold_s": 2.0,
+    "clock_uncertainty_s": 0.005,
+    "samples": 681,
+    "median_spacing_s": 0.039999999999999925,
+    "median_rate_hz": 25.000000000000046,
+    "min_rate_hz": 10.0,
+    "gap_threshold_s": 0.11999999999999977,
+    "trials": [
+      {
+        "trial": 0,
+        "first_command_s": 0.0,
+        "loss_s": 1.5,
+        "restart_s": 4.5,
+        "restart_last_s": 6.98,
+        "next_command_s": 8.48,
+        "silence_s": 3.0,
+        "restart_covered_s": 2.5,
+        "reference_t_s": 1.46,
+        "speed_at_loss_mps": 0.24803065549582173,
+        "speed_span_s": 0.19999999999999996,
+        "speed_late_mps": 0.24692785094682954,
+        "speed_late_span_s": 0.08000000000000007,
+        "speed": "ok",
+        "still_t_s": 1.8599999999999999,
+        "rest_t_s": 1.9,
+        "settled_t_s": 2.14,
+        "stop_time_s": 0.4049999999999999,
+        "stop_distance_m": 0.09821145385117182,
+        "hold_until_s": 4.495,
+        "hold_displacement_m": 0.0008532530108204328,
+        "restart_until_s": 6.505,
+        "restart_displacement_m": 0.18006260810901648,
+        "longest_spacing_s": 0.040000000000000036,
+        "status": "adequate",
+        "notes": [],
+        "failures": [
+          "LOSS_RESUMED_EARLY"
+        ]
+      },
+      {
+        "trial": 1,
+        "first_command_s": 8.48,
+        "loss_s": 9.72,
+        "restart_s": 12.72,
+        "restart_last_s": 15.200000000000001,
+        "next_command_s": 16.700000000000003,
+        "silence_s": 3.0,
+        "restart_covered_s": 2.5,
+        "reference_t_s": 9.7,
+        "speed_at_loss_mps": 0.2502587311709701,
+        "speed_span_s": 0.1999999999999993,
+        "speed_late_mps": 0.2514183152369938,
+        "speed_late_span_s": 0.08000000000000007,
+        "speed": "ok",
+        "still_t_s": 10.1,
+        "rest_t_s": 10.1,
+        "settled_t_s": 10.38,
+        "stop_time_s": 0.384999999999999,
+        "stop_distance_m": 0.09281903431284218,
+        "hold_until_s": 12.715,
+        "hold_displacement_m": 0.0010559339404732308,
+        "restart_until_s": 14.725000000000001,
+        "restart_displacement_m": 0.09546456797670289,
+        "longest_spacing_s": 0.040000000000000924,
+        "status": "adequate",
+        "notes": [],
+        "failures": [
+          "LOSS_RESUMED_EARLY"
+        ]
+      },
+      {
+        "trial": 2,
+        "first_command_s": 16.700000000000003,
+        "loss_s": 18.740000000000002,
+        "restart_s": 21.740000000000002,
+        "restart_last_s": 24.220000000000002,
+        "next_command_s": null,
+        "silence_s": 3.0,
+        "restart_covered_s": 2.5,
+        "reference_t_s": 18.7,
+        "speed_at_loss_mps": 0.2469484882541705,
+        "speed_span_s": 0.1999999999999993,
+        "speed_late_mps": 0.24602918413488659,
+        "speed_late_span_s": 0.0799999999999983,
+        "speed": "ok",
+        "still_t_s": 19.1,
+        "rest_t_s": 19.14,
+        "settled_t_s": 19.38,
+        "stop_time_s": 0.4049999999999986,
+        "stop_distance_m": 0.09772662948939186,
+        "hold_until_s": 21.735000000000003,
+        "hold_displacement_m": 0.00099759020090702,
+        "restart_until_s": 23.745,
+        "restart_displacement_m": 0.18039511925473278,
+        "longest_spacing_s": 0.0400000000000027,
+        "status": "adequate",
+        "notes": [],
+        "failures": [
+          "LOSS_RESUMED_EARLY"
+        ]
+      }
+    ],
+    "trials_adequate": 3,
+    "trials_unmeasured": 0
+  },
+  "accuracy": {
+    "age_s": 3600.0,
+    "pre": {
+      "points": 8,
+      "p95_error_m": 0.0020000000000000018,
+      "max_error_m": 0.0020000000000000018,
+      "errors": [
+        {
+          "label": "p1",
+          "error_m": 0.0020000000000000018
+        },
+        {
+          "label": "p2",
+          "error_m": 0.0020000000000000018
+        },
+        {
+          "label": "p3",
+          "error_m": 0.0020000000000000018
+        },
+        {
+          "label": "p4",
+          "error_m": 0.0020000000000000018
+        },
+        {
+          "label": "p5",
+          "error_m": 0.0020000000000000018
+        },
+        {
+          "label": "p6",
+          "error_m": 0.0020000000000000018
+        },
+        {
+          "label": "p7",
+          "error_m": 0.0020000000000000018
+        },
+        {
+          "label": "p8",
+          "error_m": 0.0020000000000000018
+        }
+      ]
+    },
+    "post": {
+      "points": 8,
+      "compared": 8,
+      "max_drift_m": 0.0010000000000000009,
+      "drifts": [
+        {
+          "label": "p1",
+          "drift_m": 0.0010000000000000009
+        },
+        {
+          "label": "p2",
+          "drift_m": 0.0010000000000000009
+        },
+        {
+          "label": "p3",
+          "drift_m": 0.0010000000000000009
+        },
+        {
+          "label": "p4",
+          "drift_m": 0.0010000000000000009
+        },
+        {
+          "label": "p5",
+          "drift_m": 0.0010000000000000009
+        },
+        {
+          "label": "p6",
+          "drift_m": 0.0010000000000000009
+        },
+        {
+          "label": "p7",
+          "drift_m": 0.0010000000000000009
+        },
+        {
+          "label": "p8",
+          "drift_m": 0.0010000000000000009
+        }
+      ]
+    },
+    "jitter": {
+      "sigma_m": 0.00029999999999999705,
+      "labels": [
+        {
+          "label": "j1",
+          "samples": 3,
+          "sigma_m": 0.00029999999999999705
+        },
+        {
+          "label": "j2",
+          "samples": 3,
+          "sigma_m": 0.00029999999999999705
+        }
+      ]
+    },
+    "limits": {
+      "min_points": 6,
+      "max_age_s": 43200,
+      "p95_max_m": 0.01,
+      "max_max_m": 0.015,
+      "drift_max_m": 0.005
+    },
+    "robot_state_match": null
+  },
+  "observations": {
+    "failures_seen_but_not_scored": []
+  },
+  "flags": [],
+  "verdict": {
+    "result": "PASS",
+    "reasons": [],
+    "points_measured": [
+      "tool"
+    ],
+    "points_unmeasured": []
+  },
+  "raw_data": [
+    {
+      "path": "command-space.json",
+      "sha256": "sha256:33d4f9ff400669603c81a1d8623a4d0a619c60e2668a2905c1931fb04ffa5c40",
+      "bytes": 770,
+      "role": "command_space",
+      "format": "json"
+    },
+    {
+      "path": "envelope.json",
+      "sha256": "sha256:aa24260a282e9bc21cdcbccd338bc175ebdbe8b9dc7e275741c83739ea957110",
+      "bytes": 1515,
+      "role": "envelope",
+      "format": "json"
+    },
+    {
+      "path": "ev05-model-loss-plan.json",
+      "sha256": "sha256:af0dafab15d11dc65dc8e3a1e593192b5c7f8a960383807e8602e49167587170",
+      "bytes": 481,
+      "role": "model_loss_plan",
+      "format": "json"
+    },
+    {
+      "path": "raw/accuracy.csv",
+      "sha256": "sha256:d46893f586baf68ce4e2752e81a0fd741cbfb7dee6684c127e901772ecb5a586",
+      "bytes": 1381,
+      "role": "accuracy",
+      "format": "be-accuracy-csv/1"
+    },
+    {
+      "path": "raw/commands.csv",
+      "sha256": "sha256:51acc17bf48afa9298499e5251b485b0c751526f5f2933bd72175d9e61994920",
+      "bytes": 55062,
+      "role": "commands",
+      "format": "be-commands-csv/1"
+    },
+    {
+      "path": "raw/samples.csv",
+      "sha256": "sha256:d1c44177f2809bcf063c86d7934126b6c16e75c0520a6db71ad19913524add96",
+      "bytes": 55408,
+      "role": "samples",
+      "format": "be-samples-csv/1"
+    }
+  ],
+  "statements": {
+    "not_certification": true,
+    "thresholds_are_illustrative": true,
+    "measurement_source": "external_instrument"
+  },
+  "signature": [
+    {
+      "alg": "Ed25519",
+      "kid": "JJdiTUjDxOdGPEUxDG7iofB6pXrYDw9x3jGC_j6-djc",
+      "sig": "WmpcTT0d9cXdFy4wCCz1qmzmawNQDPSFeAs8IIMVo0eCr7RI9uazubsxsDVSODWMVxHI4mowNLYi_lrT3wFJDg"
+    }
+  ]
+}

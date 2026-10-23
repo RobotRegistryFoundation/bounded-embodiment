@@ -1,0 +1,85 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://robotregistryfoundation.github.io/bounded-embodiment/schemas/stop-plan-0.1.json",
+  "$comment": "SPDX-FileCopyrightText: 2026 Craig Merry and contributors. SPDX-License-Identifier: CC-BY-4.0.",
+  "title": "Bounded Embodiment EV-02 stop plan 0.1",
+  "description": "What an EV-02 run does, declared by the lab before the run and saved in the run directory as ev02-stop-plan.json, listed and hashed in the report's raw_data like every other file. The plan names the stop point, the start command, the drives (commands that move the machine at its top speed in different directions), the stop sources tested, and the trials in order: each trial drives the machine with one drive and then issues the stop through one source. The be-stops/1 generator turns the plan and its parameters into the command stream; the ev02-stop/1 scorer reads the stop point. Rules a schema cannot express (unique drive ids and sources; every trial naming a declared drive and source; every command naming every axis of command-space.json and nothing else, within its limits; point naming an envelope point) are checked by bounded_embodiment.report.",
+  "type": "object",
+  "required": ["stop_plan_version", "start", "drives", "sources", "trials"],
+  "additionalProperties": false,
+  "properties": {
+    "stop_plan_version": {
+      "const": "0.1",
+      "description": "Version of this format. Quote it in YAML (\"0.1\")."
+    },
+    "point": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_][A-Za-z0-9_.-]*$",
+      "description": "The envelope point whose stop is measured (the stop point). Default: the envelope's first point."
+    },
+    "start": {
+      "$ref": "#/$defs/command",
+      "description": "The command every drive walks from: for a position command space, the pose the machine starts each trial in (the stream walks back to it between trials); for a velocity command space, the command at rest (normally every axis at 0)."
+    },
+    "drives": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 100,
+      "items": {
+        "type": "object",
+        "required": ["id", "command"],
+        "additionalProperties": false,
+        "properties": {
+          "id": { "$ref": "#/$defs/id", "description": "Unique id; the commands of a drive carry the strategy drive:<id>." },
+          "command": { "$ref": "#/$defs/command", "description": "The command the drive walks toward (a position far enough away, or a velocity)." },
+          "description": { "$ref": "#/$defs/text" }
+        }
+      }
+    },
+    "sources": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 3,
+      "items": {
+        "type": "object",
+        "required": ["source"],
+        "additionalProperties": false,
+        "properties": {
+          "source": { "$ref": "#/$defs/source" },
+          "description": { "$ref": "#/$defs/text", "description": "How the lab's bench issues this stop: for stop_message, the system's own stop request; for hardwired_stop or power_loss, the external path (for example a relay on actuator power)." }
+        }
+      }
+    },
+    "trials": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 1000,
+      "items": {
+        "type": "object",
+        "required": ["source", "drive"],
+        "additionalProperties": false,
+        "properties": {
+          "source": { "$ref": "#/$defs/source" },
+          "drive": { "$ref": "#/$defs/id" }
+        }
+      },
+      "description": "The trials in the order the bench makes them."
+    },
+    "description": { "$ref": "#/$defs/text", "description": "Free text: how the drives were chosen." }
+  },
+  "$defs": {
+    "id": { "type": "string", "pattern": "^[A-Za-z0-9_.-]{1,64}$" },
+    "text": { "type": "string", "minLength": 1, "maxLength": 2000 },
+    "source": {
+      "enum": ["stop_message", "hardwired_stop", "power_loss"],
+      "description": "An envelope stop source (envelope 0.2 stop.sources[].source). stop_message: the system's own stop request, issued by the bench through its adapter. hardwired_stop and power_loss: a path outside the system's software, issued by the bench running the lab's external stop command."
+    },
+    "command": {
+      "type": "object",
+      "minProperties": 1,
+      "propertyNames": { "type": "string", "pattern": "^[!-~]{1,128}$" },
+      "additionalProperties": { "type": "number", "minimum": -1000000, "maximum": 1000000 },
+      "description": "A value for every axis of the command space."
+    }
+  }
+}

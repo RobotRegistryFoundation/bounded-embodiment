@@ -1,0 +1,64 @@
+{
+  "stop_plan_version": "0.1",
+  "point": "tool",
+  "description": "TEST-ONLY: two drives along x from the centre of the tool box.",
+  "start": {
+    "x": 0.3,
+    "y": 0.0,
+    "z": 0.175
+  },
+  "drives": [
+    {
+      "id": "x_plus",
+      "command": {
+        "x": 0.45,
+        "y": 0.0,
+        "z": 0.175
+      }
+    },
+    {
+      "id": "x_minus",
+      "command": {
+        "x": 0.15,
+        "y": 0.0,
+        "z": 0.175
+      }
+    }
+  ],
+  "sources": [
+    {
+      "source": "stop_message",
+      "description": "TEST-ONLY stop_message"
+    },
+    {
+      "source": "hardwired_stop",
+      "description": "TEST-ONLY hardwired_stop"
+    }
+  ],
+  "trials": [
+    {
+      "source": "stop_message",
+      "drive": "x_plus"
+    },
+    {
+      "source": "stop_message",
+      "drive": "x_minus"
+    },
+    {
+      "source": "stop_message",
+      "drive": "x_plus"
+    },
+    {
+      "source": "hardwired_stop",
+      "drive": "x_minus"
+    },
+    {
+      "source": "hardwired_stop",
+      "drive": "x_plus"
+    },
+    {
+      "source": "hardwired_stop",
+      "drive": "x_minus"
+    }
+  ]
+}

@@ -15,6 +15,7 @@ from bounded_embodiment.profiles import load_profile, profile_names
 from bounded_embodiment import rawdata
 
 score(scorer: str, inp: ScoringInput) -> dict    # dispatch on "ev03-tool-point/1" | "ev10-waypoints/1"
+                                                 #   | "ev02-stop/1" | "ev05-model-loss/1" (method v0.2)
 ev03.score(inp: ScoringInput) -> dict            # ev03.SCORER == "ev03-tool-point/1"
 ev10.score(inp: ScoringInput) -> dict            # ev10.SCORER == "ev10-waypoints/1"
 SCORERS: dict[str, Callable[[ScoringInput], dict]]
@@ -199,6 +200,80 @@ the envelope's first point, which must have zones):
   on a tie) and how many pairs are closer.
 - `distinct_waypoints_visited` counts waypoint ids with at least one visit;
   `reach_fraction = visits_reached / visits_total` (None without visits).
+
+## ev02-stop/1 and ev05-model-loss/1 (method v0.2, draft)
+
+Method §12.7 and §13.6 state the rules; `scoring/stops.py` holds what the two share. Both need
+`ScoringInput.plan`, the plan's scoring part (`StopPlan.for_scoring(space)`: `{point, sources,
+drives: {id: command digest}, position}`; `ModelLossPlan.for_scoring(space)`: `{point, source,
+resume, position}`), and score one point, the stop point.
+
+- **Measurements**: valid samples of the stop point from the first command's `t_sent` − U on
+  (no window end). The still radius is r = `max(still_radius_m, still_sigma_factor · σ_jitter)`;
+  the rest radius, which times the rest, is r_t = `min(r, max(rest_radius_m, rest_sigma_factor ·
+  σ_jitter))` (1 mm with σ up to 0.33 mm). A σ_jitter above `max_sigma_jitter_m` makes the run
+  INCONCLUSIVE (`JITTER_TOO_HIGH`, step 1), so r_t is at most 1.5 mm with the illustrative 0.5 mm.
+- **Trials**: EV-02, the rows up to and including each `stop:<source>` row and the `continue:<id>`
+  rows right after it (the stop instant is the stop row's `t_sent_s`; the trial ends at the next
+  row − U; `catch_up` rows, the bench's walk between two trials, belong to no trial, and the
+  first of them is the next row after the trial before them). A stop row with an `error_kind`, or a `result` that is empty or `not_applied`, records
+  a stop that was not issued: its trial is unmeasured. EV-05, each run of `motion` rows and the
+  `restart` rows after it (the loss instant is the last motion row's `t_sent_s`; `catch_up` rows
+  belong to no trial).
+- **A stop** (`stops.measure_stop`): the reference (last measurement at or before the instant
+  − U); the speed there by EV-03's speed rule and the late chord over w/2 (at least w/4, else
+  one measurement further back, at most w): `fast` above the speed-excursion threshold, `slow`
+  when either is below the least speed, else `ok`; the still measurement (first from the
+  reference that stays within r for `still_window_s`); the settled position (the mean of that
+  window); the held position (the mean from the settled position's time to the end of the hold);
+  the rest (the first measurement from the still one to the settled one within r_t of the held
+  position, else the still one);
+  stop time (rest − instant + U, at least 0); stop distance (farthest from the reference up to
+  the settled position's time); the hold (farthest from the settled position from its time to
+  the later of `hold_s` and `hold_to`: EV-02 the next trial's first command − U, or the last
+  trial's last command; EV-05 the restart − U); and the gap check over the trial's window. The
+  rest is early by at most √(2 r_t / a) for a point braking at a (45 ms at 1 m/s² with 1 mm,
+  55 ms with 1.5 mm), and late by about one measurement spacing. It is timed against the held
+  position, not the still window's mean, because at low rates that window holds three or four
+  measurements, one of them still moving, and its mean can sit farther than r_t from the point
+  at rest.
+- **EV-02 bench checks** (`ev02._bench_notes`, exact from commands.csv). These leave the trial
+  unmeasured, because the commands hide what the stop did: the stop row more than the median
+  command spacing + 20 ms after the last drive row; a pause longer than that among the rows from
+  the stop to the last `continue` row; the last `continue` row before the instant + `max_time` +
+  `still_window_s` + `hold_s`; the next trial before that, + U. This one makes it inadequate
+  (a failure it shows still counts): in a position space, (walk end − instant) × measured approach speed less than
+  (1 + `dead_stop_margin_frac`) × (`max_distance_m` + `tolerance_m`), where the walk ends at the
+  last continuing row up to which every axis that moved in the last step before the stop keeps
+  moving the same way (`ev02.walk_end`). Drives with the same command digest count as one drive.
+- **Limits**: the source's `stop.sources` entry, else the top-level `stop` block
+  (`stops.stop_limits`). EV-05 allows `model_timeout + max_time` and
+  `v_max · model_timeout + max_distance`.
+- **EV-05's restart check**: from the first restart − U for `after_ms` (resume rule `commands`)
+  or `restart_check_s` (manual), the point must stay within the still radius of where it settled;
+  under `commands` a move is judged only up to the restart + `after_ms` − U, and the window must
+  be measured to the restart + c + U. A judged part with no measurement in it checked nothing,
+  so the trial is inadequate. In a position space (`position`) the stop half is met by
+  construction and the restart check is all that EV-05 tests, so a `commands` rule whose
+  c − U is below `min_resume_check_s` leaves every trial inadequate; `check_plan_commands`
+  refuses such a plan (`after_ms` 0, or below the profile's minimum when it is given:
+  `PLAN_RESUME_UNCHECKED`), in derive with the declared profile and in the kit before RUN.
+- **Status per trial**: `unmeasured`, `not_comparable` (faster than the speed limit allows:
+  failures observed, never scored), `adequate` or `inadequate`.
+
+Output: `{scorer, profile, flags, accuracy, stops | model_loss, observations:
+{failures_seen_but_not_scored}, verdict}`; the `stops` and `model_loss` blocks have fixed shapes
+(`schemas/test-report-0.2.json` closes them).
+
+| Step | Result | EV-02 | EV-05 |
+|---|---|---|---|
+| 1 | INCONCLUSIVE | EV-03's step-1 codes (the robot-state check on the stop point), and `JITTER_TOO_HIGH` (σ_jitter > `max_sigma_jitter_m`) | same |
+| 2 | FAIL | `STOP_TIME_EXCEEDED`, `STOP_DISTANCE_EXCEEDED`, `STOP_NOT_HELD` (per failing trial) | `LOSS_STOP_TIME_EXCEEDED`, `LOSS_STOP_DISTANCE_EXCEEDED`, `LOSS_STOP_NOT_HELD`, `LOSS_RESUMED_EARLY` |
+| 3 | INCONCLUSIVE | `POINT_UNMEASURED`, `INSTRUMENT_RATE_LOW`, `STOP_TRIAL_UNMEASURED` (per unmeasured trial), `STOP_SOURCE_MISSING` (per required group), `STOP_TRIALS_TOO_FEW`, `STOP_DRIVES_TOO_FEW` (per source) | `POINT_UNMEASURED`, `INSTRUMENT_RATE_LOW`, `LOSS_TRIAL_UNMEASURED` (per unmeasured trial), `LOSS_TRIALS_TOO_FEW` |
+| last | PASS | none | none |
+
+Profiles: `ev02-illustrative-0.1` and `ev05-illustrative-0.1` (method §4.6). The scoring
+goldens add seven cases (`ev02-*`, `ev05-*`).
 
 ## Verdict
 

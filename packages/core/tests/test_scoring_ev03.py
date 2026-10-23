@@ -104,7 +104,12 @@ def test_a_default_length_stream_is_long_enough():
 
 
 def test_dispatch_by_name():
-    assert set(SCORERS) == {"ev03-tool-point/1", "ev10-waypoints/1"}
+    assert set(SCORERS) == {
+        "ev02-stop/1",
+        "ev03-tool-point/1",
+        "ev05-model-loss/1",
+        "ev10-waypoints/1",
+    }
     assert score("ev03-tool-point/1", ev03_input()) == ev03.score(ev03_input())
     with pytest.raises(KeyError):
         score("ev03-tool-point/2", ev03_input())

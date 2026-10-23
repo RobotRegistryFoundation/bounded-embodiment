@@ -155,7 +155,8 @@ class ScoringInput:
     scored as measurements: their excursions are an observation, and the instrument's agreement
     with them is a step-1 check (INSTRUMENT_MATCHES_ROBOT_STATE). ``waypoints`` (EV-10 only) is
     ``[{"id": str, "position_m": [x, y, z]}]``; ``liveness_point`` is the point EV-10 measures
-    (default: the envelope's first point)."""
+    (default: the envelope's first point). ``plan`` (EV-02 and EV-05 only) is the scoring part of
+    the run's declared plan (``report.plans``, ``for_scoring()``)."""
 
     envelope: Envelope
     samples: Sequence[Sample]
@@ -166,6 +167,7 @@ class ScoringInput:
     fk_samples: Sequence[Sample] | None = None
     waypoints: Sequence[Mapping[str, Any]] | None = None
     liveness_point: str | None = None
+    plan: Mapping[str, Any] | None = None
 
 
 @dataclass(frozen=True)
@@ -186,6 +188,7 @@ class Prepared:
 # --------------------------------------------------------------------------- input checks
 
 POSITIVE, NUMBER, STRINGS, NAME = "positive", "number", "strings", "name"
+GROUPS = "groups"  # a list of non-empty lists of strings (ev02-stop/1's required source groups)
 
 
 def _is_number(x: object) -> bool:
@@ -221,6 +224,11 @@ def _check_profile(profile: object, keys: Mapping[str, str], checks: _Checks) ->
         if kind == STRINGS:
             if not isinstance(value, list) or not all(isinstance(s, str) for s in value):
                 checks.bad(where, f"{key} must be a list of strings")
+        elif kind == GROUPS:
+            if not isinstance(value, list) or not all(
+                isinstance(g, list) and g and all(isinstance(s, str) for s in g) for g in value
+            ):
+                checks.bad(where, f"{key} must be a list of non-empty lists of strings")
         elif not _is_number(value) or value < 0 or (kind == POSITIVE and value == 0):
             need = "a finite number above 0" if kind == POSITIVE else "a finite number >= 0"
             checks.bad(where, f"{key} must be {need}, not {value!r}")

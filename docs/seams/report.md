@@ -76,7 +76,7 @@ The scorer's `Declared` comes from the report: the primary instrument's `kind` a
 | `be-control/1` | EV-03, control or rehearsal | `{target, seconds, hz, step_cap, start}` | `control_stream(space, target, seconds, hz, step_cap, start)`; `start` is the declared start pose (every axis) or null for home |
 | `be-waypoints/1` | EV-10, any role | `{cycles, commands_per_visit, hz}` | the declared waypoints in order, `cycles` times round, each held for `commands_per_visit` commands; seq at `seq / hz`; payload the waypoint's `command`; strategy `waypoint:<id>`; position command spaces only |
 
-be-control and be-waypoints have no randomness; `seed` is still declared (every run has one) and pinned by their digest, `"sha256:"` + SHA-256 of `<name>/1\n<JCS params>\n<seed>\n<space digest>\n[<waypoints digest>\n]` followed by `<seq>,<strategy>,<payload_json>\n` per command. A stream longer than 2,000,000 commands is refused (STREAM_TOO_LARGE). `commands_compared` is the number of rows; `aborted` is true exactly when they are a strict prefix of the stream (STREAM_PREFIX, info).
+be-control and be-waypoints have no randomness; `seed` is still declared (every run has one) and pinned by their digest, `"sha256:"` + SHA-256 of `<name>/1\n<JCS params>\n<seed>\n<space digest>\n[<waypoints digest>\n]` followed by `<seq>,<strategy>,<payload_json>\n` per command. A stream longer than 2,000,000 commands is refused (STREAM_TOO_LARGE). `commands_compared` is the number of rows compared with the stream (every row, but the catch_up rows of a be-stops or be-model-loss run); `aborted` is true exactly when they are a strict prefix of the stream (STREAM_PREFIX, info). Between two trials of a be-stops or be-model-loss run in a position command space, `catch_up` rows (the bench's walk from where the machine rests to the next trial's first command, round-2 K3) are checked by `streams.catch_up_problem` (every axis within its limits, at most `step_cap` per axis per row, the next trial's first command within one step cap of the last, and only right before a trial's first command, never the first trial's) and skipped; seq counts them with every other row. Anything else about them is STREAM_CATCH_UP_INVALID.
 
 Note for lab parameters: the scorer's duration is last − first `t_sent`, so a stream must run past `min_duration_s` by at least one command period (a be-waypoints tour lasts `(cycles × waypoints × commands_per_visit − 1) / hz`).
 
@@ -102,7 +102,7 @@ Checks, in order. When report.json is unreadable, not 0.1, or breaks the schema,
 | files | UNEXPECTED_FILE, DUPLICATE_RAW_FILE, REQUIRED_FILE_MISSING, FILE_MISSING, FILE_HASH_MISMATCH, UNLISTED_FILE, RAW_DATA_MISMATCH |
 | declarations | SIMULATION_NOT_REHEARSAL, RUN_TIMES_INVERTED, ACCURACY_CHECK_AFTER_RUN_START, ACCURACY_CHECK_POINTS_MISMATCH, CALIBRATION_FILE_MISSING, GENERATOR_TEST_MISMATCH, GENERATOR_ROLE_MISMATCH, COMMAND_SPACE_DIGEST_MISMATCH, DECLARED_INVALID, CORE_VERSION_DIFFERS (warn) |
 | inputs (relayed) | ENVELOPE_*, COMMAND_SPACE_*, WAYPOINTS_*, RAW_* (and RAW_TOO_LARGE), SCORING_INPUT_INVALID, SCORING_OUTPUT_NOT_JSON |
-| stream | GENERATOR_UNSUPPORTED, STREAM_PARAMS_INVALID, STREAM_TOO_LARGE, STREAM_SEQ_GAP, STREAM_TOO_LONG, STREAM_MISMATCH, STREAM_PREFIX (info), STREAM_DIGEST_MISMATCH, STREAM_COUNT_MISMATCH, STREAM_ABORTED_MISMATCH |
+| stream | GENERATOR_UNSUPPORTED, STREAM_PARAMS_INVALID, STREAM_TOO_LARGE, STREAM_SEQ_GAP, STREAM_TOO_LONG, STREAM_MISMATCH, STREAM_CATCH_UP_INVALID, STREAM_PREFIX (info), STREAM_DIGEST_MISMATCH, STREAM_COUNT_MISMATCH, STREAM_ABORTED_MISMATCH |
 | derived members | ENVELOPE_HASH_MISMATCH, VERDICT_MISMATCH, STATEMENTS_MISMATCH, DERIVED_MISMATCH (any other block; `where` names it, the detail is a readable diff) |
 | last resort | INTERNAL_ERROR (verify met something it did not expect) |
 
@@ -119,6 +119,60 @@ Every signature entry must verify, so a co-signature by a key outside the keyrin
 | ev03-inconclusive-encoders, ev03-rehearsal-simulation, -no-post-check, -gap, -short | consistent, INCONCLUSIVE |
 | ev03-aborted | consistent, `aborted: true`, INCONCLUSIVE (strategies missing) |
 | tamper-file-edited / -unlisted-file / -unknown-key / -embedded-key / -pass-over-fail / -envelope-swapped / -stream-edited / -abort-undeclared | not consistent: FILE_HASH_MISMATCH / UNLISTED_FILE / UNKNOWN_KID / EMBEDDED_KEY / VERDICT_MISMATCH / ENVELOPE_HASH_MISMATCH / STREAM_MISMATCH / STREAM_ABORTED_MISMATCH |
+
+## Method v0.2: EV-02, EV-05 and test report 0.2 (draft)
+
+```python
+report.load_stop_plan(src) -> StopPlan                  # ev02-stop-plan.json; PlanError(findings)
+report.load_model_loss_plan(src) -> ModelLossPlan       # ev05-model-loss-plan.json; PlanError(findings)
+report.check_plan_commands(plan, space, file) -> list[Finding]
+report.stop_stream(space, plan, params) -> Iterator[Proposal]          # be-stops/1
+report.model_loss_stream(space, plan, seed, params) -> Iterator[Proposal]   # be-model-loss/1
+report.split_segments(proposals) -> list[list[Proposal]]  # one segment per trial (t_s restarts at 0)
+report.report_version_for(test) -> "0.1" | "0.2"         # EV-02, EV-05: "0.2"
+report.REPORT_VERSIONS, report.SCHEMA_NAMES               # ("0.1", "0.2"), version -> schema name
+```
+
+| path | role | format | |
+|---|---|---|---|
+| `ev02-stop-plan.json` | stop_plan | json | EV-02: required; every other test: not allowed |
+| `ev05-model-loss-plan.json` | model_loss_plan | json | EV-05: required; every other test: not allowed |
+
+| name/version | test, role | params (normalized) | stream |
+|---|---|---|---|
+| `be-stops/1` | EV-02, test or rehearsal | `{hz, drive_s, return_s, after_s, step_cap}` | per trial: a `return` walk to the plan's start from the command at the previous stop instant (position spaces, after the first trial), a `drive:<id>` walk, one `stop:<source>` proposal with payload `{}` (the bench issues the stop instead of sending it), then `continue:<id>` proposals for `after_s` (D1: position spaces walk on to the drive and repeat it, velocity spaces repeat the last drive command); each segment's `t_s` from 0. Refused (STREAM_PARAMS_INVALID) in a position space when a walk lands on its drive by its last drive proposal |
+| `be-model-loss/1` | EV-05, test or rehearsal | `{hz, trials, motion_s: [lo, hi], silence_s, restart_s, step_cap}` | per trial: `motion` round the plan's path for a seeded time, nothing for `silence_s`, then `restart` commands out along the path and back to the last motion command (in a velocity space each trial's motion and restart walk from the plan's start, and the restart back to it). Refused (STREAM_PARAMS_INVALID) when `hi − lo` is less than one cycle of the path (`path_cycle_s`: each leg at least one command) or one period; in a position space, when a leg of the path moves no axis by a full step cap (a dwell); in a velocity space, when a command of the walk round the path is zero on every axis |
+
+Their digests add one header line, the plan's digest (as be-waypoints adds the waypoints'). Plan
+findings are relayed with their own codes (PLAN_PARSE_ERROR, PLAN_NOT_OBJECT,
+PLAN_VERSION_UNSUPPORTED, PLAN_DUPLICATE_ID, PLAN_DUPLICATE_SOURCE, PLAN_UNKNOWN_DRIVE,
+PLAN_UNKNOWN_SOURCE, PLAN_COMMAND_UNKNOWN_AXIS, PLAN_COMMAND_MISSING_AXIS,
+PLAN_COMMAND_OUTSIDE_LIMITS, PLAN_RESUME_UNCHECKED for a model-loss plan that resumes on commands
+in a position space at once or, against the declared profile's `min_resume_check_s`, sooner than
+that; schema violations SCHEMA_INVALID), as WAYPOINTS_* are. The plans' scoring parts
+(`for_scoring(space)`) also say whether the command space holds positions, and the stop plan's
+carries each drive's command digest.
+
+**Test report 0.2** is 0.1 with `test` EV-02 and EV-05, their generators and scorers, and the
+derived blocks `stops` (EV-02) or `model_loss` (EV-05) in place of `window`, `achieved_rates`,
+`score`, `gaps`, `motion`/`liveness` and `coverage`; `observations` holds
+`failures_seen_but_not_scored`. An EV-03 or EV-10 report may declare 0.2 and has the same members
+as in 0.1. An EV-02 or EV-05 report must cite method version 0.2 and has no `control` role (the
+0.2 schema pins both, and core checks them). `schemas/test-report-0.1.json` and every 0.1 report
+are unchanged.
+
+Golden runs added: `ev02-pass`, `ev02-fail`, `ev02-inconclusive-one-source`, `ev05-pass`,
+`ev05-fail-resumed`, `ev05-inconclusive-short-silence` (packaged profiles, no NONSTANDARD_PARAMS),
+and `tamper-ev02-plan-swapped` (FILE_HASH_MISMATCH, with STREAM_DIGEST_MISMATCH and
+STREAM_MISMATCH), `tamper-ev02-stop-moved` (ev02-fail's late stop row and the commands after it
+recorded 0.2 s later, raw_data updated and re-signed as PASS: DERIVED_MISMATCH and
+VERDICT_MISMATCH; a stop row more than a command spacing and 20 ms after its last drive row leaves
+its trial unmeasured, so core derives INCONCLUSIVE (`STOP_TRIAL_UNMEASURED`) however many trials
+the run has, or FAIL when the moved stop still reads too slow; pinned at 0.10 s (FAIL), 0.15 and
+0.25 s by `test_a_stop_recorded_late_is_caught_whatever_the_shift`, and with a spare trial by
+`test_review_round2.py::test_a_spare_trial_cannot_hide_a_stop_row_recorded_late`)
+and `tamper-ev05-fail-as-pass`
+(VERDICT_MISMATCH). The 19 earlier run vectors are unchanged and verify byte for byte as before.
 
 ## Decisions and open questions
 

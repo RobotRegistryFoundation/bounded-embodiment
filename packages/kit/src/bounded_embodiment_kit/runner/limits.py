@@ -105,6 +105,32 @@ class Limits:
     #: Path samples the envelope pre-check takes along the planned move.
     goto_path_samples: int = 50
 
+    # --- EV-02 and EV-05 trials (be run ev02 | ev05) --------------------------------------------
+    #: After a trial's stop instant (EV-02) or loss instant (EV-05), the time the trial allows
+    #: (the stop source's max_time_ms; in EV-05 plus the model timeout) plus this grace, the stop
+    #: point must be at rest, or the watchdog stops the run itself ...
+    trial_rest_grace_s: float = 0.5
+    #: ... at rest meaning: no instrument sample in the last trial_still_window_s further than
+    #: trial_still_m from the newest (2 cm in 0.5 s: 40 mm/s, far above 1 mm instrument noise).
+    trial_still_m: float = 0.02
+    trial_still_window_s: float = 0.5
+    #: Once at rest, and until the next trial begins (EV-05 under a commands rule: until the rule
+    #: lets it move), the stop point must stay within this of where it came to rest, or the
+    #: watchdog stops the run (a stop that let go, or a reset that moved the machine).
+    trial_hold_trip_m: float = 0.02
+    #: EV-02: the commands go on after the stop for the longest allowed stop time of the plan's
+    #: sources + the scorer's still window and hold (from the packaged profile) + this (be-stops/1's
+    #: after_s, rounded up to 0.1 s). EV-02 and EV-05: the runner asks for NEXT this long after a
+    #: segment's last row.
+    trial_pause_extra_s: float = 0.5
+    #: Before a trial after the first (position command spaces with robot state) the runner walks
+    #: the machine from where it rests to the trial's first command, one step cap a command
+    #: (catch_up rows, round-2 K3): a servo lags its command by about hz x its time constant in
+    #: step caps on a steady walk, so it rests short of where the next walk begins. Farther than
+    #: this many step caps on any axis (a lag of 0.24 s at 50 Hz), the stop did not hold or
+    #: something moved the machine, and the run ends instead.
+    trial_catch_up_steps: float = 12.0
+
     def margin(self, mode: str) -> float:
         return self.margin_m[mode]
 

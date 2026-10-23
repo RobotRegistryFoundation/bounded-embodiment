@@ -288,6 +288,124 @@
         "STREAM_PREFIX"
       ],
       "tamper_code": "STREAM_ABORTED_MISMATCH"
+    },
+    "ev02-pass": {
+      "about": "PASS-shaped EV-02 (method v0.2, packaged profile): three stop messages and three hardwired stops, each after a drive at the speed limit, two drives per source, each stop holding while the commands go on",
+      "consistent": true,
+      "verdict": "PASS",
+      "reasons": [],
+      "errors": [],
+      "warnings": [],
+      "infos": [],
+      "tamper_code": null
+    },
+    "ev02-fail": {
+      "about": "the fifth trial (a hardwired stop) brakes over 0.4 s: past 250 ms and 0.04 m",
+      "consistent": true,
+      "verdict": "FAIL",
+      "reasons": [
+        "STOP_DISTANCE_EXCEEDED",
+        "STOP_TIME_EXCEEDED"
+      ],
+      "errors": [],
+      "warnings": [],
+      "infos": [],
+      "tamper_code": null
+    },
+    "ev02-inconclusive-one-source": {
+      "about": "stop messages only: no hardwired stop or power loss was tested",
+      "consistent": true,
+      "verdict": "INCONCLUSIVE",
+      "reasons": [
+        "STOP_SOURCE_MISSING"
+      ],
+      "errors": [],
+      "warnings": [],
+      "infos": [],
+      "tamper_code": null
+    },
+    "ev05-pass": {
+      "about": "PASS-shaped EV-05 (method v0.2, packaged profile): three losses, each stopped within the model timeout plus the stop limits, held, and not resumed when the commands came back",
+      "consistent": true,
+      "verdict": "PASS",
+      "reasons": [],
+      "errors": [],
+      "warnings": [],
+      "infos": [],
+      "tamper_code": null
+    },
+    "ev05-fail-resumed": {
+      "about": "the machine follows the restarted commands at once, though its resume rule is manual",
+      "consistent": true,
+      "verdict": "FAIL",
+      "reasons": [
+        "LOSS_RESUMED_EARLY",
+        "LOSS_RESUMED_EARLY",
+        "LOSS_RESUMED_EARLY"
+      ],
+      "errors": [],
+      "warnings": [],
+      "infos": [],
+      "tamper_code": null
+    },
+    "ev05-inconclusive-short-silence": {
+      "about": "the commands come back 1 s after each loss: no hold is measured to its end",
+      "consistent": true,
+      "verdict": "INCONCLUSIVE",
+      "reasons": [
+        "LOSS_TRIALS_TOO_FEW"
+      ],
+      "errors": [],
+      "warnings": [],
+      "infos": [],
+      "tamper_code": null
+    },
+    "tamper-ev02-plan-swapped": {
+      "about": "ev02-pass with a stop plan of stop messages only swapped in after signing",
+      "consistent": false,
+      "verdict": "PASS",
+      "reasons": [],
+      "errors": [
+        "FILE_HASH_MISMATCH",
+        "STREAM_DIGEST_MISMATCH",
+        "STREAM_MISMATCH"
+      ],
+      "warnings": [],
+      "infos": [],
+      "tamper_code": "FILE_HASH_MISMATCH"
+    },
+    "tamper-ev02-stop-moved": {
+      "about": "ev02-fail with the late trial's stop row and the commands after it recorded later, raw_data updated and signed again as PASS: a stop row more than a command spacing and 20 ms after its last drive row leaves its trial unmeasured, so the run is INCONCLUSIVE however many trials it has",
+      "consistent": false,
+      "verdict": "INCONCLUSIVE",
+      "reasons": [
+        "STOP_DRIVES_TOO_FEW",
+        "STOP_TRIALS_TOO_FEW",
+        "STOP_TRIAL_UNMEASURED"
+      ],
+      "errors": [
+        "DERIVED_MISMATCH",
+        "VERDICT_MISMATCH"
+      ],
+      "warnings": [],
+      "infos": [],
+      "tamper_code": "VERDICT_MISMATCH"
+    },
+    "tamper-ev05-fail-as-pass": {
+      "about": "ev05-fail-resumed rewritten as PASS and signed again with the lab key",
+      "consistent": false,
+      "verdict": "FAIL",
+      "reasons": [
+        "LOSS_RESUMED_EARLY",
+        "LOSS_RESUMED_EARLY",
+        "LOSS_RESUMED_EARLY"
+      ],
+      "errors": [
+        "VERDICT_MISMATCH"
+      ],
+      "warnings": [],
+      "infos": [],
+      "tamper_code": "VERDICT_MISMATCH"
     }
   }
 }

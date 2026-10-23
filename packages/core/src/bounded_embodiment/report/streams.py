@@ -50,7 +50,19 @@ segment has ``t_s`` 0 (:func:`split_segments`). The bench pauses between segment
 and the comparison with commands.csv never look at ``t_s``.
 
 Finding codes: STREAM_PARAMS_INVALID, STREAM_TOO_LARGE, GENERATOR_UNSUPPORTED (errors), and the
-generator's STREAM_SEQ_GAP, STREAM_TOO_LONG, STREAM_MISMATCH (errors) and STREAM_PREFIX (info).
+generator's STREAM_SEQ_GAP, STREAM_TOO_LONG, STREAM_MISMATCH (errors) and STREAM_PREFIX (info),
+and STREAM_CATCH_UP_INVALID (error) for ``catch_up`` rows that are not a walk the method allows.
+
+Catch-up rows. Between two trials of a be-stops or be-model-loss run in a position command space
+the bench may send ``catch_up`` rows: a walk from where the machine rests to within one step cap
+of the next trial's first command, at most ``step_cap`` per axis per row (a position servo lags its
+command, so after a stop that held the machine rests short of where the next walk begins: round-2
+review K3). They are not proposals of the stream and are not part of its digest. In commands.csv
+they are numbered with every other row (seq counts rows), and :func:`check` skips them when it
+compares the rows with the stream, after :func:`catch_up_problem` has found nothing wrong with
+them: each names every axis within its limits, consecutive ones differ by at most the step cap,
+the next trial's first command is within one step cap of the last, and they come right before a
+trial's first command, never before the first trial's or after the last trial.
 """
 
 from __future__ import annotations
@@ -69,6 +81,7 @@ from .plans import ModelLossPlan, StopPlan, check_plan_commands
 from .waypoints import Waypoints
 
 __all__ = [
+    "CATCH_UP",
     "CONTINUE_PREFIX",
     "CONTROL",
     "DRIVE_PREFIX",
@@ -84,6 +97,7 @@ __all__ = [
     "VERSION",
     "WAYPOINTS",
     "StreamCheck",
+    "catch_up_problem",
     "check",
     "control_stream",
     "model_loss_stream",
@@ -120,6 +134,13 @@ _MAX_TRIALS = 1000
 #: after it carry their id after the colon).
 DRIVE_PREFIX, STOP_PREFIX, CONTINUE_PREFIX, RETURN = "drive:", "stop:", "continue:", "return"
 MOTION, RESTART = "motion", "restart"
+#: Rows the bench sends between two trials of a be-stops or be-model-loss run in a position command
+#: space, walking the machine from where it rests to the next trial's first command (round-2 K3).
+#: They are not proposals of the stream: the check skips them, after checking that they walk.
+CATCH_UP = "catch_up"
+#: How far over its step cap a catch_up step may go, as a fraction of the cap: binary64 rounding of
+#: a walk step, nothing more.
+CAP_ROUNDING = 1e-9
 
 
 # --------------------------------------------------------------------------- parameters
@@ -674,6 +695,128 @@ def _clip(text: str, limit: int = 400) -> str:
     return text if len(text) <= limit else text[: limit - 3] + "..."
 
 
+def catch_up_problem(
+    space: CommandSpace,
+    caps: Mapping[str, float] | None,
+    walk: Sequence[Mapping[str, object]],
+    next_command: Mapping[str, float],
+) -> str | None:
+    """Why a run of ``catch_up`` commands (``walk``, in order) is not one the method allows before
+    a trial whose first command is ``next_command``, or None (module docstring). Where the first
+    of them begins is the bench's to check: it is where the machine rests."""
+    if space.kind not in _POSITION_KINDS:
+        return "catch_up rows are for position command spaces (a velocity machine starts every trial at rest)"
+    if caps is None:
+        return "catch_up rows walk at most step_cap per command, and this stream has no step cap"
+    keys = space.keys
+    previous: Mapping[str, object] | None = None
+    for i, command in enumerate(walk):
+        unknown = [k for k in command if k not in keys]
+        missing = [k for k in keys if k not in command]
+        if unknown or missing:
+            return (
+                f"catch_up row {i} must name every axis of the command space and nothing else"
+                + (f"; unknown: {unknown}" if unknown else "")
+                + (f"; missing: {missing}" if missing else "")
+            )
+        for axis in space.axes:
+            value = command[axis.key]
+            if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value):
+                return f"catch_up row {i}: {axis.key} is not a number"
+            if not axis.lo <= value <= axis.hi:
+                return f"catch_up row {i}: {axis.key}={value!r} is outside [{axis.lo!r}, {axis.hi!r}]"
+        if previous is not None:
+            over = [k for k in keys if abs(command[k] - previous[k]) > caps[k] * (1.0 + CAP_ROUNDING)]  # type: ignore[operator]
+            if over:
+                return f"catch_up row {i} moves {', '.join(over)} more than a step cap from the row before it"
+        previous = command
+    if previous is not None:
+        over = [k for k in keys if abs(next_command[k] - previous[k]) > caps[k] * (1.0 + CAP_ROUNDING)]  # type: ignore[operator]
+        if over:
+            return (
+                f"the next trial's first command is more than a step cap from the last catch_up row "
+                f"on {', '.join(over)}"
+            )
+    return None
+
+
+def _catch_up_payload(text: object) -> dict | None:
+    """A catch_up row's payload: a JSON object in encode_payload's form, else None."""
+    if not isinstance(text, str):
+        return None
+    try:
+        value = canonical.loads_strict(text)
+    except ValueError:
+        return None
+    if not isinstance(value, dict) or encode_payload(value) != text:
+        return None
+    return value
+
+
+def _compare_trial_rows(
+    regenerated: Iterable[Proposal],
+    rows: Sequence[tuple],
+    space: CommandSpace,
+    caps: Mapping[str, float] | None,
+) -> tuple[list[Finding], int]:
+    """generator.compare_rows for a be-stops or be-model-loss run, with its catch_up rows: the
+    same rules, codes and wording for the stream's rows (seq still counts every row), and the
+    catch_up rows checked by :func:`catch_up_problem` and skipped. Returns the findings and how
+    many rows were compared with the stream."""
+    stream_iter = iter(regenerated)
+    expected = next(stream_iter, None)
+    at_first = True  # expected is the stream's first proposal
+    run: list[tuple[int, dict]] = []
+    compared = 0
+
+    def run_finding() -> Finding | None:
+        where = f"rows[{run[0][0]}]"
+        if expected is None:
+            problem: str | None = "catch_up rows after the last trial"
+        elif at_first or expected.t_s != 0.0:
+            problem = "catch_up rows come only between two trials, right before a trial's first command"
+        else:
+            problem = catch_up_problem(space, caps, [c for _, c in run], expected.payload)
+        return None if problem is None else Finding("STREAM_CATCH_UP_INVALID", "error", _clip(problem), where)
+
+    for i, (seq, strategy, payload_json) in enumerate(rows):
+        where = f"rows[{i}]"
+        n = generator._seq_number(seq)
+        if n != i:
+            found = f"seq {n}" if n is not None else f"seq {seq!r}, which is not a whole number"
+            detail = f"row {i} has {found}; rows carry seq 0, 1, 2, ... in order"
+            return [Finding("STREAM_SEQ_GAP", "error", _clip(detail), where)], compared
+        if strategy == CATCH_UP:
+            payload = _catch_up_payload(payload_json)
+            if payload is None:
+                detail = f"catch_up row {i}: the payload is not a JSON object as encode_payload writes it"
+                return [Finding("STREAM_CATCH_UP_INVALID", "error", detail, where)], compared
+            run.append((i, payload))
+            continue
+        if run:
+            bad = run_finding()
+            if bad is not None:
+                return [bad], compared
+            run = []
+        if expected is None:
+            detail = f"the stream has {compared} commands; the rows go on past it, from seq {i}"
+            return [Finding("STREAM_TOO_LONG", "error", detail, where)], compared
+        want = encode_payload(expected.payload)
+        if strategy != expected.strategy or payload_json != want:
+            detail = f"seq {i}: the stream has {expected.strategy} {want}; the row has {strategy} {payload_json}"
+            return [Finding("STREAM_MISMATCH", "error", _clip(detail), where)], compared
+        compared += 1
+        expected, at_first = next(stream_iter, None), False
+    if run:
+        bad = run_finding()
+        if bad is not None:
+            return [bad], compared
+    if expected is not None:
+        detail = f"the rows are the first {compared} commands of the stream, which goes on (the run stopped early)"
+        return [Finding("STREAM_PREFIX", "info", detail)], compared
+    return [], compared
+
+
 def check(
     name: object,
     version: object,
@@ -723,8 +866,11 @@ def check(
             None,
         )
     rows = list(rows)
-    found = generator.compare_rows(regenerated, rows)
+    if name in (STOPS, MODEL_LOSS):
+        found, compared = _compare_trial_rows(regenerated, rows, space, p["step_cap"])
+    else:
+        found, compared = generator.compare_rows(regenerated, rows), len(rows)
     if any(f.severity == "error" for f in found):
         return StreamCheck(tuple(found), digest, None, None)
     aborted = any(f.code == "STREAM_PREFIX" for f in found)
-    return StreamCheck(tuple(found), digest, len(rows), aborted)
+    return StreamCheck(tuple(found), digest, compared, aborted)

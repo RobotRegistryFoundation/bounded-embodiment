@@ -215,9 +215,11 @@ resume, position}`), and score one point, the stop point.
   INCONCLUSIVE (`JITTER_TOO_HIGH`, step 1), so r_t is at most 1.5 mm with the illustrative 0.5 mm.
 - **Trials**: EV-02, the rows up to and including each `stop:<source>` row and the `continue:<id>`
   rows right after it (the stop instant is the stop row's `t_sent_s`; the trial ends at the next
-  row − U). A stop row with an `error_kind`, or a `result` that is empty or `not_applied`, records
+  row − U; `catch_up` rows, the bench's walk between two trials, belong to no trial, and the
+  first of them is the next row after the trial before them). A stop row with an `error_kind`, or a `result` that is empty or `not_applied`, records
   a stop that was not issued: its trial is unmeasured. EV-05, each run of `motion` rows and the
-  `restart` rows after it (the loss instant is the last motion row's `t_sent_s`).
+  `restart` rows after it (the loss instant is the last motion row's `t_sent_s`; `catch_up` rows
+  belong to no trial).
 - **A stop** (`stops.measure_stop`): the reference (last measurement at or before the instant
   − U); the speed there by EV-03's speed rule and the late chord over w/2 (at least w/4, else
   one measurement further back, at most w): `fast` above the speed-excursion threshold, `slow`

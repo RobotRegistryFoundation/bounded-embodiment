@@ -390,3 +390,101 @@ def test_model_loss_in_a_velocity_space_starts_each_trial_and_restart_at_rest() 
     last = [p.payload for p in pos[0] if p.strategy == "motion"][-1]
     first_next = [p.payload for p in pos[1] if p.strategy == "motion"][0]
     assert max(abs(first_next[k] - last[k]) for k in ("x", "y", "z")) <= 0.005 + 1e-12
+
+
+# --------------------------------------------------------------------------- catch_up rows (K3)
+
+
+def _segment_starts(proposals) -> list[int]:
+    starts, n = [], 0
+    for seg in streams.split_segments(proposals):
+        starts.append(n)
+        n += len(seg)
+    return starts
+
+
+def _with_catch_up(rows, at: int, walk) -> list[tuple]:
+    """``rows`` with ``walk`` (payloads) as catch_up rows before row ``at``, every row renumbered
+    (seq counts every row of commands.csv)."""
+    out = rows[:at] + [(None, streams.CATCH_UP, generator.encode_payload(p)) for p in walk] + rows[at:]
+    return [(i, s, j) for i, (_, s, j) in enumerate(out)]
+
+
+def _walk(start: dict, target: dict, caps: dict) -> list[dict]:
+    """From start to within one cap of target, one walk step a command."""
+    out, current = [], dict(start)
+    while any(abs(target[k] - current[k]) > caps[k] for k in caps):
+        current = streams.walk_step(current, target, tuple(caps), caps)
+        out.append(dict(current))
+    return out
+
+
+def test_catch_up_rows_between_trials_are_checked_and_skipped() -> None:
+    """Round-2 kit review K3: a position servo lags its command, so after a stop that held the
+    machine rests short of the command at the stop instant, where the next trial's walk begins,
+    and a slightly slower servo was refused there by the kit's guard. The bench now walks the
+    machine from where it rests to within one step cap of the next trial's first command, at most
+    one step cap per command, in catch_up rows that seq numbers with every other row. Core skips
+    them when it compares the rows with the stream, after checking that they are such a walk,
+    between two trials."""
+    g = golden()
+    plan = stop_plan()
+    proposals = list(streams.stop_stream(space(), plan, g.STOP_PARAMS))
+    rows = rows_of(proposals)
+    starts = _segment_starts(proposals)
+    first = proposals[starts[1]].payload
+    rest = dict(first, x=first["x"] - 0.03)  # six caps short of it, along the last drive
+    walk = _walk(rest, first, g.STOP_CAP)
+    assert len(walk) == 5
+    ok = streams.check("be-stops", "1", space(), 0, g.STOP_PARAMS, _with_catch_up(rows, starts[1], walk),
+                       plan=plan)
+    assert ok.findings == () and ok.commands_compared == len(rows) and ok.aborted is False
+
+    def codes(rws) -> list[str]:
+        return [f.code for f in streams.check("be-stops", "1", space(), 0, g.STOP_PARAMS, rws, plan=plan).findings]
+
+    jump = [walk[0], dict(walk[1], x=walk[1]["x"] + 0.006)] + walk[2:]  # a step of 1.2 caps
+    assert codes(_with_catch_up(rows, starts[1], jump)) == ["STREAM_CATCH_UP_INVALID"]
+    assert codes(_with_catch_up(rows, starts[1], walk[:-1])) == ["STREAM_CATCH_UP_INVALID"]  # 2 caps short
+    assert codes(_with_catch_up(rows, starts[1] + 5, walk)) == ["STREAM_CATCH_UP_INVALID"]  # inside a trial
+    assert codes(_with_catch_up(rows, 0, _walk(dict(proposals[0].payload, x=0.27), proposals[0].payload,
+                                                 g.STOP_CAP))) == ["STREAM_CATCH_UP_INVALID"]  # before trial 1
+    assert codes(_with_catch_up(rows, len(rows), walk)) == ["STREAM_CATCH_UP_INVALID"]  # after the last
+    no_z = [{"x": p["x"], "y": p["y"]} for p in walk]
+    assert codes(_with_catch_up(rows, starts[1], no_z)) == ["STREAM_CATCH_UP_INVALID"]
+    outside = [dict(p, z=0.5) for p in walk]  # z's limit is 0.35
+    assert codes(_with_catch_up(rows, starts[1], outside)) == ["STREAM_CATCH_UP_INVALID"]
+    # the rows keep their own numbering: a catch_up row that does not count breaks seq
+    unnumbered = rows[:starts[1]] + [(starts[1], "catch_up", generator.encode_payload(walk[0]))] + rows[starts[1]:]
+    assert codes(unnumbered) == ["STREAM_SEQ_GAP"]
+    # a run that stopped during the catch-up is a prefix, and its last row is checked against
+    # the trial it was heading for
+    cut = _with_catch_up(rows[:starts[1]], starts[1], walk)
+    assert codes(cut) == ["STREAM_PREFIX"]
+    assert codes(_with_catch_up(rows[:starts[1]], starts[1], walk[:-1])) == ["STREAM_CATCH_UP_INVALID"]
+
+
+def test_catch_up_rows_in_a_model_loss_run_and_not_in_a_velocity_space() -> None:
+    g = golden()
+    lp = loss_plan()
+    proposals = list(streams.model_loss_stream(space(), lp, 5, g.LOSS_PARAMS))
+    rows, starts = rows_of(proposals), _segment_starts(proposals)
+    first = proposals[starts[2]].payload
+    walk = _walk(dict(first, y=first["y"] + 0.02), first, g.STOP_CAP)
+    ok = streams.check("be-model-loss", "1", space(), 5, g.LOSS_PARAMS, _with_catch_up(rows, starts[2], walk),
+                       plan=lp)
+    assert ok.findings == () and ok.commands_compared == len(rows)
+    # a velocity machine starts every trial at rest from the plan's start: nothing to catch up
+    doc = g.loss_plan_doc()
+    doc["start"] = {"x": 0.0, "y": 0.0, "z": 0.0}
+    doc["path"] = [{"x": 0.0, "y": 0.2, "z": 0.0}, {"x": 0.1, "y": 0.2, "z": 0.0}]
+    vplan = load_model_loss_plan(doc)
+    vparams = {**g.LOSS_PARAMS, "motion_s": [1.0, 2.0], "step_cap": {"x": 0.02, "y": 0.02, "z": 0.02}}
+    vprops = list(streams.model_loss_stream(velocity_space(), vplan, 5, vparams))
+    vstarts = _segment_starts(vprops)
+    vwalk = [{"x": 0.0, "y": 0.0, "z": 0.0}]
+    found = streams.check("be-model-loss", "1", velocity_space(), 5, vparams,
+                          _with_catch_up(rows_of(vprops), vstarts[1], vwalk), plan=vplan)
+    assert [f.code for f in found.findings] == ["STREAM_CATCH_UP_INVALID"]
+    # and no other stream has catch_up rows
+    assert streams.CATCH_UP not in {p.strategy for p in proposals}

@@ -97,7 +97,8 @@ class Trial:
 def split_trials(commands: Sequence[Command]) -> list[Trial]:
     """Rule: "a trial is a maximal run of motion rows and the restart rows that follow it; a
     motion row after a restart row starts the next trial". Restart rows before any motion row
-    belong to no trial."""
+    belong to no trial, and so do catch_up rows (round-2 K3: the bench's walk between two trials);
+    a trial's next row is the row after its last motion or restart row."""
     groups: list[tuple[list[Command], list[Command], int]] = []  # (motion, restart, next index)
     for k, c in enumerate(commands):
         if c.strategy == MOTION:
@@ -106,8 +107,9 @@ def split_trials(commands: Sequence[Command]) -> list[Trial]:
             groups[-1][0].append(c)
         elif c.strategy == RESTART and groups:
             groups[-1][1].append(c)
-        if groups:
-            groups[-1] = (groups[-1][0], groups[-1][1], k + 1)
+        else:
+            continue
+        groups[-1] = (groups[-1][0], groups[-1][1], k + 1)
     out = []
     for i, (motion, restart, nxt) in enumerate(groups):
         out.append(

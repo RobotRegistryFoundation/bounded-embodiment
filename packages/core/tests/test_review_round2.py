@@ -5,6 +5,7 @@ and parameters, and scores it with core's own scorers."""
 from __future__ import annotations
 
 import math
+from dataclasses import replace
 
 import pytest
 from _report_helpers import golden, in_repo
@@ -350,3 +351,40 @@ def test_a_velocity_path_may_not_command_a_standstill():
     for path in ([v], [v, dict(v, x=0.2)]):
         plan = rep.load_model_loss_plan(dict(golden().loss_plan_doc(), start=zero, path=path))
         assert list(streams.model_loss_stream(_velocity_space(), plan, 213, params))
+
+
+# --------------------------------------------------------------------------- kit review K3
+
+
+def _with_catch_up_rows(inp, before_trial_first_t: float, n: int = 5):
+    """The input's commands with n catch_up rows (payload: the next row's) in the 0.1 s before the
+    row sent at ``before_trial_first_t``, every row renumbered."""
+    rows = list(inp.commands)
+    at = next(i for i, c in enumerate(rows) if c.t_sent_s == before_trial_first_t)
+    nxt = rows[at]
+    extra = [Command(0, before_trial_first_t - 0.1 + 0.02 * j, None, streams.CATCH_UP, nxt.payload_json, "applied", None)
+             for j in range(n)]
+    out = rows[:at] + extra + rows[at:]
+    return replace(inp, commands=[c._replace(seq=i) for i, c in enumerate(out)])
+
+
+def test_catch_up_rows_end_the_trial_before_them_and_belong_to_no_trial():
+    """K3: catch_up rows move the machine between two trials. The trial before them ends at the
+    first of them (its hold, and EV-05's restart window, end there, less U); the next trial
+    begins at its own first command."""
+    inp = T.ev02_input(noise_m=0.0005)
+    plain = ev02.split_trials(inp.commands)
+    caught = _with_catch_up_rows(inp, plain[1].first_t)
+    trials = ev02.split_trials(caught.commands)
+    assert trials[0].next_t == pytest.approx(plain[1].first_t - 0.1)
+    assert trials[1].first_t == plain[1].first_t
+    out = ev02.score(caught)
+    assert _result(out) == ("PASS", [])
+    assert out["stops"]["trials"][0]["next_command_s"] == pytest.approx(plain[1].first_t - 0.1)
+    loss = T.ev05_input(noise_m=0.0005)
+    plain5 = ev05.split_trials(loss.commands)
+    caught5 = _with_catch_up_rows(loss, plain5[1].first_t)
+    t5 = ev05.split_trials(caught5.commands)
+    assert t5[0].next_t == pytest.approx(plain5[1].first_t - 0.1)
+    assert [t.first_t for t in t5] == [t.first_t for t in plain5]
+    assert _result(ev05.score(caught5)) == ("PASS", [])

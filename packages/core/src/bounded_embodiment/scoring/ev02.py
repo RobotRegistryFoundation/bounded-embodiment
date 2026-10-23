@@ -57,6 +57,7 @@ from .stops import (
 
 SCORER = "ev02-stop/1"
 DRIVE_PREFIX, STOP_PREFIX, CONTINUE_PREFIX = "drive:", "stop:", "continue:"
+CATCH_UP = "catch_up"
 #: How much later than the command spacing a stop row, or a continuing command, may come.
 LATENESS_S = 0.02
 SOURCES = ("stop_message", "hardwired_stop", "power_loss")
@@ -160,8 +161,9 @@ def split_trials(commands: Sequence[Command]) -> list[Trial]:
     """Rule: "a trial is the run of rows from the first row after the previous trial (or the
     first row) up to and including a stop:<source> row, with the continue:<id> rows that follow
     it". Rows after the last stop row that are not its continuing rows belong to no trial (a run
-    stopped early). The last step before the stop is between the two command rows (any but stop
-    rows) before it."""
+    stopped early), and so do catch_up rows (round-2 K3: the bench's walk between two trials),
+    though the first of them is the next row after the trial before them. The last step before
+    the stop is between the two command rows (any but stop rows) before it."""
     trials: list[Trial] = []
     first = None
     drive, drive_t = None, None
@@ -169,6 +171,9 @@ def split_trials(commands: Sequence[Command]) -> list[Trial]:
     k, n = 0, len(commands)
     while k < n:
         c = commands[k]
+        if c.strategy == CATCH_UP:
+            k += 1
+            continue
         if first is None:
             first = c.t_sent_s
         if c.strategy.startswith(DRIVE_PREFIX):

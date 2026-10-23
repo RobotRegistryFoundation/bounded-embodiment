@@ -617,6 +617,35 @@ def test_a_source_command_still_running_when_the_run_ends_is_ended(tmp_path):
     assert not marker.exists()
 
 
+def test_the_last_trials_source_command_is_waited_for_before_the_run_finishes(tmp_path):
+    """Round-2 kit review N-a: the run's end did not wait for the last trial's source command, so a
+    power-loss command still running (sh -c 'touch ESTOP; sleep 4.9') left the last stop row
+    not_applied (external_unfinished) and core the trial unmeasured, though the command worked. The
+    last trial's command is waited for now, as between trials."""
+    from bounded_embodiment.generator import Proposal
+    from bounded_embodiment_kit.runner.trials import TrialSegment
+
+    marker = tmp_path / "cut"
+    seg = TrialSegment((), "trial 1 (power_loss)", "stop", "power_loss", 0.8, 0.0, True)
+    thread = _bare_thread(segments=(seg,))
+    thread.read_state = lambda: None
+    pend, proc = _pending(f"sh -c 'sleep 0.8; touch {marker}'", thread)
+
+    def send_segment(k):  # the stop is issued and the segment sent; its command still runs
+        pend["p"] = Proposal(0, 0.0, "stop:power_loss", {})
+        thread._pending = pend
+        thread._helper = threading.Thread(target=thread._wait_for_command,
+                                          args=(pend, proc, seg.label, seg.source))
+        thread._helper.start()
+        return True
+
+    thread._send_segment, thread._pause, thread._room = send_segment, (lambda k: True), (lambda k: True)
+    thread._send_all()
+    assert marker.exists() and pend["result"].applied and pend["result"].decision == "issued"
+    assert thread._pending is None and thread.stream_finished
+    assert thread.latch.kind == "finished"
+
+
 def test_the_stop_row_waits_for_its_commands_outcome_and_keeps_the_rows_in_order():
     """Rows sent while a source command runs are written after its stop row, in order; a command
     still running when the thread ends is recorded as unfinished (so core leaves the trial

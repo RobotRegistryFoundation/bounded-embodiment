@@ -70,3 +70,13 @@ def test_ev02_needs_a_lab_config_that_cites_method_0_2(tmp_path):
     lab["method"] = dict(lab["method"], version="0.1")
     args = sup.report_args(tmp_path, run, key, lab=lab)
     assert args.func(args) == 1
+
+
+@pytest.mark.parametrize("name", sorted(PLAN))
+def test_an_ev02_or_ev05_run_is_never_a_control_run(tmp_path, name, capsys):
+    """Method §9.3 item 4: EV-02 and EV-05 have no control run. Core's 0.2 schema refuses the role
+    (review note 11); be report says so before it builds anything."""
+    run, key = _run(tmp_path, name)
+    args = sup.report_args(tmp_path, run, key, lab=sup.lab_config(name), extra=("--role", "control"))
+    assert args.func(args) == 1
+    assert "no control run" in capsys.readouterr().err

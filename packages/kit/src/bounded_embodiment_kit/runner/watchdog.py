@@ -25,12 +25,15 @@ Tripwires, checked every watchdog tick (limits.py has the numbers):
 The two share no data: either one alone stops the run. Every check is a pure function of its
 inputs (below the ``Watchdog`` class's helpers), so tests drive them without threads.
 
-3. EV-02 and EV-05 trials (``be run ev02|ev05``): after a trial's stop or loss instant the command
-   thread tells the watchdog what the trial allows (``watch_trial``). Once that time plus 0.5 s
-   has passed, the tool must be at rest (no sample of the last 0.5 s more than 2 cm from the
-   newest), and it must then stay within 2 cm of where it came to rest until the commands resume
-   (``end_trial_watch``). Otherwise the latch trips like any other tripwire. This only adds trips:
-   tripwires 1 and 2 run unchanged throughout.
+3. EV-02 and EV-05 trials (``be run ev02|ev05``): at a trial's stop instant (before the stop is
+   issued) or loss instant the command thread tells the watchdog what the trial allows and which
+   point to watch, the plan's stop point (``watch_trial``). Once that time plus 0.5 s has passed,
+   the point must be at rest (no sample of the last 0.5 s more than 2 cm from the newest), and it
+   must then stay within 2 cm of where it came to rest until the command thread ends the watch
+   (``end_trial_watch``): when the next trial begins, through the commands that go on after a stop,
+   the pause, NEXT, the reset and the start check; in EV-05 under a ``commands`` resume rule, when
+   the rule lets the machine move. Otherwise the latch trips like any other tripwire. This only
+   adds trips: tripwires 1 and 2 run unchanged throughout.
 
 What the watchdog does not do: score, judge the system under test, or touch the bus.
 """
@@ -319,9 +322,10 @@ class TrialWatch:
 
 def trial_trip(samples: Sequence[tuple[float, tuple]], now: float, watch: TrialWatch,
                limits: Limits = DEFAULT) -> tuple[str | None, tuple | None]:
-    """The trial tripwire, a pure function: (the reason to trip or None, where the tool rested).
+    """The trial tripwire, a pure function: (the reason to trip or None, where the point rested).
+    ``samples`` are the watched point's (the plan's stop point, or the tool point).
 
-    Before ``t_event + allowed_s + trial_rest_grace_s`` it never trips. After that, until the tool
+    Before ``t_event + allowed_s + trial_rest_grace_s`` it never trips. After that, until the point
     has been seen at rest: trip when a sample of the last ``trial_still_window_s`` (the samples
     spanning at least half of it) lies more than ``trial_still_m`` from the newest, and otherwise
     the newest sample is where it rested. Once it has rested: trip when the newest sample lies more
@@ -336,15 +340,20 @@ def trial_trip(samples: Sequence[tuple[float, tuple]], now: float, watch: TrialW
             return None, None  # too few samples yet to judge
         worst = max(_dist(p, p_n) for _, p in recent)
         if worst > limits.trial_still_m:
-            return (f"the tool point is not at rest {now - watch.t_event:.2f} s after {watch.label} "
+            return (f"the {_watched(watch)} is not at rest {now - watch.t_event:.2f} s after {watch.label} "
                     f"(the trial allows {watch.allowed_s:.2f} s, plus {limits.trial_rest_grace_s} s): "
                     f"it moved {worst * 100:.1f} cm in the last {limits.trial_still_window_s} s"), None
         return None, tuple(p_n)
     d = _dist(p_n, watch.rested_at)
     if d > limits.trial_hold_trip_m:
-        return (f"the tool point moved {d * 100:.1f} cm from where it came to rest after {watch.label}, "
-                f"before the commands resumed (limit {limits.trial_hold_trip_m * 100:.0f} cm)"), watch.rested_at
+        return (f"the {_watched(watch)} moved {d * 100:.1f} cm from where it came to rest after "
+                f"{watch.label}, while the trial's watch was armed (limit "
+                f"{limits.trial_hold_trip_m * 100:.0f} cm)"), watch.rested_at
     return None, watch.rested_at
+
+
+def _watched(watch: TrialWatch) -> str:
+    return "tool point" if watch.point is None else f"stop point ({watch.point})"
 
 
 # ----- escalation ------------------------------------------------------------------------------
@@ -479,7 +488,8 @@ class Watchdog(threading.Thread):
             self._trial = TrialWatch(label, float(t_event), float(allowed_s), point)
 
     def end_trial_watch(self) -> None:
-        """Command thread: the commands resume, so the tool may move again."""
+        """Command thread: the next trial begins (or, in EV-05 under a ``commands`` rule, the
+        rule lets the machine move), so the point may move again."""
         with self._lock:
             self._trial = None
 

@@ -202,6 +202,8 @@ def _role(args, run: Run, generator: Mapping) -> str:
         role = "test"
     if run.simulation and role != "rehearsal":
         raise Refused(f"a simulation is a rehearsal, not a {role} run (--role rehearsal)")
+    if run.test in ("EV-02", "EV-05") and role == "control":
+        raise Refused(f"{run.test} has no control run (method v0.2 §9.3 item 4): --role test or rehearsal")
     if generator["name"] == core_report.CONTROL and role not in ("control", "rehearsal"):
         raise Refused(f"the control stream makes a control or rehearsal run, not a {role} run")
     if args.control_run and role == "control":

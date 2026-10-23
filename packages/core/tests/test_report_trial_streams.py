@@ -244,8 +244,8 @@ def test_path_cycle() -> None:
     # 0.2 m each way at 0.005 m a command: 40 + 40 commands at 50 Hz
     assert streams.path_cycle_s(space(), loss_plan(), g.STOP_CAP, 50.0) == 1.6
     doc = g.loss_plan_doc()
-    doc["path"] = doc["path"][:1]
-    assert streams.path_cycle_s(space(), load_model_loss_plan(doc), g.STOP_CAP, 50.0) == 0.0
+    doc["path"] = doc["path"][:1]  # one leg, back to itself: one command (round-2 M5)
+    assert streams.path_cycle_s(space(), load_model_loss_plan(doc), g.STOP_CAP, 50.0) == 0.02
 
 
 @pytest.mark.parametrize("motion_s", [[1.0, 1.0], [1.0, 1.4], [1.0, 2.59]])
@@ -258,12 +258,15 @@ def test_model_loss_refuses_a_loss_that_cannot_fall_anywhere_on_the_path(motion_
         streams.model_loss_stream(space(), loss_plan(), 5, params)
     found = streams.check("be-model-loss", "1", space(), 5, params, [], plan=loss_plan())
     assert [f.code for f in found.findings] == ["STREAM_PARAMS_INVALID"]
+    # one command, in a velocity space (in a position space it is a dwell, refused: round-2 M5):
+    # the cycle is one command, one period
     doc = g.loss_plan_doc()
-    doc["path"] = doc["path"][:1]  # one command: the cycle is 0, a period is still needed
+    doc["start"] = {"x": 0.0, "y": 0.0, "z": 0.0}
+    doc["path"] = [{"x": 0.0, "y": 0.1, "z": 0.0}]
     one = load_model_loss_plan(doc)
     with pytest.raises(ValueError, match="at least one cycle of the path"):
-        streams.model_loss_stream(space(), one, 5, {**g.LOSS_PARAMS, "motion_s": [1.0, 1.0]})
-    assert list(streams.model_loss_stream(space(), one, 5, {**g.LOSS_PARAMS, "motion_s": [1.0, 1.02]}))
+        streams.model_loss_stream(velocity_space(), one, 5, {**g.LOSS_PARAMS, "motion_s": [1.0, 1.0]})
+    assert list(streams.model_loss_stream(velocity_space(), one, 5, {**g.LOSS_PARAMS, "motion_s": [1.0, 1.02]}))
 
 
 @pytest.mark.parametrize(

@@ -16,6 +16,7 @@ from bounded_embodiment.envelope import load
 from bounded_embodiment.generator import encode_payload
 from bounded_embodiment.rawdata import Command
 from bounded_embodiment.report.plans import check_plan_commands
+from bounded_embodiment.report import streams
 from bounded_embodiment.scoring import ScoringInput, ev02, ev05
 from bounded_embodiment.scoring import stops as stops_mod
 
@@ -268,3 +269,84 @@ def test_an_empty_judged_window_is_not_a_check():
         assert trial["status"] == "inadequate"
         assert "no measurement in the judged part of the restart window" in trial["notes"]
     assert out["verdict"]["result"] != "PASS"
+
+
+# --------------------------------------------------------------------------- finding 5 (M5)
+
+
+def _velocity_space():
+    doc = dict(golden().COMMAND_SPACE, kind="velocity")
+    doc.pop("far_targets", None)
+    doc["axes"] = [{"key": k, "unit": "m/s", "lo": -0.25, "hi": 0.25, "home": 0.0} for k in ("x", "y", "z")]
+    return load_command_space(doc)
+
+
+def _walk_period(space, plan, caps) -> int:
+    """How many commands one round of the path takes, by walking it (as be-model-loss/1 does)."""
+    keys, path = space.keys, [dict(c) for c in plan.path]
+    current, cursor, n = dict(path[0]), 1 % len(path), 0
+    while True:
+        target = path[cursor]
+        current = streams.walk_step(current, target, keys, caps)
+        n += 1
+        if current == target:
+            cursor = (cursor + 1) % len(path)
+            if cursor == 1 % len(path) and current == path[0]:
+                return n
+
+
+def test_the_cycle_counts_a_command_for_every_leg():
+    """Finding 5, reproduction 1: a leg that does not move still takes the walk one command, but
+    path_cycle_s counted it 0, so a path of A 99 times then B counted 0.48 s against a real cycle
+    of 2.44 s (122 commands at 50 Hz). Each leg now counts max(1, ceil(|change| / cap))."""
+    A, B = {"x": 0.3, "y": -0.03, "z": 0.175}, {"x": 0.3, "y": 0.03, "z": 0.175}
+    plan = rep.load_model_loss_plan(dict(golden().loss_plan_doc(), start=B, path=[A] * 99 + [B]))
+    cap = {"x": 0.005, "y": 0.005, "z": 0.005}
+    space = load_command_space(golden().COMMAND_SPACE)
+    assert streams.path_cycle_s(space, plan, cap, 50.0) == pytest.approx(2.44)
+    assert _walk_period(space, plan, cap) == 122
+    # reproduction 3's velocity path: 20 x +v, a zero, 20 x -v, a zero: 0.08 s counted, 0.84 s real
+    v = {"x": 0.0, "y": 0.2, "z": 0.0}
+    back, zero = dict(v, y=-0.2), dict(v, y=0.0)
+    vel = rep.load_model_loss_plan(dict(golden().loss_plan_doc(), start=zero,
+                                        path=[v] * 20 + [zero] + [back] * 20 + [zero]))
+    caps = {"x": 0.2, "y": 0.2, "z": 0.2}
+    assert streams.path_cycle_s(_velocity_space(), vel, caps, 50.0) == pytest.approx(0.84)
+    assert _walk_period(_velocity_space(), vel, caps) == 42
+
+
+def test_a_position_path_may_not_dwell():
+    """Finding 5, reproduction 2: with dwells in the path (A repeated), a chosen seed put every
+    loss on the command that lands on A, so the restart's walk-on repeated A and a machine that
+    follows every restart command at once never moved during the check: PASS with no loss
+    handling. In a position space every leg of the path must move some axis by a full step cap,
+    so the walk-on always moves; a path of one command is a dwell."""
+    space = load_command_space(golden().COMMAND_SPACE)
+    A, B = {"x": 0.3, "y": -0.03, "z": 0.175}, {"x": 0.3, "y": 0.03, "z": 0.175}
+    params = dict(golden().LOSS_PARAMS, motion_s=[2.42, 2.90])
+    for path in ([A] * 99 + [B], [A, B, B], [A], [A, dict(A, y=-0.0275)]):
+        plan = rep.load_model_loss_plan(dict(golden().loss_plan_doc(), start=B, path=path))
+        with pytest.raises(ValueError, match="moves no axis by a full step"):
+            list(streams.model_loss_stream(space, plan, 1837, params))
+        found = streams.check("be-model-loss", "1", space, 1837, params, [], plan=plan)
+        assert [f.code for f in found.findings] == ["STREAM_PARAMS_INVALID"]
+    plan = rep.load_model_loss_plan(dict(golden().loss_plan_doc(), start=B, path=[A, B]))
+    assert list(streams.model_loss_stream(space, plan, 1837, params))
+
+
+def test_a_velocity_path_may_not_command_a_standstill():
+    """Finding 5, reproduction 3: a velocity path with a zero command between its runs; 26 of the
+    first 2,000 seeds put every loss on a zero, and a machine that keeps its last velocity, with
+    no loss handling, PASSed (seed 213): the model's last command was itself a stop. In a
+    velocity space no command of the walk round the path may be zero on every axis."""
+    v = {"x": 0.0, "y": 0.2, "z": 0.0}
+    back, zero = dict(v, y=-0.2), dict(v, y=0.0)
+    caps = {"x": 0.2, "y": 0.2, "z": 0.2}
+    params = dict(golden().LOSS_PARAMS, motion_s=[1.0, 2.0], step_cap=caps)
+    for path in ([v] * 20 + [zero] + [back] * 20 + [zero], [zero], [v, back]):  # +v to -v steps through 0
+        plan = rep.load_model_loss_plan(dict(golden().loss_plan_doc(), start=zero, path=path))
+        with pytest.raises(ValueError, match="zero on every axis"):
+            list(streams.model_loss_stream(_velocity_space(), plan, 213, params))
+    for path in ([v], [v, dict(v, x=0.2)]):
+        plan = rep.load_model_loss_plan(dict(golden().loss_plan_doc(), start=zero, path=path))
+        assert list(streams.model_loss_stream(_velocity_space(), plan, 213, params))

@@ -27,7 +27,9 @@
     ``silence_s`` (the model is lost), then ``restart`` commands that walk on along the path for
     half the restart and back to the last motion command for the other half. Params:
     ``{"hz", "trials", "motion_s", "silence_s", "restart_s", "step_cap"}``; ``motion_s[1] -
-    motion_s[0]`` is at least one cycle of the path (:func:`path_cycle_s`) and one period.
+    motion_s[0]`` is at least one cycle of the path (:func:`path_cycle_s`) and one period; in a
+    position space every leg of the path moves some axis by a full step cap, and in a velocity
+    space no command of the walk round it is zero on every axis.
 
 be-control, be-waypoints and be-stops have no randomness; be-model-loss draws one motion time per
 trial from the seed. Their digest has the same shape as ``stream_sha256``: SHA-256 over the UTF-8
@@ -437,20 +439,51 @@ def _stops(space: CommandSpace, plan: StopPlan, p: dict, caps) -> Iterator[Propo
 
 def path_cycle_s(space: CommandSpace, plan: ModelLossPlan, step_cap: Mapping[str, float], hz: float) -> float:
     """How long one walk round the plan's path takes: for each leg (each path command to the
-    next, the last back to the first), the walk steps it needs, ceil(|change| / cap) on its
-    slowest axis (0 for a leg that does not move), summed and divided by ``hz``. 0 for a path of
-    one command."""
+    next, the last back to the first; a path of one command has one leg, back to itself), the
+    walk steps it needs, ceil(|change| / cap) on its slowest axis and at least 1 (the walk spends
+    a command landing on a command it is already at: round-2 M5), summed and divided by ``hz``."""
     path = plan.path
     steps = 0
-    for k in range(len(path) if len(path) > 1 else 0):
+    for k in range(len(path)):
         a, b = path[k], path[(k + 1) % len(path)]
-        leg = 0
+        leg = 1
         for key in space.keys:
             change = abs(b[key] - a[key])
             if change > 0.0:
                 leg = max(leg, math.ceil(change / step_cap[key]))
         steps += leg
     return steps / hz
+
+
+def _check_path(space: CommandSpace, plan: ModelLossPlan, caps: Mapping[str, float]) -> None:
+    """Round-2 M5: "moving at the loss" must hold of the commands, not only of the measurement.
+    In a position space every leg of the path must move some axis by a full step cap, so the
+    walk never stands on a command (a dwell) and the restart's walk-on always moves. In a velocity
+    space no command of the walk round the path may be zero on every axis: a loss there would find
+    the machine already told to stop."""
+    path, keys = [{k: c[k] for k in space.keys} for c in plan.path], space.keys
+    if space.kind in _POSITION_KINDS:
+        for k, a in enumerate(path):
+            b = path[(k + 1) % len(path)]
+            if not any(abs(b[key] - a[key]) >= caps[key] for key in keys):
+                raise ValueError(
+                    f"the path's leg from path[{k}] to path[{(k + 1) % len(path)}] moves no axis by "
+                    "a full step cap: the walk would stand still there, a loss could fall on it, "
+                    "and the restart's walk-on would not move"
+                )
+        return
+    # velocity: walk one cycle from path[0], until it is back there heading for path[1] (the walk
+    # lands on every path command); the bound only guards against rounding in the step count
+    current, cursor = dict(path[0]), 1 % len(path)
+    for _ in range(round(path_cycle_s(space, plan, caps, 1.0)) + 2 * len(path) + 2):
+        if all(current[key] == 0.0 for key in keys):
+            raise ValueError(
+                f"the walk round the path commands zero on every axis ({current}): a loss there "
+                "would find the machine already told to stop"
+            )
+        current, cursor = _round(current, path, cursor, keys, caps)
+        if cursor == 1 % len(path) and current == path[0]:
+            break
 
 
 def model_loss_stream(
@@ -474,6 +507,7 @@ def model_loss_stream(
     p = normalize(MODEL_LOSS, params)
     caps = _check_caps(space, p["step_cap"])
     _check_plan(plan, space, "ev05-model-loss-plan.json")
+    _check_path(space, plan, caps)
     lo, hi = p["motion_s"]
     need = max(path_cycle_s(space, plan, caps, p["hz"]), 1.0 / p["hz"])
     if hi - lo < need:

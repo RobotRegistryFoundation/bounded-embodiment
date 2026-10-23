@@ -10,7 +10,11 @@ import threading
 import time
 
 import pytest
-from bounded_embodiment_kit.runner.interlocks import InterlockError, require_terminal, typed_word
+from bounded_embodiment_kit.runner.interlocks import (
+    InterlockError,
+    require_terminal,
+    typed_word,
+)
 
 
 def test_a_typed_word_at_a_terminal_ignores_what_was_typed_ahead_and_ends_on_the_latch():

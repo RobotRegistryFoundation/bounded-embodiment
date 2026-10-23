@@ -79,6 +79,7 @@ from .feeds import SimFeed, UDPFeed, parse_instrument
 from .interlocks import (
     InterlockError,
     Ledger,
+    check_command,
     default_ledger_path,
     file_sha256,
     require_run_flags,
@@ -795,6 +796,8 @@ def execute_run(args, *, prompt: Callable[[str], str] = _ask, log: Callable[[str
                 if getattr(args, a, None)]
         if cmds and test != "ev02":
             raise RunError(f"{', '.join(cmds)}: for be run ev02 (they issue its external stop sources)")
+        for source, flag in SOURCE_FLAGS.items():  # a typo is found now, not at its trial's stop (N-b)
+            check_command(getattr(args, f"{source}_cmd", None), flag)
         out = Path(args.out)
         if out.exists() and any(out.iterdir()):
             raise RunError(f"{out} exists and is not empty; a run directory is written once")

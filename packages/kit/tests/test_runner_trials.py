@@ -185,7 +185,9 @@ def test_a_velocity_trial_trips_on_a_stop_point_faster_than_its_limit():
     trip = runmod.trial_speed_limit(envelope, seg)
     assert trip.point == "base" and trip.v_max_mps == 0.5
     assert trip.limit_mps == pytest.approx(0.5 * 1.05 + 3 * 2 ** 0.5 * 0.0005 / 0.1)
-    at = lambda v: _samples(0.0, 1.0, lambda t: (1.0 + v * t, 4.0, 0.0))  # noqa: E731
+    def at(v: float) -> list:
+        return _samples(0.0, 1.0, lambda t: (1.0 + v * t, 4.0, 0.0))
+
     assert trial_speed_trip(at(0.5), trip, 0.2) is None
     assert trial_speed_trip(at(0.54), trip, 0.2) is None
     reason = trial_speed_trip(at(1.4), trip, 0.2)
@@ -204,6 +206,65 @@ def test_each_trial_knows_who_resets_its_source(tmp_path):
     doc = json.loads(json.dumps(PLANS["rover-ev05"]))
     doc["resume"] = {"rule": "commands", "after_ms": 500}
     assert _segments(tmp_path, "ev05", doc, both, None) == [("heartbeat_loss", False, False)] * 2
+
+
+@pytest.mark.parametrize("failure", [OSError(5, "Input/output error"), "interlock"])
+def test_a_terminal_that_fails_at_next_ends_the_run_through_the_latch(failure):
+    """Round-2 kit review N-e: an OSError at NEXT (EIO after a hangup) left _between_trials, and
+    execute_run, before declared.json's end was written. A failure to ask (typed_word's
+    InterlockError, or an OSError from the prompt) is now a cancel through the latch, so the stop
+    phase runs and the end record is written."""
+    from bounded_embodiment_kit.runner.interlocks import InterlockError
+
+    def ask(word, text, **kw):
+        raise InterlockError("the terminal failed while asking for NEXT: EIO") if failure == "interlock" else failure
+
+    def prompt(question):
+        raise failure
+
+    latch = StopLatch(lambda: 0.0)
+    command = _AsksOnce(TrialSegment((), "trial 1 (stop_message)", "stop", "stop_message", 0.5, 1.0, True))
+    command.is_alive = lambda: not latch.tripped
+    if failure == "interlock":
+        _between_trials(latch, command, lambda q: "NEXT", DEFAULT, ask=ask)
+    else:
+        _between_trials(latch, command, prompt, DEFAULT)
+    assert not command.next_go.is_set()
+    assert latch.kind == "error" and "could not ask for NEXT before trial 2 of 2" in latch.reason
+
+
+def test_ev05_under_a_commands_rule_watches_again_once_its_restart_rows_end():
+    """Round-2 kit review N-d: under a commands rule the watch ended when the rule let the machine
+    move, and stayed off through NEXT and the start check, though once the restart rows end no
+    command moves the machine. It is armed again at the segment's last row."""
+    from bounded_embodiment.generator import Proposal
+    from bounded_embodiment_kit.adapters.base import SendResult
+
+    calls = []
+
+    class Watch:
+        def watch_trial(self, label, t_event, allowed_s, point=None):
+            calls.append(("watch", label, allowed_s, point))
+
+        def end_trial_watch(self):
+            calls.append(("end",))
+
+    class Adapter:
+        def send(self, payload):
+            return SendResult(True, None, None)
+
+    motion = [Proposal(i, i * 0.02, "motion", {"x": 0.0}) for i in range(3)]
+    restart = [Proposal(3 + j, 0.1 + j * 0.02, "restart", {"x": 0.0}) for j in range(5)]
+    seg = TrialSegment(tuple(motion + restart), "trial 1 (heartbeat_loss)", "loss", "heartbeat_loss", 0.8,
+                       0.5, False, point="tool", release_after_s=0.03)
+    thread = _bare_thread(segments=(seg,))
+    thread.watchdog, thread.adapter, thread.read_state = Watch(), Adapter(), lambda: None
+    assert thread._send_segment(0)
+    # ended as the segment begins, armed at the loss, ended when the rule lets the machine move,
+    # and armed again at the last restart row, until the next segment
+    assert [c[0] for c in calls] == ["end", "watch", "end", "watch"]
+    assert calls[-1] == ("watch", "trial 1 (heartbeat_loss)'s restart", 0.8, "tool")
+    assert thread._release_at is None
 
 
 def test_anything_but_next_ends_the_run_through_the_latch():
@@ -291,6 +352,18 @@ def test_an_external_stop_needs_its_own_command_and_a_reset(tmp_path):
     # the source commands are EV-02's
     ev05 = _rover_argv(tmp_path, "ev05", None, "--power-loss-cmd", "true")
     assert "--power-loss-cmd: for be run ev02" in _refused(ev05, tmp_path)
+
+
+def test_a_source_command_that_names_no_program_is_refused_before_anything_connects(tmp_path):
+    """Round-2 kit review N-b: --power-loss-cmd "/usr/local/bin/relay-of --cut" passed every check;
+    three stop_message trials ran at speed, and trial 4 failed at its stop instant with
+    external_failed:FileNotFoundError, escalating. The command is now split and its program looked
+    up before anything connects."""
+    refused = _refused(_rover_argv(tmp_path, "ev02", None, "--power-loss-cmd", "relay-of-no-such-name --cut"),
+                       tmp_path)
+    assert "--power-loss-cmd: 'relay-of-no-such-name' is not a program on PATH" in refused
+    refused = _refused(_rover_argv(tmp_path, "ev02", None, "--power-loss-cmd", "sh -c 'unbalanced"), tmp_path)
+    assert "--power-loss-cmd" in refused and "does not split" in refused
 
 
 def test_a_full_trial_run_needs_a_shakedown_on_the_setup(tmp_path):

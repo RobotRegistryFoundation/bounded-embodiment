@@ -29,7 +29,8 @@ What is new against an EV-03 session (``session.py``), and nothing else is:
 - The watch stays armed until the next segment begins: through the commands that continue after
   the stop, the pause, the operator's NEXT, the reset and the start check. In EV-05 under a
   ``commands`` resume rule it ends when the rule lets the machine move (that long after the
-  first restart command); under a ``manual`` rule it too lasts until the next segment.
+  first restart command), and is armed again at the segment's last row, since nothing moves the
+  machine after that (round-2 N-d); under a ``manual`` rule it too lasts until the next segment.
 - Between segments the thread waits, reading state, ``pause_s`` after the segment's last row;
   then the main thread asks for a typed NEXT. After NEXT, and a last look at the latch, the
   thread resets the source (``adapter.reset_stop(source)``) when the trial needs it, and begins
@@ -61,7 +62,7 @@ from dataclasses import dataclass
 from bounded_embodiment.generator import Proposal
 
 from ..adapters.base import ADAPTER_STOP_SOURCES, SendResult
-from .interlocks import confirm
+from .interlocks import InterlockError, confirm
 from .limits import DEFAULT, Limits
 from .session import CommandThread, SessionResult, run_session
 
@@ -393,6 +394,12 @@ class TrialCommandThread(CommandThread):
                 self.trials[k]["instant_t_s"] = t_sent
                 self.trials[k]["issued"] = "silence"
                 self.watchdog.watch_trial(seg.label, t_sent, seg.allowed_s, seg.point)
+        if seg.release_after_s is not None and not self.latch.tripped:
+            # EV-05 under a commands rule (round-2 N-d): the watch ended when the rule let the
+            # machine move; once the restart rows end nothing moves it, so it watches again, through
+            # NEXT and the start check, until the next segment
+            self._release_at = None
+            self.watchdog.watch_trial(f"{seg.label}'s restart", self.last_t, seg.allowed_s, seg.point)
         return not self.latch.tripped
 
     def _pause(self, k: int) -> bool:
@@ -557,10 +564,14 @@ def _between_trials(latch, command: TrialCommandThread, prompt: Callable[[str], 
         else:
             reset = ""
         text = f"{prev.label} done ({k} of {n}).{reset} Hands clear of the machine; one hand on the hardware stop."
-        if ask is not None:
-            go = ask("NEXT", text, cancelled=lambda: latch.tripped)
-        else:
-            go = confirm(prompt, "NEXT", text)
+        try:
+            if ask is not None:
+                go = ask("NEXT", text, cancelled=lambda: latch.tripped)
+            else:
+                go = confirm(prompt, "NEXT", text)
+        except (InterlockError, OSError) as e:  # the terminal failed (round-2 N-e): a cancel
+            latch.trip("error", f"could not ask for NEXT before trial {k + 1} of {n}: {e}")
+            return
         if go:
             command.next_go.set()
         elif not latch.tripped:

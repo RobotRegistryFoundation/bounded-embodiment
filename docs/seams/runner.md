@@ -173,7 +173,9 @@ differs:
   there. The thread then sends nothing for the silence and resumes with the restart rows.
 - Tripwire 3 stays armed until the next segment begins: through the commands after the stop, the
   pause, NEXT, the reset and the start check (review S1). In EV-05 under a `commands` resume rule
-  it ends when the rule lets the machine move, `after_ms` after the first restart row.
+  it ends when the rule lets the machine move, `after_ms` after the first restart row, and is
+  armed again at the segment's last row (round-2 N-d: nothing moves the machine after it), through
+  NEXT and the start check.
 - After each trial it waits `pause_s` (0.5 s) after the segment's last row, reading state, then asks
   the main thread for a typed NEXT. On hardware NEXT is read with `interlocks.typed_word`: input
   typed ahead is thrown away, and the latch (Ctrl+C trips it) ends the question at once; a hardware
@@ -219,7 +221,7 @@ differs:
 | speed | tool speed > 3 x `speed_limit_mps(tool)` over a 0.15-0.2 s span | a joint faster than the adapter's `joint_speed_trip_per_s` over >= 0.1 s of a 0.2 s window |
 | liveness | no datagram for 0.5 s; no valid tool sample for 1 s (0.2 s with the FK override) | newest state older than 0.25 s; `read_state` raised or returned None; FK failed |
 | other | `camera_moved` | |
-| 3: trial (EV-02, EV-05) | armed at the trial's instant (EV-02: before the stop is issued); from the instant + the time it allows + 0.5 s: the plan's stop point not at rest (a sample of the last 0.5 s more than 2 cm from the newest), then, until the next segment begins (EV-05 under a `commands` rule: until the rule lets it move), more than 2 cm from where it came to rest | same, on the stop point's FK when there is no instrument |
+| 3: trial (EV-02, EV-05) | armed at the trial's instant (EV-02: before the stop is issued); from the instant + the time it allows + 0.5 s: the plan's stop point not at rest (a sample of the last 0.5 s more than 2 cm from the newest), then, until the next segment begins (EV-05 under a `commands` rule: until the rule lets it move, and again from the segment's last row), more than 2 cm from where it came to rest | same, on the stop point's FK when there is no instrument |
 
 Tripwire 3 only adds trips: tripwires 1 and 2 run unchanged throughout a trial run, and silence is
 left to their liveness checks. The time a trial allows is the stop source's `max_time_ms` (EV-02),
@@ -363,7 +365,7 @@ One timebase: `time.monotonic()` at run start = 0. The runner never writes a sco
 | `goto_hz` / `goto_settle_s` / `goto_path_samples` | 50 / 1.0 / 50 | |
 | `trial_rest_grace_s` | 0.5 | EV-02/EV-05: after a trial's instant + the time it allows + this, the stop point must be at rest (tripwire 3) |
 | `trial_still_m` / `trial_still_window_s` | 0.02 / 0.5 | at rest: no sample of the last 0.5 s more than 2 cm from the newest (40 mm/s, far above 1 mm instrument noise) |
-| `trial_hold_trip_m` | 0.02 | once at rest, until the next segment (EV-05 `commands`: until the rule lets it move): no further than this from where it rested |
+| `trial_hold_trip_m` | 0.02 | once at rest, until the next segment (EV-05 `commands`: until the rule lets it move, and again from the segment's last row): no further than this from where it rested |
 | `trial_pause_extra_s` | 0.5 | EV-02: the commands go on for the allowed time + the scorer's still window and hold + this after the stop instant; EV-02 and EV-05: NEXT is asked this long after the segment's last row |
 | `trial_catch_up_steps` | 12.0 | before a trial after the first (position spaces with robot state): the catch-up walk covers at most this many step caps on any axis (a servo lag of 0.24 s at 50 Hz); farther, the run ends |
 

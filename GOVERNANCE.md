@@ -1,9 +1,13 @@
 # Governance
 
 This document says who decides what in the Bounded Embodiment project, and how. It is written to
-work today, with one maintainer and two of the steering group's three seats vacant, and it tightens
-as seats are filled. Where it and [CONTRIBUTING.md](CONTRIBUTING.md) differ, this document applies.
-"Method §N" is a section of the method text, version 0.1.
+work with one maintainer and the other seats vacant, and it tightens as seats are filled. Where it
+differs from CONTRIBUTING.md, or from POLICY.md, README.md, labs/README.md or CODEOWNERS in
+bounded-embodiment-results, this document applies until they are brought into line. "Method §N" is
+a section of the method text, version 0.1.
+
+**Draft.** Items marked [TO DECIDE: …] or [TO COMPLETE: …] are the maintainer's to settle before
+this document is adopted.
 
 ## 1 Scope
 
@@ -19,7 +23,11 @@ This document covers:
   and the CI checks that enforce it.
 
 It does not cover RCAN or the Robot Registry Foundation's registry, which have their own processes.
-The method does not depend on either (method §1.6).
+Nothing in the method requires RCAN (method §1.6) or a registry number (method §9.3 item 3). The
+envelope 0.1 and gate-decision 0.1 schemas that core ships are copies of rcan-spec schemas; the
+copies are governed here and do not change when rcan-spec does. RCAN's Appendix C relies on
+`docs/requirements.md` for the requirements and the levels BE-1 to BE-3; this document, not RCAN's
+process, decides changes to them.
 
 ## 2 Roles
 
@@ -31,70 +39,94 @@ packages' PyPI projects, and uses that access only to carry out decisions made u
 The first member other than the maintainer to be seated is offered the same access, so that it does
 not rest with one person.
 
-If the maintainer steps down, or does not respond on the repository for 90 days, the other members
-appoint a new maintainer by group approval (section 3.2).
+**What rests with the maintainer today.** Until a second member is seated: every decision (section
+4); every merge, and the only human review of safety-critical code; administration of both
+repositories, in a GitHub organization that also holds RCAN, and of both PyPI projects; the homepage
+and results table, which robotregistryfoundation.org builds from his own repository
+`craigm26/RobotRegistryFoundation`, outside this document; the only contact for conduct and security
+reports (CODE_OF_CONDUCT.md, SECURITY.md); POLICY.md's removal of personal or unlawful material,
+which may rewrite the results repository's history; and succession, since no one can appoint a new
+maintainer. The Robot Registry Foundation is a proposal in a draft charter, not a legal entity, and
+it does not govern this project.
+
+If the maintainer steps down, is removed (section 2.2), or does not respond on the repository for
+90 days, the other members appoint a new maintainer by group approval (section 3.2).
 
 ### 2.2 Steering group
 
-The steering group decides method changes, results-policy changes, changes to this document and
-appointments (section 3). It has three seats.
+The steering group decides method changes, requirements and results-policy changes, changes to this
+document and appointments (section 3). It has three seats.
 
 | Seat | Member | Since | Term ends | Declaration of interests |
 |---|---|---|---|---|
-| 1 | Craig Merry, as maintainer | adoption | held while maintainer | [method §1.6](method/bounded-embodiment-method-v0.1.md#16-disclosure) |
-| 2 | vacant | | | |
-| 3 | vacant | | | |
+| 1 | Craig Merry, as maintainer | adoption | held while maintainer | [craig-merry.md](docs/declarations/craig-merry.md) [TO COMPLETE: before adoption] |
+| 2 | [TO DECIDE: an outside member, needed before adoption] | [TO DECIDE] | [TO DECIDE] | [TO DECIDE] |
+| 3 | vacant [TO DECIDE: a name, or leave vacant] | | | |
 
 **Affiliation.** Two people are affiliated if either employs, pays or directs the other, directly
 or through a project they lead; they work for the same organization; they are family; or either has
-a financial stake in a project the other leads. The maintainer's projects include RCAN and the Robot
-Registry Foundation registry. Unpaid contributions to a project make no one affiliated. An
-**outsider** is someone not affiliated with the maintainer.
+a financial stake in a project the other leads. The maintainer's projects include RCAN, the Robot
+Registry Foundation registry and OpenCastor; his declaration lists them all. Unpaid contributions to
+a project make no one affiliated. An **outsider** is someone not affiliated with the maintainer.
 
 **Composition.** No two members may be affiliated with each other. While the maintainer holds seat
 1, that makes the members in seats 2 and 3 outsiders, so the group has at least one outsider as soon
 as a second seat is filled.
 
-**Terms.** Seats 2 and 3 have two-year terms, and a member may serve at most three terms in a row.
-The first member appointed to seat 3 serves one year, so that the terms are staggered. Seat 1 is
-held by whoever is maintainer.
+**Terms.** [TO DECIDE: term length, limit and stagger. Proposed: seats 2 and 3 have two-year terms;
+a member may serve at most three in a row; the first member appointed to an outside seat serves one
+year, so that the terms are staggered; someone appointed to a seat vacated early serves the rest of
+its term.] Seat 1 is held by whoever is maintainer.
 
 **Filling a seat.** Anyone may nominate someone, themselves included, by opening an issue that names
 the seat. The nominee accepts on the issue and posts their declaration of interests there. After a
-14-day comment period the other members decide by group approval, or, while the maintainer is the
-only member, the chair decides. The appointment takes effect when the table above is updated.
+14-day comment period, a seat is filled by group approval with at least two eligible members, not
+under section 4. The one exception: while the maintainer is the only member, he decides one
+appointment, as chair. The appointment takes effect when the decision is recorded (section 3.3).
+The chair then updates the table. An update that records a decision already made (an appointment, a
+resignation, the end of a term, a removal or a new declaration) is a record, not a change to this
+document.
 
 **Leaving a seat.** A member leaves their seat by resigning on the repository, at the end of their
-term unless reappointed, on ceasing to be eligible, or after being absent from three decisions in a
-row (section 3.2). A member may be removed for a breach of the Code of Conduct or an undisclosed
-conflict of interest, with the support of two members other than the one concerned and the reason
-recorded. No member, the maintainer included, can remove another alone.
+term unless reappointed, on ceasing to be eligible, or after being absent from every decision for
+90 days, and from at least three decisions in that time. A member may be removed for a breach of
+the Code of Conduct or an undisclosed conflict of interest, with the support of two members other
+than the one concerned and the reason recorded. No member, the maintainer included, can remove
+another alone. The other two members together may remove the maintainer for the same reasons, with
+the reason recorded; he then ceases to be maintainer, and they appoint a new one (section 2.1).
+While he alone holds the access in section 2.1, carrying this out depends on him.
 
 **Conflicts of interest.** Every member, the maintainer included, posts a declaration of interests
 and updates it within 30 days of a change: employer, who funds their work on robots or AI, projects
-they lead, and any machine, gate, lab or product the method could be used to test. A member recuses
-from a decision in which they, or an organization they are affiliated with, have a particular
-interest, such as their own appointment or removal, or a question about their own lab's results. A
-recused member may comment but is not counted. The maintainer's standing interests (method §1.6) do
-not by themselves require him to recuse.
+they lead, any machine, gate, lab or product the method could be used to test, and a contact
+address for decisions (section 3.2). A declaration lists the person's contributions to the
+maintainer's projects in the last two years. A member recuses from a decision in which they, or an
+organization they are affiliated with, have a particular interest, such as their own appointment or
+removal, or a question about their own lab's results. A recused member may comment but is not
+counted. The maintainer's standing interests, as declared, do not by themselves require him to
+recuse.
 
 ### 2.3 Chair
 
-The chair opens comment periods, asks members for decisions, records outcomes (section 3.3) and
-keeps the table in section 2.2 current. The members choose the chair from among themselves each
-year, by group approval; while the maintainer is the only member, he is the chair. The chair has no
-casting vote, and no power beyond any other member's except under section 4.
+The maintainer is the first chair. A chair serves until the members choose another member by group
+approval, which they may do at any time. If the chair leaves the group, the member who has served
+longest is chair until the members choose. The chair has no casting vote. Beyond any member's
+powers, the chair opens comment periods, asks members for decisions, records outcomes (section 3.3)
+and keeps the table in section 2.2 current, and, while the maintainer is the only member, decides
+appointments (sections 2.2 and 2.4).
 
 ### 2.4 Committers
 
-Committers merge pull requests in this repository and in bounded-embodiment-results under section
-3, and their reviews count toward its review requirements. Today the only committer is the
-maintainer.
+Committers, and every member while seated, merge pull requests in this repository and in
+bounded-embodiment-results under section 3, and their reviews count toward its review requirements.
+A change decided under section 3 is merged by the chair or any committer within 7 days of the
+record; if it is not, any member may merge it. Today the only committer is the maintainer.
 
 A contributor can be appointed committer once, over at least 60 days, they have:
 
-1. had at least three pull requests merged in either repository, or posted at least three reviews
-   that found a problem the author then fixed;
+1. had at least three pull requests merged in either repository, not counting result submissions
+   and lab registrations, or posted at least three reviews that found a problem the author then
+   fixed;
 2. signed off every commit (section 6); and
 3. posted a declaration of interests (section 2.2).
 
@@ -117,10 +149,12 @@ lab's results.
 
 ### 2.6 AI agents
 
-AI agents write some changes and reviews here for the maintainer. Under this document, a change an
-agent writes is the maintainer's change: he is its author and signs it off (section 6). An agent is
-never a member or committer, and never counts toward group approval. Its review can serve only as
-the recorded second review of section 3.4, and says what it is.
+AI agents write some changes and reviews here. A change an agent writes is the change of the person
+who directs the agent, who is its author and signs it off (section 6). Today that is always the
+maintainer. An agent is never a member or committer, and never counts toward group approval. Its
+review can serve only as the recorded second review of section 3.4. An agent's review is headed as
+an agent review. It is independent, at most, of the session that wrote the change, never of the
+person who directs it.
 
 ## 3 Decisions
 
@@ -128,19 +162,23 @@ the recorded second review of section 3.4, and says what it is.
 
 | Kind | What it covers | Comment period | Decided by |
 |---|---|---|---|
-| Method change | Freezing a method version (method §1.1). Any change to the normative text of a draft version. A new version of a named generator, scorer, profile or format (method §11). Any change to the output of a released rule set or to its vectors | 14 days | group approval |
+| Method change | Freezing a method version (method §1.1). Any change to the normative text of a draft version. A new named generator, scorer, profile or format, or a new version of one (method §11) | 14 days | group approval |
+| Released versions | A frozen method text; a released rule set, profile or format, and its vectors | none | never changed (method §1.1, §1.5, §11). A pull request that would change one is refused, and the change is made as a new version, which is a method change |
 | Erratum | An error found in a frozen method version | none | recorded as an issue and corrected in the next version; the frozen text never changes (method §1.1) |
-| Editorial and documentation | Wording that changes no requirement, in draft method text or in documentation | none | any committer merges |
-| Code | Core, the kit apart from the safety-critical code, tools, tests, examples and the reference gates | none | any committer merges once CI passes; once there is a second committer, after a review by someone other than the author |
-| Safety-critical code | The kit's runner, including its watchdog and interlocks, and its adapters (`runner/` and `adapters/` in `packages/kit/src/bounded_embodiment_kit/`), and their tests (`packages/kit/tests/test_runner_*`, `test_adapter_*`) | none | section 3.4 |
-| Results policy | `POLICY.md` in bounded-embodiment-results, and any change to that repository's CI that changes which submissions it accepts | 14 days (none for editorial changes) | group approval |
+| Requirements and scope | `docs/requirements.md`: a change to a requirement, a test in the test plan, or the assurance levels | 14 days | group approval |
+| Editorial and documentation | Wording that changes no requirement or rule, in draft method text, in documentation or in `POLICY.md` | none | any committer merges |
+| Code | Core, the kit apart from the safety-critical code, tools, tests, examples and the reference gates | none | any committer merges once CI passes; once there is a second committer, after a recorded review by someone other than the author, who need not be a committer |
+| Safety-critical code | The kit's runner, including its watchdog and interlocks, its adapters and its kinematics (`runner/`, `adapters/` and `kinematics/` in `packages/kit/src/bounded_embodiment_kit/`), any other code the runner calls to decide whether to stop (today including core's `Envelope.clearance`), and their tests | none | section 3.4 |
+| Results policy | `POLICY.md` in bounded-embodiment-results; any change to that repository's CI or tools that changes which submissions it accepts or how its table labels or counts a result, such as removing a handle or lab from `tools/maintainer.json` or changing `tools/claim-words.txt`. Adding a released core version to `kits.lock` is a code change | 14 days | group approval |
 | Result submission | A pull request to bounded-embodiment-results that adds runs, a lab registration or a withdrawal | none | any committer merges once its CI passes and it follows `POLICY.md`; see section 5, item 3 |
-| This document | Any change | 14 days | group approval, within the limits of section 7 |
+| This document | Any change, other than updating the table in section 2.2 to record a decision | 14 days | group approval, within the limits of section 7 |
 | Appointments | Seats and committers | 14 days for a seat, 7 for a committer | sections 2.2 and 2.4 |
 
-A results-policy change applies only to submissions made after it is merged. If anyone says on a
-pull request, with a reason, that it belongs to a kind with a longer comment period or a stricter
-rule, it is handled as that kind.
+A results-policy change applies only to submissions made after it is merged. A change that fits no
+row is handled as the kind with the longest comment period that could apply. If anyone says, with a
+reason, on a pull request or within 14 days after it was merged, that it belongs to a stricter kind,
+it is handled as that kind; for a merged change the comment period runs afterwards, and if the
+decision goes against it, it is reverted.
 
 A fix for a security or run-safety problem ([SECURITY.md](SECURITY.md)) in code, safety-critical
 code or the results repository's CI may be merged before the reviews or comment period it needs, if
@@ -158,19 +196,23 @@ if two are eligible; two, if three are.
   who opened the pull request supports it by opening it. No rule here needs anyone to approve their
   own pull request.
 - A member is **absent** from a decision if they have neither supported it nor objected 14 days
-  after the chair asked them on the pull request or issue. The chair asks when the comment period
-  opens.
-- If only one member is eligible, that member decides under section 4.
+  after they were asked (section 3.3), on the pull request or issue and by email at the contact in
+  their declaration.
+- If only one member is eligible, that member decides under section 4, except where a rule needs at
+  least two eligible members.
+- If no member is eligible, nothing is decided and nothing changes until one is. A lab may always
+  withdraw its own results (POLICY.md).
 
 A decision without the support it needs fails, and the change is not made. Repository settings, such
 as branch protection, never require more approvals than this section does.
 
 ### 3.3 Comment periods and records
 
-A comment period opens when the chair says so on the pull request or issue, with a closing date at
-least the required number of days later, and links it from this repository's Discussions. A
-revision during the period that adds, removes or changes a requirement or rule, or changes how a
-verdict is reached, restarts it.
+A comment period opens when the chair opens it, or 14 days after the author asked for it on the pull
+request or issue, whichever comes first, with a closing date at least the required number of days
+later. The chair, or the author if the chair has not, asks the members (section 3.2) and links it
+from this repository's Discussions. A revision during the period that adds, removes or changes a
+requirement or rule, or changes how a verdict is reached, restarts it.
 
 Every decision other than a merge of editorial, documentation, code or result-submission changes is
 recorded in a comment on the pull request or issue. The record gives the kind of change and the rule
@@ -186,15 +228,22 @@ not be members or committers.
 While there are fewer than two members and committers other than the author, or none of them is
 unaffiliated with the author, the change needs instead:
 
-1. the maintainer's review, recorded on the pull request, including when the change is his own; and
-2. a recorded second review: one that says who or what made it, and that it is not a maintainer
-   approval.
+1. the maintainer's review, recorded on the pull request, including when the change is his own;
+2. a review by each other member and committer, unless they have not given one 14 days after being
+   asked; and
+3. if those and any other reviews give fewer than two by people other than the author, a recorded
+   second review that says who or what made it, and that it is not a maintainer approval.
+
+Every review of safety-critical code says which files it covered and whether it read them line by
+line.
 
 Today the second review is made by an AI agent and posted from the maintainer's account. It is a
 second reading, not an independent one: it does not stand in for the unaffiliated reviewer above,
 and it does not lift the kit's draft notice (README, "Status"; the method's known gaps). That notice
-stays until a line-by-line review of the runner, watchdog and adapters by a person other than the
-maintainer is recorded and linked from the change that removes it.
+stays until a line-by-line review of the runner, watchdog and adapters by a person not affiliated
+with the maintainer is recorded, names the commit it covers, and is linked from the change that
+removes it. Code changed after that commit carries the notice again until it has had the same
+review.
 
 ## 4 Interim rule
 
@@ -210,18 +259,22 @@ An objection is **sustained** if it is posted on the pull request or issue befor
 closes, says what is wrong with the change and why, and has not been withdrawn. The author answers
 each objection there. An objection lapses if the objector does not reply within 14 days of being
 asked whether the answer meets it. While a sustained objection is open, the change waits until the
-objection is withdrawn or lapses, the change is revised to meet it (which may restart the comment
-period, section 3.3), or a second member is eligible and the group decides. An objection that
-breaches the Code of Conduct is not counted.
+objector withdraws it, it lapses, or a second member is eligible and the group decides. Revising the
+change does not by itself end an objection: the author asks the objector whether the revision meets
+it, and the lapse rule applies to that question. An objection that breaches the Code of Conduct is
+not counted. The record lists every objection, including any not counted, and why.
 
 Appointments of members and committers do not wait for objections, but an objection that the
 nominee is not eligible is answered on the issue, with facts, before the appointment is made.
 
-**Sunset.** While the other seats are vacant, the maintainer can decide alone under this section
-only until 30 April 2027. If no other member has been seated by then, from that date no method
-version is frozen, and no method change, results-policy change or change to this document is
-decided, until one is. Errata, editorial and documentation changes, code, safety-critical code
-under section 3.4, result submissions and appointments continue.
+**Sunset.** From [TO DECIDE: date; proposed 30 April 2027], freezing a method version, a method
+change, a requirements-and-scope change, a results-policy change and a change to this document need
+group approval with at least two eligible members, and cannot be decided under this section; until
+two members are eligible, they wait. Everything else continues: errata are recorded (and corrected
+only in a later version), and editorial and documentation changes, code, safety-critical code under
+section 3.4, result submissions, appointments and removals go on as before. A physical run needs a
+frozen text (method §1.1), so a version not frozen by then cannot be used for one until a second
+member takes part.
 
 ## 5 Independence and honesty
 
@@ -234,15 +287,18 @@ under section 3.4, result submissions and appointments continue.
    reproduction exists; and none of the words those rules exclude.
 3. Results from the maintainer's labs are labelled "maintainer's own" (method §10 item 4; POLICY.md,
    "The maintainer's own results"). All his labs count as one lab, so a re-run by one of them is
-   never a reproduction (method §9.7 item 2). Once there is a committer other than the maintainer,
-   that committer, not the maintainer, merges results labelled "maintainer's own".
-4. Nobody says or implies, in the project's name, that a person, organization or standards body
-   endorses, supports, uses or has reviewed this work, unless that party has said so publicly and
-   the statement links to it. A presentation, or the receipt of a contribution, is not an
-   endorsement. A member's or committer's role here is not an endorsement by their employer, and
-   employers are not listed as supporters.
-5. No method change may make running a test need a particular protocol, vendor or model, RCAN
-   included.
+   never a reproduction (method §9.7 item 2). No committer merges a result from a lab they are
+   affiliated with if a committer who is not can. Results labelled "maintainer's own" are merged by
+   a committer not affiliated with the maintainer; if none has done so 14 days after being asked,
+   the maintainer may merge them and says so on the pull request.
+4. Nobody says or implies, in the project's name or as a member or committer, that a person,
+   organization or standards body endorses, supports, uses or has reviewed this work, unless that
+   party has said so publicly and the statement links to it. A presentation, or the receipt of a
+   contribution, is not an endorsement. A member's or committer's role here is not an endorsement by
+   their employer, and employers are not listed as supporters.
+5. No method, requirements or results-policy change may make running a test, or submitting a
+   result, need a particular protocol, vendor, model or registry, RCAN and the Robot Registry
+   Foundation registry included.
 
 ## 6 Conduct, sign-off and licences
 
@@ -253,7 +309,7 @@ member is seated.
 
 Every commit is signed off under the Developer Certificate of Origin, as
 [CONTRIBUTING.md](CONTRIBUTING.md#sign-off-dco) describes. An AI agent cannot make that
-certification, so the maintainer signs off an agent's commits before they are merged.
+certification, so the person who directs the agent signs off its commits before they are merged.
 
 Contributions are licensed like the files they change, CC BY 4.0 or Apache-2.0, as
 [REUSE.toml](REUSE.toml) records path by path; the texts are in [`LICENSES/`](LICENSES/).
@@ -271,8 +327,13 @@ needs group approval with at least two eligible members, and cannot be made unde
 - narrows section 5.
 
 This document is adopted under its own section 4: the pull request that adds it has a 14-day comment
-period, and is also the nomination of any member it names. Pull requests open when it is adopted
-follow it; their comment periods open when the chair opens them.
+period, and is the nomination of any member it names. Section 2.2 applies to those nominations: the
+maintainer decides one appointment alone, and any other is decided by group approval once that
+member is seated. Pull requests open when it is adopted follow it; their comment periods open as
+section 3.3 says.
 
-If the work moves to a neutral steward, or a standards body takes on the method, that body's process
-replaces this one for what it takes over, and this document will say so.
+Moving the work to a steward, or handing the method to a standards body, is a change to this
+document that needs at least two eligible members. A body that the maintainer, or anyone affiliated
+with him, controls is not a neutral steward; the Robot Registry Foundation is not one while its
+draft charter makes the maintainer its founding chair. A standards body's process governs what it
+publishes; this repository follows this document until the change is made.

@@ -126,6 +126,13 @@ PLANS = {
         "path": [_pan(35.0), _pan(-35.0)],
         "resume": {"rule": "manual", "description": "TEST-ONLY: the gate's resume(), after NEXT"},
     },
+    "so101-ev05-wrist": {
+        "model_loss_plan_version": "0.1", "point": "wrist", "source": "heartbeat_loss",
+        "description": "TEST-ONLY: as so101-ev05, with the wrist as the stop point.",
+        "start": _pan(0.0),
+        "path": [_pan(35.0), _pan(-35.0)],
+        "resume": {"rule": "manual", "description": "TEST-ONLY: the gate's resume(), after NEXT"},
+    },
 }
 
 
@@ -138,6 +145,8 @@ class Case:
     trials: int = 3         # ev05
     plan: str | None = None  # a PLANS key other than "<machine>-<test>"
     power_loss_cmd: str | None = None  # instead of touching the simulated e-stop file
+    hide_point: str | None = None  # a point the simulated instrument does not report ...
+    hide_after_s: float = 0.0      # ... from this long after the instrument starts (round-2 K2)
 
 
 CASES = {c.id: c for c in (
@@ -153,6 +162,11 @@ CASES = {c.id: c for c in (
     Case("rover-ev05-heartbeat", "rover", "ev05", "_trial_gates:heartbeat"),
     Case("so101-ev05-bare", "so101", "ev05", None),
     Case("so101-ev05-heartbeat", "so101", "ev05", "_trial_gates:heartbeat", trials=6),
+    # round-2 K2: the plan's stop point is the wrist, which the instrument never reports, or stops
+    # reporting once trial 1 is under way
+    Case("so101-ev05-unseen", "so101", "ev05", None, plan="so101-ev05-wrist", hide_point="wrist"),
+    Case("so101-ev05-lost", "so101", "ev05", None, plan="so101-ev05-wrist", hide_point="wrist",
+         hide_after_s=3.2),
 )}
 
 
@@ -232,6 +246,24 @@ def run_case(case_id: str, out_dir: str | Path, real_time: bool = False) -> dict
 
     modules, joins = clock_modules()
     clock = VirtualClock()
+    if case.hide_point:  # the simulated instrument does not report this point (from hide_after_s)
+        from bounded_embodiment_kit.adapters import sim_so101
+
+        real_truth = sim_so101.SimSO101Adapter.truth_fn
+        calls = [0]
+
+        def truth_fn(self, fk, envelope=None):
+            inner = real_truth(self, fk, envelope)
+
+            def points():
+                calls[0] += 1
+                seen = inner()
+                if calls[0] > case.hide_after_s * FEED["fps"]:
+                    seen = {k: v for k, v in seen.items() if k != case.hide_point}
+                return seen
+            return points
+
+        sim_so101.SimSO101Adapter.truth_fn = truth_fn
     t0 = time.time()
     if real_time:
         code = runmod.execute_run(args, prompt=prompt, log=logs.append)

@@ -333,6 +333,8 @@ class _Live:
                 adapter_sources=[s for s in desc.get("stop_triggers") or [] if s in ADAPTER_STOP_SOURCES],
                 clearance=self.room, check_next=self.near)
         self.watchdog.stop_executed_at = lambda: self.command.first_stop_t
+        if segments:  # the start checks must see the plan's stop point too (round-2 K2)
+            self.watchdog.required_points = tuple(sorted({s.point for s in segments if s.point}))
         self.limits = limits
 
     def near(self, seg: TrialSegment) -> str | None:

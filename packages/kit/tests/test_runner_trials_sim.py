@@ -23,6 +23,8 @@ as seen but not scored.
 | rover-ev05-heartbeat | rover | 0.3 s heartbeat, manual resume | PASS-shaped |
 | so101-ev05-bare | SO-101 | none | the arm stops, then follows the restart: FAIL-shaped (LOSS_RESUMED_EARLY); tripwire 3 |
 | so101-ev05-heartbeat | SO-101 | 0.3 s heartbeat, manual resume | 6 trials: PASS-shaped (the losses at the path's reversals are slow, not adequate) |
+| so101-ev05-unseen | SO-101 | none | the plan's stop point (the wrist) is never reported: the start check refuses, nothing moves |
+| so101-ev05-lost | SO-101 | none | the wrist stops being reported during trial 1: tripwire 3 stops the run |
 """
 from __future__ import annotations
 
@@ -296,3 +298,20 @@ def test_be_report_and_be_verify_take_the_simulated_ev02_run(cases, tmp_path, _f
     args = sup.be("report", run, "--lab-config", tmp_path / "lab-config.json", "--key", key,
                   "--out", tmp_path / "again", "--accuracy", tmp_path / "accuracy.csv")
     assert args.func(args) == 1  # EV-02 is method version 0.2
+
+
+def test_a_stop_point_the_instrument_never_reports_is_refused_before_anything_moves(cases):
+    """Round-2 K2: the start check must see the plan's stop point, recent and inside."""
+    s = _case(cases, "so101-ev05-unseen")
+    end = s["end"]
+    assert end["status"] == "cancelled" and "no recent sample of 'wrist'" in end["why"]
+    assert all(t["instant_t_s"] is None for t in end["trials"])  # no trial began
+    assert end["first_command_t_s"] is None
+
+
+def test_a_stop_point_lost_during_a_trial_trips_the_watch(cases):
+    """Round-2 K2: tripwire 3 no longer sits idle when the watched point goes unreported."""
+    s = _case(cases, "so101-ev05-lost")
+    latch = s["end"]["latch"]
+    assert latch["kind"] == "tripwire"
+    assert latch["reason"].startswith("no sample of the stop point (wrist) since trial 1")

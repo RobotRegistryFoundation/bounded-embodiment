@@ -70,8 +70,23 @@ def test_a_machine_at_rest_is_remembered_and_must_stay_there():
 
 def test_too_few_samples_is_no_judgement():
     watch = TrialWatch("trial 1", t_event=0.0, allowed_s=0.1)
-    assert trial_trip([], 5.0, watch) == (None, None)
-    assert trial_trip([(4.99, (0.0, 0.0, 0.0))], 5.0, watch) == (None, None)
+    assert trial_trip([(4.99, (0.0, 0.0, 0.0))], 5.0, watch) == (None, None)  # fresh, but too few
+
+
+def test_a_watched_point_the_instrument_does_not_report_trips_the_watch():
+    """Round-2 K2: once the trial's time has passed, no sample of the watched point since the
+    instant, or a newest sample older than feed_silent_s, trips the watch: an instrument that
+    does not see the plan's stop point leaves nothing to judge, and the watch must not sit idle."""
+    watch = TrialWatch("trial 1", t_event=10.0, allowed_s=0.3, point="wrist")
+    assert trial_trip([], 10.7, watch) == (None, None)  # before 10.0 + 0.3 + 0.5: no judgement yet
+    reason, _ = trial_trip([], 10.81, watch)
+    assert reason.startswith("no sample of the stop point (wrist) since trial 1's instant")
+    before = _samples(9.0, 9.99, lambda t: (0.2, 0.0, 0.1))  # only samples from before the instant
+    assert trial_trip(before, 10.81, watch)[0].startswith("no sample of the stop point (wrist)")
+    stale = _samples(9.0, 10.2, lambda t: (0.2, 0.0, 0.1))  # it stopped reporting at 10.2 s
+    assert trial_trip(stale, 10.69, watch)[0] is None  # 0.49 s old, and before the grace
+    reason, _ = trial_trip(stale, 10.81, watch)
+    assert reason.startswith("the newest sample of the stop point (wrist) is 0.61 s old")
 
 
 def test_the_trial_numbers_live_with_the_runners_limits():

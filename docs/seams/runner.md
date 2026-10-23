@@ -160,6 +160,12 @@ Gaussian noise `--sim-sigma-m` (0.001), a fixed bias of length `--sim-bias-m` (0
   statement to the submission's `notes/NOTES.md`.
 - **FK override**: a run without the FK tripwire (no `--urdf`, no state, or by choice) needs
   `--no-fk-tripwire-i-understand`, gets the 0.2 s tool-unseen limit, and declares `fk_tripwire: override`.
+- **Typed words on hardware** (added 22 Oct, from the review of PR #12): with an adapter that is
+  not a simulation, `be run` and `be goto-start` refuse stdin that is not a terminal before
+  anything moves (`interlocks.require_terminal`; the message names `ssh -t`), and ask for RUN and
+  GO with `interlocks.typed_word`: input typed before the question is thrown away (`tcflush`),
+  and Ctrl+C or the latch ends the question at once. Other questions (OFF at close) are asked as
+  before, and simulation adapters keep the plain prompt, so piped answers still work for them.
 
 ## Modes
 

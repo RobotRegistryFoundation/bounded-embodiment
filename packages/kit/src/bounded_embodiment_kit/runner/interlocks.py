@@ -84,16 +84,19 @@ def typed_word(word: str, text: str, *, cancelled: Callable[[], bool] = lambda: 
     latch, Ctrl+C) ends the question within ``poll_s`` instead of waiting for Enter, and only the
     exact word (surrounding spaces ignored) goes ahead; anything else, end of input or
     ``cancelled()`` is False. One helper for every typed word: NEXT uses it now on hardware, and
-    RUN and GO can adopt it."""
+    RUN and GO can adopt it. POSIX only, from a terminal only: anything else is refused
+    (InterlockError), never answered."""
     stdin = sys.stdin if stdin is None else stdin
     out = sys.stderr if out is None else out
-    fd = stdin.fileno()
     try:
         import termios
-
+    except ImportError:  # pragma: no cover - not POSIX
+        raise InterlockError("cannot clear input typed ahead: no termios on this platform") from None
+    try:
+        fd = stdin.fileno()
         termios.tcflush(fd, termios.TCIFLUSH)
-    except (ImportError, OSError) as e:  # pragma: no cover - not a terminal, or not POSIX
-        raise InterlockError(f"cannot clear input typed ahead: {e}") from None
+    except (termios.error, OSError, ValueError) as e:
+        raise InterlockError(f"cannot clear input typed ahead (not a terminal?): {e}") from None
     out.write(f"{text}\nType {word} and Enter to start (anything else cancels): ")
     out.flush()
     buf = b""

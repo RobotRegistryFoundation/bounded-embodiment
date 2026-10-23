@@ -22,6 +22,7 @@ Output (a JCS-safe dict; docs/seams/scoring.md describes every member)::
 
 from __future__ import annotations
 
+import json
 import math
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
@@ -90,9 +91,8 @@ FAILURES = ("STOP_TIME_EXCEEDED", "STOP_DISTANCE_EXCEEDED", "STOP_NOT_HELD")
 class Trial:
     """One trial as the commands show it: its segment's first command, its drive (the id of the
     last drive row before the stop; None without one) and that row's send time, the stop row, the
-    send times of the rows from the stop row to the trial's last continuing row, the time of the
-    walk's last move (the last of those rows whose command differs from the one before it), and
-    the next row after the trial."""
+    send times of the rows from the stop row to the trial's last continuing row, the end of the
+    walk after the stop (``walk_end``, below), and the next row after the trial."""
 
     index: int
     source: str
@@ -118,41 +118,79 @@ def _issued(c: Command) -> tuple[bool, str | None]:
     return True, None
 
 
+def _numbers(payload_json: str | None) -> dict[str, float]:
+    """A command row's payload as {axis: value}, numbers only ({} when it cannot be read)."""
+    try:
+        obj = json.loads(payload_json) if payload_json else {}
+    except ValueError:
+        return {}
+    if not isinstance(obj, dict):
+        return {}
+    return {k: float(v) for k, v in obj.items()
+            if isinstance(v, (int, float)) and not isinstance(v, bool) and math.isfinite(v)}
+
+
+def _direction(a: float, b: float) -> int:
+    return (b > a) - (b < a)
+
+
+def walk_end(before: str | None, at_stop: str | None, after: Sequence[tuple[float, str]],
+             t_stop: float) -> float:
+    """The end of the walk after the stop (method §12.7.4 item 3.5): the moving axes are those
+    whose command changed in the last step before the stop (from ``before`` to ``at_stop``), each
+    with its direction; the walk ends at the last continuing row (``after``: send time and payload)
+    up to which every moving axis keeps changing in its own direction, row after row. A row in
+    which one of them stops changing, or turns back, ends it; so does a stop with no moving axis
+    (the walk ends at the stop itself)."""
+    a, b = _numbers(before), _numbers(at_stop)
+    moving = {k: _direction(a[k], b[k]) for k in b if k in a and a[k] != b[k]}
+    end, previous = t_stop, b
+    if not moving:
+        return end
+    for t, payload in after:
+        p = _numbers(payload)
+        if any(k not in p or _direction(previous[k], p[k]) != s for k, s in moving.items()):
+            break
+        end, previous = t, p
+    return end
+
+
 def split_trials(commands: Sequence[Command]) -> list[Trial]:
     """Rule: "a trial is the run of rows from the first row after the previous trial (or the
     first row) up to and including a stop:<source> row, with the continue:<id> rows that follow
     it". Rows after the last stop row that are not its continuing rows belong to no trial (a run
-    stopped early)."""
+    stopped early). The last step before the stop is between the two command rows (any but stop
+    rows) before it."""
     trials: list[Trial] = []
     first = None
-    drive, drive_t, last_walk = None, None, None
+    drive, drive_t = None, None
+    before, last = None, None  # the payloads of the last two command rows (stop rows aside)
     k, n = 0, len(commands)
     while k < n:
         c = commands[k]
         if first is None:
             first = c.t_sent_s
         if c.strategy.startswith(DRIVE_PREFIX):
-            drive, drive_t, last_walk = c.strategy[len(DRIVE_PREFIX) :], c.t_sent_s, c.payload_json
-        elif c.strategy == "return" or not c.strategy.startswith((STOP_PREFIX, CONTINUE_PREFIX)):
-            last_walk = c.payload_json
+            drive, drive_t = c.strategy[len(DRIVE_PREFIX) :], c.t_sent_s
         if c.strategy.startswith(STOP_PREFIX):
             issued, note = _issued(c)
-            after, walk_end, previous = [c.t_sent_s], c.t_sent_s, last_walk
+            after, walk = [c.t_sent_s], []
             k += 1
             while k < n and commands[k].strategy.startswith(CONTINUE_PREFIX):
                 row = commands[k]
                 after.append(row.t_sent_s)
-                if row.payload_json != previous:
-                    walk_end = row.t_sent_s
-                previous = row.payload_json
+                walk.append((row.t_sent_s, row.payload_json))
                 k += 1
             nxt = commands[k].t_sent_s if k < n else None
             trials.append(
                 Trial(len(trials), c.strategy[len(STOP_PREFIX) :], drive, first, drive_t,
-                      c.t_sent_s, issued, note, tuple(after), walk_end, nxt)
+                      c.t_sent_s, issued, note, tuple(after), walk_end(before, last, walk, c.t_sent_s), nxt)
             )
-            first, drive, drive_t, last_walk = None, None, None, None
+            if walk:
+                before, last = (walk[-2][1] if len(walk) > 1 else last), walk[-1][1]
+            first, drive, drive_t = None, None, None
             continue
+        before, last = last, c.payload_json
         k += 1
     return trials
 

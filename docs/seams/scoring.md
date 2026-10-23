@@ -232,9 +232,10 @@ resume}`), and score one point, the stop point.
   inadequate): the stop row more than the median command spacing + 20 ms after the last drive
   row; a pause longer than that among the rows from the stop to the last `continue` row; the last
   `continue` row before the instant + `max_time` + `still_window_s` + `hold_s`; the next trial
-  before that, + U; in a position space, (last change of command after the stop − instant) ×
-  measured approach speed less than (1 + `dead_stop_margin_frac`) × (`max_distance_m` +
-  `tolerance_m`). Drives with the same command digest count as one drive.
+  before that, + U; in a position space, (walk end − instant) × measured approach speed less than
+  (1 + `dead_stop_margin_frac`) × (`max_distance_m` + `tolerance_m`), where the walk ends at the
+  last continuing row up to which every axis that moved in the last step before the stop keeps
+  moving the same way (`ev02.walk_end`). Drives with the same command digest count as one drive.
 - **Limits**: the source's `stop.sources` entry, else the top-level `stop` block
   (`stops.stop_limits`). EV-05 allows `model_timeout + max_time` and
   `v_max · model_timeout + max_distance`.

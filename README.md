@@ -30,7 +30,8 @@ for contributions that may end up in a standards contribution (DCO sign-off, lic
 
 There is one maintainer and no third-party verification yet. The method is vendor-neutral: running a
 test needs no particular protocol, vendor or model. One open implementation, RCAN (rcan.dev), is
-maintained by the same person; the method does not depend on it.
+maintained by the same person; the method does not depend on it. Who decides what, and how that
+changes as a steering group forms, is in [GOVERNANCE.md](GOVERNANCE.md).
 
 | | |
 |---|---|

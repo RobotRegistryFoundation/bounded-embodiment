@@ -36,7 +36,7 @@ from pathlib import Path
 from bounded_embodiment.generator import Proposal, encode_payload
 
 from ..adapters.base import SendResult
-from .interlocks import confirm
+from .interlocks import InterlockError, confirm
 from .kin import ArmFK, FKError
 from .limits import DEFAULT, Limits
 from .watchdog import StateBox, StateSnapshot, StopLatch, Watchdog
@@ -341,7 +341,7 @@ def _run_session(*, adapter, latch, watchdog, command, feed, prompt, confirm_wor
         return SessionResult("refused", "no robot state could be read")
     watchdog.start()
 
-    if not confirm(prompt, confirm_word, confirm_text):
+    if not _confirm_word(prompt, latch, confirm_word, confirm_text):
         command.abort.set()
         command.join(2.0)
         if latch.tripped:  # the watchdog tripped while the operator was reading
@@ -420,3 +420,17 @@ def _install_sigint(latch: StopLatch, log):
 def _restore_sigint(previous) -> None:
     if previous is not None and threading.current_thread() is threading.main_thread():
         signal.signal(signal.SIGINT, previous)
+
+
+def _confirm_word(prompt, latch: StopLatch, word: str, text: str) -> bool:
+    """The typed word that starts a run (RUN, GO). A terminal prompt (one with ``ask_word``,
+    which run.py gives hardware runs: ``interlocks.typed_word``) throws away input typed before
+    the question and ends at once on the latch or Ctrl+C; any other prompt is asked as
+    ``confirm`` asks. Anything but the exact word cancels, and so does a terminal that fails."""
+    ask = getattr(prompt, "ask_word", None)
+    if ask is None:
+        return confirm(prompt, word, text)
+    try:
+        return bool(ask(word, text, cancelled=lambda: latch.tripped))
+    except (EOFError, KeyboardInterrupt, InterlockError):
+        return False

@@ -66,3 +66,29 @@ def test_the_walk_rule_still_lets_a_long_walk_count(monkeypatch):
     out = _dead_stop_run(monkeypatch, dict(G.STOP_DRIVES), dict(G.STOP_PARAMS["step_cap"]))
     assert out["verdict"]["result"] == "FAIL"
     assert all(t["walk_end_s"] - t["stop_s"] > 0.3 for t in out["stops"]["trials"])
+
+
+@pytest.mark.parametrize("shift_s", [None, 0.1, 0.25])
+def test_a_spare_trial_cannot_hide_a_stop_row_recorded_late(tmp_path, shift_s):
+    """Finding 3: with one spare hardwired trial, ev02-fail's late, far stop recorded 0.1 s late
+    read 0.245 s and 41 mm from the moved instant, its trial was only "inadequate", the spare
+    trial made up the count, and the run PASSed (consistent). A late stop row now leaves its trial
+    unmeasured, so the run is INCONCLUSIVE, never PASS."""
+    G = golden()
+    trials = G.EV02_TRIALS + [("hardwired_stop", "x_plus")]
+    run = tmp_path / "run"
+    run.mkdir()
+    files = G.ev02_files(trials, slow={4: 0.4})  # trial 4 brakes over 0.4 s: late and far
+    if shift_s:  # ... and its stop row (and the commands after it) are recorded late
+        lines = files["raw/commands.csv"].decode().split("\n")
+        files["raw/commands.csv"] = "\n".join(G.move_stop(lines, 4, shift_s)).encode()
+    G.write_files(run, files)
+    G.finish(run, G.declared(test="EV-02", generator=G.ev02_generator(), method_version="0.2",
+                             profile="ev02-illustrative-0.1"))
+    res = rep.verify(run, rep.load_keyring(G.OUT / "keyring.json"))
+    assert res.consistent
+    codes = [r["code"] for r in res.verdict["reasons"]]
+    if shift_s is None:
+        assert res.verdict["result"] == "FAIL" and codes == ["STOP_DISTANCE_EXCEEDED", "STOP_TIME_EXCEEDED"]
+    else:
+        assert res.verdict["result"] == "INCONCLUSIVE" and "STOP_TRIAL_UNMEASURED" in codes

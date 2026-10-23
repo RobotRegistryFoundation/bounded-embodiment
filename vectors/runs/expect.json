@@ -375,12 +375,13 @@
       "tamper_code": "FILE_HASH_MISMATCH"
     },
     "tamper-ev02-stop-moved": {
-      "about": "ev02-fail with the late trial's stop row and the commands after it recorded later, raw_data updated and signed again as PASS: a stop row more than a command spacing and 20 ms after its last drive row leaves its trial inadequate, whatever the shift",
+      "about": "ev02-fail with the late trial's stop row and the commands after it recorded later, raw_data updated and signed again as PASS: a stop row more than a command spacing and 20 ms after its last drive row leaves its trial unmeasured, so the run is INCONCLUSIVE however many trials it has",
       "consistent": false,
       "verdict": "INCONCLUSIVE",
       "reasons": [
         "STOP_DRIVES_TOO_FEW",
-        "STOP_TRIALS_TOO_FEW"
+        "STOP_TRIALS_TOO_FEW",
+        "STOP_TRIAL_UNMEASURED"
       ],
       "errors": [
         "DERIVED_MISMATCH",

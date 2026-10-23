@@ -243,7 +243,7 @@ def score(inp: ScoringInput) -> dict:
             m = measure_stop(meas, t_event=t.stop_t, end_t=end_t, allowed_time_s=max_time,
                              rules=rules, hold_to=hold_to)
         bench = _bench_notes(t, m, rules, spacing, max_time, max_distance, profile, plan["position"])
-        trials.append(_trial_entry(t, m, max_time, max_distance, profile["tolerance_m"], radius, bench))
+        trials.append(_trial_entry(t, m, max_time, max_distance, profile["tolerance_m"], radius, *bench))
     stops = {
         "point": point,
         "speed_limit_mps": v_max,
@@ -288,13 +288,16 @@ def _bench_notes(
     max_distance: float,
     profile: Mapping,
     position: bool,
-) -> list[str]:
-    """Why the commands of a measured trial could not show a stop that does not act (§12.7.4);
-    each note makes the trial inadequate. Exact from commands.csv, apart from the walk rule, which
-    takes the approach speed the instrument measured."""
+) -> tuple[list[str], list[str]]:
+    """Why the commands of a measured trial could not show a stop that does not act (§12.7.4):
+    (notes that leave the trial unmeasured, notes that make it inadequate). Checks 3.1 to 3.4 are
+    exact from commands.csv, and leave it unmeasured: a stop row recorded late, commands that
+    pause or end too soon, and a next trial that begins too soon each hide what the stop did, so a
+    spare trial must not stand in for it (round-2 M3). The walk rule (3.5) takes the approach speed
+    the instrument measured, and makes it inadequate."""
     if not m.measured or spacing is None:
-        return []
-    out = []
+        return [], []
+    out: list[str] = []
     late = spacing + LATENESS_S
     if t.drive_t is not None and t.stop_t - t.drive_t > late:
         out.append(
@@ -315,30 +318,32 @@ def _bench_notes(
             f"the next trial began {t.next_t - t.stop_t:.3f} s after the stop, before this one's "
             f"hold could have ended ({need - t.stop_t + rules.clock_uncertainty_s:.3f} s)"
         )
+    walk: list[str] = []
     if position and m.speed_mps is not None:
         travel = (t.walk_end_t - t.stop_t) * m.speed_mps
         clear = (max_distance + profile["tolerance_m"]) * (1.0 + profile["dead_stop_margin_frac"])
         if travel < clear:
-            out.append(
+            walk.append(
                 f"the walk stops moving {t.walk_end_t - t.stop_t:.3f} s after the stop: at the "
                 f"approach speed a stop that does not act would travel about {travel:.3f} m, not "
                 f"clearly more than the allowed {max_distance + profile['tolerance_m']:.3f} m "
                 f"({clear:.3f} m needed)"
             )
-    return out
+    return out, walk
 
 
-def _status(m: StopTrial, bench: list[str]) -> str:
-    """unmeasured: the measurements cannot judge this stop, or the stop was not issued.
-    not_comparable: the approach was faster than the point's speed limit allows (the declared
-    stop limits hold at the top speed). adequate: measured, both approach chords at least the least
-    approach speed, at rest, the hold measured to its end, and nothing in ``bench`` (the commands
-    could show a stop that does not act). inadequate: measured and comparable, but not adequate."""
-    if not m.measured:
+def _status(m: StopTrial, unmeasured: list[str], inadequate: list[str]) -> str:
+    """unmeasured: the measurements cannot judge this stop, the stop was not issued, or the
+    commands hide what it did (``unmeasured``: §12.7.4 items 3.1 to 3.4). not_comparable: the
+    approach was faster than the point's speed limit allows (the declared stop limits hold at the
+    top speed). adequate: measured, both approach chords at least the least approach speed, at
+    rest, the hold measured to its end, and nothing in ``inadequate`` (the walk rule, 3.5).
+    inadequate: measured and comparable, but not adequate."""
+    if not m.measured or unmeasured:
         return "unmeasured"
     if m.speed_class == "fast":
         return "not_comparable"
-    if m.speed_class == "ok" and m.rest_t_s is not None and m.hold_observed and not bench:
+    if m.speed_class == "ok" and m.rest_t_s is not None and m.hold_observed and not inadequate:
         return "adequate"
     return "inadequate"
 
@@ -363,7 +368,8 @@ def _trial_entry(
     max_distance: float,
     tolerance: float,
     radius: float,
-    bench: list[str],
+    bench_unmeasured: list[str],
+    bench_inadequate: list[str],
 ) -> dict:
     notes = list(m.notes)
     if m.measured and m.speed_class == "slow":
@@ -372,7 +378,7 @@ def _trial_entry(
         notes.append("the approach was faster than the speed limit allows")
     if m.measured and m.rest_t_s is None:
         notes.append("the point did not come to rest")
-    notes += bench
+    notes += bench_unmeasured + bench_inadequate
     return {
         "trial": t.index,
         "source": t.source,
@@ -400,7 +406,7 @@ def _trial_entry(
         "hold_until_s": m.hold_until_s,
         "hold_displacement_m": m.hold_displacement_m,
         "longest_spacing_s": m.longest_spacing_s,
-        "status": _status(m, bench),
+        "status": _status(m, bench_unmeasured, bench_inadequate),
         "notes": notes,
         "failures": _failures(m, max_distance, tolerance, radius),
     }

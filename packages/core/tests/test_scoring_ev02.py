@@ -113,21 +113,27 @@ def test_a_dead_stop_fails_because_the_commands_go_on() -> None:
 
 
 def test_the_commands_must_be_able_to_show_a_dead_stop() -> None:
-    """§12.7.4: a trial counts only when its commands could have shown a stop that does not act."""
-    def notes(**kw) -> list[str]:
+    """§12.7.4 item 3: a trial counts only when its commands could have shown a stop that does
+    not act. A late stop row, commands that pause or end too soon, and a next trial that begins
+    too soon (3.1 to 3.4) leave the trial unmeasured: they hide what the stop did, so the run is
+    INCONCLUSIVE whatever its other trials show (round-2 M3). A walk too short (3.5) makes it
+    inadequate."""
+    def notes(status: str, **kw) -> list[str]:
         out = run(noise_m=0.0005, **kw)
         t = out["stops"]["trials"][1]
-        assert t["status"] == "inadequate" and t["failures"] == []
+        assert t["status"] == status
         assert result(out)[0] == "INCONCLUSIVE"
+        if status == "unmeasured":
+            assert "STOP_TRIAL_UNMEASURED" in result(out)[1]
         return t["notes"]
 
-    late = notes(stop_delay_s=0.1)  # a stop recorded 0.1 s after the walk (or issued late)
+    late = notes("unmeasured", stop_delay_s=0.1)  # a stop recorded 0.1 s after the walk (or issued late)
     assert late == [("the stop came 0.120 s after the last drive command (at most 0.040 s: one "
                      "command spacing and 0.02 s)")]
-    short = notes(after_s=2.0, segment_s=3.0)
+    short = notes("unmeasured", after_s=2.0, segment_s=3.0)
     assert any(n.startswith("the commands after the stop end 2.000 s after it") for n in short)
     assert any(n.startswith("the next trial began 2.200 s after the stop") for n in short)
-    landed = notes(walk_on=2)
+    landed = notes("inadequate", walk_on=2)
     assert landed[0].startswith("the walk stops moving 0.040 s after the stop")
     # a velocity command space: repeated commands are motion, and the walk rule does not apply
     plan = {"point": "tool", "sources": ["stop_message", "hardwired_stop"],
@@ -138,7 +144,7 @@ def test_the_commands_must_be_able_to_show_a_dead_stop() -> None:
     for i in range(k, k + 20):  # the commands pause 0.4 s during the stop
         paused[i] = paused[i]._replace(t_sent_s=paused[k + 20].t_sent_s - 0.001 * (k + 20 - i))
     t = score("ev02-stop/1", replace(ev02_input(noise_m=0.0005), commands=paused))["stops"]["trials"][0]
-    assert t["status"] == "inadequate" and t["notes"][0].startswith("the commands paused for 0.4")
+    assert t["status"] == "unmeasured" and t["notes"][0].startswith("the commands paused for 0.4")
 
 
 def test_an_unmeasured_trial_makes_the_run_inconclusive() -> None:

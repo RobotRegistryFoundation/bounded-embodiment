@@ -1089,9 +1089,9 @@ def move_stop(lines: list[str], trial: int, shift_s: float) -> list[str]:
 def tamper_stop_moved(base: Path, run: Path) -> None:
     """ev02-fail with the late trial's stop row (and the commands after it) recorded STOP_MOVED_S
     later, so that its stop looks quick, raw_data updated and signed again as PASS. The stream
-    still matches (send times are not part of it), but the recomputed trial is not adequate
-    whatever the shift: its stop row comes more than a command spacing and 20 ms after its last
-    drive row (method §12.7.4)."""
+    still matches (send times are not part of it), but the recomputed trial is unmeasured: its
+    stop row comes more than a command spacing and 20 ms after its last drive row (method §12.7.4
+    item 3.1), which hides what the stop did, so no spare trial can stand in for it."""
     report = _copy(base, run)
     report["verdict"]["result"] = "PASS"
     report["verdict"]["reasons"] = []
@@ -1360,14 +1360,15 @@ EXPECT: dict[str, dict] = {
     "tamper-ev02-stop-moved": _e(
         False,
         "INCONCLUSIVE",
-        ["STOP_DRIVES_TOO_FEW", "STOP_TRIALS_TOO_FEW"],
+        ["STOP_DRIVES_TOO_FEW", "STOP_TRIALS_TOO_FEW", "STOP_TRIAL_UNMEASURED"],
         ["DERIVED_MISMATCH", "VERDICT_MISMATCH"],
         warnings=[],
         specific="VERDICT_MISMATCH",
         about=(
             "ev02-fail with the late trial's stop row and the commands after it recorded later, "
             "raw_data updated and signed again as PASS: a stop row more than a command spacing "
-            "and 20 ms after its last drive row leaves its trial inadequate, whatever the shift"
+            "and 20 ms after its last drive row leaves its trial unmeasured, so the run is "
+            "INCONCLUSIVE however many trials it has"
         ),
     ),
     "tamper-ev05-fail-as-pass": _e(

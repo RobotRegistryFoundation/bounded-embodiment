@@ -173,9 +173,9 @@ revision during the period that adds, removes or changes a requirement or rule, 
 verdict is reached, restarts it.
 
 Every decision other than a merge of editorial, documentation, code or result-submission changes is
-recorded in a comment on the pull request or issue. The record gives the kind of change and the rule applied; the dates of the
-comment period; who supported it, who recused and who was absent; and each objection, with how it
-was answered. A decision made under section 4 says "interim rule".
+recorded in a comment on the pull request or issue. The record gives the kind of change and the rule
+applied; the dates of the comment period; who supported it, who recused and who was absent; and each
+objection, with how it was answered. A decision made under section 4 says "interim rule".
 
 ### 3.4 Safety-critical code
 

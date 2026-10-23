@@ -191,6 +191,10 @@ def test_a_hung_source_command_never_blocks_the_runners_stop(cases, case_id):
     assert end["first_stop_t_s"] - latch["t_s"] <= runmod.DEFAULT.state_period_s
     assert "STOP_TRIAL_UNMEASURED" in s["scored"]["internal_reasons"] or s["scored"]["internal"] == "FAIL"
     assert s["scored"]["trials"][0]["status"] == "unmeasured"
+    # round-2 K1: the hung command was ended (at its deadline, or when the run ended before it),
+    # and the end of the run says it may have acted
+    assert end["trials"][0]["command"] in ("SIGTERM", "SIGKILL")
+    assert any("may have acted" in line for line in s["log_tail"])
 
 
 def test_a_stop_that_does_not_stop_is_stopped_by_the_watchdog(cases):

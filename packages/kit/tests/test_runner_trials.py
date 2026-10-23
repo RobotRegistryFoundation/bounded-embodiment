@@ -425,6 +425,49 @@ def test_a_failing_or_hung_source_command_trips_the_latch_off_the_command_thread
     proc.kill()
 
 
+def test_a_source_command_that_outlives_its_deadline_is_ended_and_cannot_act_later(tmp_path):
+    """Round-2 K1: at the deadline the command's process group is ended (SIGTERM, then SIGKILL),
+    reaped, and recorded; the latch reason says it may have acted. Before, it ran on (in a session
+    of its own) and could cut power after the run was over."""
+    import time
+
+    marker = tmp_path / "cut-late"
+    hung = _bare_thread(limits=DEFAULT.__class__(estop_timeout_s=0.6))
+    pend, proc = _pending(f"sh -c 'sleep 2; touch {marker}'", hung)
+    hung._wait_for_command(pend, proc, "trial 1", "power_loss")
+    assert pend["result"].error_kind == "external_timeout"
+    assert pend["ended"] in ("SIGTERM", "SIGKILL") and proc.poll() is not None
+    assert "may have acted" in hung.latch.reason and "ended" in hung.latch.reason
+    time.sleep(2.5)
+    assert not marker.exists()  # the command, and the sleep inside it, were ended
+
+
+def test_a_source_command_still_running_when_the_run_ends_is_ended(tmp_path):
+    """Round-2 K1: the run can end (a tripwire) before a command's deadline; the command does not
+    outlive it. Its row records that it was unfinished, and how it was ended."""
+    import time
+
+    from bounded_embodiment.generator import Proposal
+    from bounded_embodiment_kit.runner.trials import TrialSegment
+
+    marker = tmp_path / "cut-late"
+    seg = TrialSegment((), "trial 1", "stop", "power_loss", 0.8, 0.5, True)
+    thread = _bare_thread(limits=DEFAULT.__class__(estop_timeout_s=30.0), segments=(seg,))
+    pend, proc = _pending(f"sh -c 'sleep 2; touch {marker}'", thread)
+    pend["p"] = Proposal(5, 0.0, "stop:power_loss", {})
+    thread._pending = pend
+    helper = threading.Thread(target=thread._wait_for_command, args=(pend, proc, "trial 1", "power_loss"))
+    helper.start()
+    thread._helper = helper
+    thread.latch.trip("tripwire", "test")
+    thread._close_commands()  # what run() does at its end
+    assert proc.poll() is not None and pend["ended"] in ("SIGTERM", "SIGKILL")
+    assert pend["result"].error_kind == "external_unfinished"
+    assert thread.trials[0]["command"] == pend["ended"]
+    time.sleep(2.5)
+    assert not marker.exists()
+
+
 def test_the_stop_row_waits_for_its_commands_outcome_and_keeps_the_rows_in_order():
     """Rows sent while a source command runs are written after its stop row, in order; a command
     still running when the thread ends is recorded as unfinished (so core leaves the trial

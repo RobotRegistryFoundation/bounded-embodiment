@@ -917,7 +917,26 @@ def execute_run(args, *, prompt: Callable[[str], str] = _ask, log: Callable[[str
                        "ended_wall": time.time(), "run_dir": str(out.resolve())})
     code = _exit_code(result, live)
     log(f"Run ended ({live.latch.kind}: {live.latch.reason}); exit {code}. Run directory: {out}")
+    for warning in _source_command_warnings(live):
+        log(warning)
     return code
+
+
+def _source_command_warnings(live: _Live | None) -> list[str]:
+    """Round-2 K1: a source command the kit had to end may have acted before it was (cut power,
+    opened the stop circuit); the end of the run says so, trial by trial."""
+    c = live.command if live is not None else None
+    if not isinstance(c, TrialCommandThread):
+        return []
+    out = []
+    for t in c.trials:
+        how = t.get("command")
+        if how in ("SIGTERM", "SIGKILL", "survived"):
+            what = ("could not be ended and may still be running" if how == "survived"
+                    else f"was ended ({how})")
+            out.append(f"*** {t['label']}: the {t['source']} command did not finish and {what}. It may have "
+                       "acted: check the machine (its power, its stop circuit) before you touch it.")
+    return out
 
 
 # ----- be goto-start ---------------------------------------------------------------------------

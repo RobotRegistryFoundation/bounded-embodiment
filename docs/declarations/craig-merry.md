@@ -9,7 +9,7 @@ They are prompts, not the declaration.]
 
 | Item (GOVERNANCE.md, section 2.2) | Declaration |
 |---|---|
-| Employer | [TO COMPLETE. `labs/craig-merry/lab.json` in bounded-embodiment-results gives `"affiliation": "independent"`; make the two agree.] |
+| Employer | [TO COMPLETE. `labs/craig-merry/lab.json` in bounded-embodiment-results gives `"affiliation": "independent"`: check that lab.json still describes the lab; it need not name an employer.] |
 | Who funds his work on robots or AI | [TO COMPLETE] |
 | Projects he leads | [TO COMPLETE. Public record: RCAN (rcan-spec, rcan-py and rcan-ts); the Robot Registry Foundation registry and its website, robotregistryfoundation.org (`craigm26/RobotRegistryFoundation`); OpenCastor (`craigm26/OpenCastor`); ROBOT.md (robotmd.dev; `RobotRegistryFoundation/robot-md` and `RobotRegistryFoundation/robot-md-mcp`); this repository and bounded-embodiment-results. Not exhaustive.] |
 | Any financial stake in a project another member leads | [TO COMPLETE] |

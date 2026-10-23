@@ -49,8 +49,9 @@ robotregistryfoundation.org builds from his own repository `craigm26/RobotRegist
 with him, outside this document. The Robot Registry Foundation is a proposal in a draft charter, not
 a legal entity, and it does not govern this project.
 
-If the maintainer steps down, is removed, or does not respond on the repository for 90 days, the
-other members appoint a new maintainer as they fill any seat (section 2.2).
+If the maintainer steps down, is removed or leaves seat 1, or, while another member is seated, does
+not respond on the repository or by email for 90 days, he ceases to be maintainer and holds no seat,
+and the other members appoint a new maintainer as they fill any seat (section 2.2).
 
 ### 2.2 Steering group
 
@@ -89,8 +90,8 @@ removal or a new declaration) is a record, not a change to this document.
 term unless reappointed, when a change in their circumstances makes them affiliated with another
 member, or when 90 days have passed since the first of three or more absences (section 3.2) and
 they have not supported or objected to any decision since that first absence. Recusals don't count
-as absences and don't break the run. [TO DECIDE: seat 1 and absence. Either the absence rule does
-not apply to seat 1, or a maintainer who leaves seat 1 also ceases to be maintainer.]
+as absences and don't break the run. The only seated member does not leave at the end of a term or
+for absence. [TO DECIDE: whether the absence rule applies to seat 1.]
 
 **Removal.** A member may be removed for a breach of the Code of Conduct or an undisclosed conflict
 of interest, with the support of two members other than the one concerned. A removal, of a member or
@@ -175,13 +176,14 @@ that wrote the change, never of the person who directs it.
 | Result submission | A pull request to bounded-embodiment-results that adds runs, a lab registration or a withdrawal | none | any committer merges once its CI passes and it follows `POLICY.md`; see section 5, item 3 |
 | Removals under POLICY.md | Material removed under its privacy and legal rules; a `test-` lab | none | any committer; recorded (section 3.3) and reported to the other members |
 | This document | Any change, other than updating the table in section 2.2 to record a decision | 14 days | group approval, within the limits of section 7 |
-| Appointments and removals | Seats and committers | 14 days for a seat, 7 for a committer; a removal waits 14 days after the person is told why (section 2.2) | sections 2.2 and 2.4 |
+| Appointments and removals | Seats and committers | 14 days for a seat, 7 for a committer; a removal waits 14 days after the person is told why (section 2.2); none under section 6 | sections 2.2 and 2.4 |
 
-A pull request that is more than one kind meets the rules of each. A change that fits no row is
-handled as the strictest kind that could apply. If anyone says, with a reason, on a pull request or
-within 14 days after it was merged, that it belongs to a stricter kind, it is handled as that kind;
-for a merged change, the comment period runs afterwards, and if the change has not been decided in
-its favour when that period closes, it is reverted until it is.
+A pull request that is more than one kind meets the rules of each. A results-policy change applies
+only to submissions made after it is merged. A change that fits no row is handled as the strictest
+kind that could apply. If anyone says, with a reason, on a pull request or within 14 days after it
+was merged, that it belongs to a stricter kind, it is handled as that kind; for a merged change, its
+comment period opens on the day that is said, and if the change has not been decided in its favour
+when the period closes, it is reverted until it is.
 
 A fix for a security or run-safety problem ([SECURITY.md](SECURITY.md)) in code, safety-critical
 code or the results repository's CI may be merged before the reviews or comment period it needs, if
@@ -221,8 +223,8 @@ pull request, no longer counts.
 
 Every decision other than a merge of editorial, documentation, code or result-submission changes is
 recorded in a comment on the pull request or issue. The record gives the kind of change and the rule
-applied; the dates of the comment period; who supported it, who recused and who was absent; and each
-objection, with how it was answered.
+applied; the commit decided, where there is one; the dates of the comment period; who supported it,
+who recused and who was absent; and each objection, with how it was answered.
 
 ### 3.4 Safety-critical code
 
@@ -298,10 +300,10 @@ two members are eligible, they wait. Everything else continues.
 
 Everyone follows the [Code of Conduct](CODE_OF_CONDUCT.md). The community leaders it refers to are
 the steering group's members. A report about a member goes to the other members, who decide what to
-do by group approval among themselves, without a public comment period; the member concerned
-recuses. When a member is seated, CODE_OF_CONDUCT.md and SECURITY.md are updated, as an editorial
-change, to give their contact. While the maintainer is the only member, no one else receives a
-report about him.
+do, removal included, by group approval among themselves, with no comment period; the member
+concerned recuses. When a member is seated, CODE_OF_CONDUCT.md and SECURITY.md are updated, as an
+editorial change, to give their contact. While only one member is seated, no one else receives a
+report about them.
 
 Every commit is signed off under the Developer Certificate of Origin, and contributions are licensed
 like the files they change ([CONTRIBUTING.md](CONTRIBUTING.md#sign-off-dco),

@@ -66,10 +66,13 @@ from .feeds import SimFeed, UDPFeed, parse_instrument
 from .interlocks import (
     InterlockError,
     Ledger,
+    check_command,
     default_ledger_path,
     file_sha256,
     require_run_flags,
+    require_terminal,
     setup_hash,
+    typed_word,
 )
 from .kin import ArmFK, FKError
 from .limits import DEFAULT, Limits
@@ -96,7 +99,10 @@ class RunError(RuntimeError):
 
 
 def _stderr(msg: str) -> None:
-    print(msg, file=sys.stderr, flush=True)
+    try:
+        print(msg, file=sys.stderr, flush=True)
+    except OSError:  # the terminal is gone (a hangup): the stop and the records go on without it
+        pass
 
 
 def _iso(t: float | None = None) -> str:
@@ -322,7 +328,9 @@ class _Live:
         execute it and would fire a false e-stop."""
         if self.watchdog.is_alive():
             self.watchdog.stop()
-            self.watchdog.join(2.0)
+            # it may be running the escalation command, which takes up to estop_timeout_s: wait
+            # for it, or declared.json loses the record of a command that ran
+            self.watchdog.join(self.limits.estop_timeout_s + 2.0)
         stuck = self.command.is_alive()
         closed = "not closed: the command thread is stuck holding the bus" if stuck else "closed"
         if not stuck:
@@ -366,6 +374,19 @@ def _ask(question: str) -> str:
     return input(question)
 
 
+def terminal_prompt(prompt: Callable[[str], str]) -> Callable[[str], str]:
+    """``prompt`` for a run on hardware: the word that starts it (RUN, GO) is asked at the terminal
+    with ``interlocks.typed_word`` (``session._confirm_word`` looks for ``ask_word``), so input typed
+    before the question never answers it and Ctrl+C ends it at once; any other question (the
+    adapter's OFF at close) goes through ``prompt`` as before."""
+
+    def ask(question: str) -> str:
+        return prompt(question)
+
+    ask.ask_word = typed_word
+    return ask
+
+
 def load_tour(space, path) -> tuple[object, bytes]:
     """The EV-10 waypoints file (waypoints 0.1), checked against the command space: (Waypoints, its bytes)."""
     from bounded_embodiment.report.waypoints import check_commands
@@ -404,6 +425,7 @@ def execute_run(args, *, prompt: Callable[[str], str] = _ask, log: Callable[[str
         args.seed = 0 if test == "ev10" else 7
     try:
         require_run_flags(args, mode)
+        check_command(getattr(args, "estop_cmd", None), "--estop-cmd")  # a typo is found now (item 4)
         if test == "ev10" and (mode != "full" or not getattr(args, "waypoints", None)):
             raise RunError("EV-10 runs the be-waypoints/1 tour: --mode full --waypoints FILE")
         if test == "ev10" and getattr(args, "seconds", None):
@@ -440,6 +462,9 @@ def execute_run(args, *, prompt: Callable[[str], str] = _ask, log: Callable[[str
         if kind == "none" and not fk_tripwire:
             raise RunError("with no live instrument the robot's own state is the only supervision, so the "
                            "FK tripwire must be on (--urdf, and no --no-fk-tripwire-i-understand)")
+        if not desc.get("simulation"):  # RUN from a terminal only: never piped, never typed ahead
+            require_terminal()
+            prompt = terminal_prompt(prompt)
         urdf_sha = file_sha256(args.urdf)
         file_space = load_command_space(args.command_space)
         if test == "ev10":
@@ -629,6 +654,7 @@ def execute_goto_start(args, *, prompt: Callable[[str], str] = _ask,
                        log: Callable[[str], None] = _stderr, limits: Limits = DEFAULT) -> int:
     try:
         require_run_flags(args, "goto-start")
+        check_command(getattr(args, "estop_cmd", None), "--estop-cmd")
         if getattr(args, "wrapper", None):
             raise RunError("goto-start moves the bare robot; drop --wrapper")
         if not args.urdf:
@@ -650,6 +676,9 @@ def execute_goto_start(args, *, prompt: Callable[[str], str] = _ask,
         context = _context(args, "goto-start", kit_config, limits, prompt, log)
         adapter = adapter_module(args.adapter).from_args(args, context)
         fk = ArmFK.build(args.urdf, kit_config.get("joint_map"), envelope)
+        if not adapter.describe().get("simulation"):  # GO from a terminal only: never piped or typed ahead
+            require_terminal()
+            prompt = terminal_prompt(prompt)
     except (InterlockError, RunError, AdapterError, FKError, ValueError, OSError) as e:
         log(f"Refused: {e}")
         return EXIT_REFUSED

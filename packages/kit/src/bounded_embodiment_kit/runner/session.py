@@ -36,7 +36,7 @@ from pathlib import Path
 from bounded_embodiment.generator import Proposal, encode_payload
 
 from ..adapters.base import SendResult
-from .interlocks import confirm
+from .interlocks import InterlockError, confirm
 from .kin import ArmFK, FKError
 from .limits import DEFAULT, Limits
 from .watchdog import StateBox, StateSnapshot, StopLatch, Watchdog
@@ -341,7 +341,7 @@ def _run_session(*, adapter, latch, watchdog, command, feed, prompt, confirm_wor
         return SessionResult("refused", "no robot state could be read")
     watchdog.start()
 
-    if not confirm(prompt, confirm_word, confirm_text):
+    if not _confirm_word(prompt, latch, confirm_word, confirm_text, log):
         command.abort.set()
         command.join(2.0)
         if latch.tripped:  # the watchdog tripped while the operator was reading
@@ -403,20 +403,55 @@ def _post_roll(latch, command, limits) -> None:
         time.sleep(min(0.05, max(0.0, until - latch.clock())))
 
 
+#: The signals that stop a run as Ctrl+C does, and what the latch records for each. A hangup (an
+#: ssh session that drops) and SIGTERM would otherwise end the process at once, with no stop and
+#: no end record (round-2 review of #13, item 3). There is no SIGHUP on Windows.
+STOP_SIGNALS = (("SIGINT", "Ctrl+C"), ("SIGHUP", "hangup (SIGHUP): the terminal was lost"),
+                ("SIGTERM", "SIGTERM"))
+
+
 def _install_sigint(latch: StopLatch, log):
-    """Ctrl+C trips the latch (the command thread then stops the arm). Main thread only."""
+    """Ctrl+C trips the latch (the command thread then stops the arm), and so do SIGHUP and
+    SIGTERM (``STOP_SIGNALS``). Main thread only. Returns the handlers to restore."""
     if threading.current_thread() is not threading.main_thread():
         return None
+    previous = {}
+    for name, why in STOP_SIGNALS:
+        sig = getattr(signal, name, None)
+        if sig is None:
+            continue
 
-    def handler(signum, frame):
-        if latch.trip("operator", "Ctrl+C"):
-            log("\nStopping (Ctrl+C).")
-        else:
-            log("\nAlready stopping. Cut power if the arm is moving.")
+        def handler(signum, frame, why=why):
+            said = f"\nStopping ({why})." if latch.trip("operator", why) else (
+                "\nAlready stopping. Cut power if the arm is moving.")
+            try:
+                log(said)
+            except OSError:  # the terminal is gone: the stop goes on without it
+                pass
 
-    return signal.signal(signal.SIGINT, handler)
+        previous[sig] = signal.signal(sig, handler)
+    return previous
 
 
 def _restore_sigint(previous) -> None:
-    if previous is not None and threading.current_thread() is threading.main_thread():
-        signal.signal(signal.SIGINT, previous)
+    if previous and threading.current_thread() is threading.main_thread():
+        for sig, handler in previous.items():
+            signal.signal(sig, handler)
+
+
+def _confirm_word(prompt, latch: StopLatch, word: str, text: str, log=lambda m: None) -> bool:
+    """The typed word that starts a run (RUN, GO). A terminal prompt (one with ``ask_word``,
+    which run.py gives hardware runs: ``interlocks.typed_word``) throws away input typed before
+    the question and ends at once on the latch or Ctrl+C; any other prompt is asked as
+    ``confirm`` asks. Anything but the exact word cancels, and so does a terminal that fails,
+    which is logged with its reason (round-2 review of #13, item 2)."""
+    ask = getattr(prompt, "ask_word", None)
+    if ask is None:
+        return confirm(prompt, word, text)
+    try:
+        return bool(ask(word, text, cancelled=lambda: latch.tripped))
+    except (EOFError, KeyboardInterrupt):
+        return False
+    except InterlockError as e:
+        log(f"Cannot ask for {word}: {e}")
+        return False

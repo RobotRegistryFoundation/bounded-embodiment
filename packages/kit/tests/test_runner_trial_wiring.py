@@ -83,12 +83,12 @@ def test_a_hardware_trial_run_refuses_piped_input_before_anything_moves(tmp_path
 def test_next_on_hardware_is_a_typed_word(tmp_path, as_hardware, monkeypatch):
     """review N1: on hardware NEXT is asked through interlocks.typed_word (input typed ahead never
     answers it), never through the plain prompt. Here the operator declines it, so trial 2 never
-    begins."""
+    begins. (With #13, RUN on hardware is asked through typed_word too; the test holds either way.)"""
     words = []
 
     def typed_word(word, text, **kw):
         words.append(word)
-        return False
+        return word == "RUN"  # RUN is typed; NEXT is declined
 
     monkeypatch.setattr(runmod, "require_terminal", lambda: None)  # a test has no terminal
     monkeypatch.setattr(runmod, "typed_word", typed_word)
@@ -104,7 +104,7 @@ def test_next_on_hardware_is_a_typed_word(tmp_path, as_hardware, monkeypatch):
     with virtual_time(VirtualClock(), modules, joins):
         code = runmod.execute_run(args, prompt=prompt, log=logs.append)
     end = json.loads((tmp_path / "run" / "declared.json").read_text(encoding="utf-8"))["end"]
-    assert words == ["NEXT"], logs
+    assert words in (["NEXT"], ["RUN", "NEXT"]), logs
     assert not any("NEXT" in q for q in asked)
     assert end["latch"]["kind"] == "operator" and "before trial 2" in end["latch"]["reason"]
     assert end["trials"][0]["instant_t_s"] is not None and end["trials"][1]["instant_t_s"] is None

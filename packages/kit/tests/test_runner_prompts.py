@@ -12,6 +12,7 @@ import time
 import pytest
 from bounded_embodiment_kit.runner.interlocks import (
     InterlockError,
+    check_command,
     require_terminal,
     typed_word,
 )
@@ -41,8 +42,9 @@ def test_a_typed_word_at_a_terminal_ignores_what_was_typed_ahead_and_ends_on_the
         assert time.monotonic() - t0 < 1.0  # Ctrl+C (the latch) ends it without Enter
         require_terminal(tty)
     os.close(master)
-    with pytest.raises(InterlockError, match="ssh -t"):
+    with pytest.raises(InterlockError, match="ssh -t") as refused:
         require_terminal(io.StringIO("NEXT\n"))
+    assert "tmux or screen" in str(refused.value)
 
 
 def test_a_typed_word_from_anything_but_a_terminal_is_refused():
@@ -56,3 +58,48 @@ def test_a_typed_word_from_anything_but_a_terminal_is_refused():
             typed_word("NEXT", "trial 1 done.", stdin=pipe, out=io.StringIO())
     with pytest.raises(InterlockError, match="not a terminal"):
         typed_word("NEXT", "trial 1 done.", stdin=io.StringIO("NEXT\n"), out=io.StringIO())
+
+
+def test_without_termios_a_hardware_run_is_refused_before_anything_connects(monkeypatch):
+    """Round-2 review of #13, item 2: without termios every typed word was refused once the robot
+    was connected, as a bare cancel; require_terminal now refuses first, and says why."""
+    import sys
+
+    master, slave = os.openpty()
+    with os.fdopen(slave, "r", closefd=True) as tty:
+        monkeypatch.setitem(sys.modules, "termios", None)  # import termios: ImportError
+        with pytest.raises(InterlockError, match="needs a POSIX terminal"):
+            require_terminal(tty)
+    os.close(master)
+
+
+def test_a_terminal_that_fails_while_asking_is_a_refusal_not_a_crash(monkeypatch):
+    """Round-2 kit review N-e: an OSError from the terminal (EIO once the other end has hung up)
+    left typed_word's read loop as an OSError, which nothing caught; it is an InterlockError now."""
+    import errno
+    import types
+
+    from bounded_embodiment_kit.runner import interlocks
+
+    def hung_up(*_):
+        raise OSError(errno.EIO, "Input/output error")
+
+    master, slave = os.openpty()
+    with os.fdopen(slave, "r", closefd=True) as tty:
+        monkeypatch.setattr(interlocks, "select", types.SimpleNamespace(select=hung_up))
+        with pytest.raises(InterlockError, match="the terminal failed while asking for NEXT"):
+            typed_word("NEXT", "trial 1 done.", stdin=tty, out=io.StringIO())
+    os.close(master)
+
+
+def test_a_command_is_checked_before_anything_connects(tmp_path):
+    """Round-2 reviews (N-b of #12, item 4 of #13): a command the runner starts without a shell
+    must split and name a program on PATH, or a typo is found only when the command is needed."""
+    check_command(None, "--estop-cmd")
+    check_command("true", "--estop-cmd")
+    check_command(f"touch {tmp_path / 'estop'}", "--power-loss-cmd")
+    for cmd, words in (("relay-of-no-such-name --cut", "is not a program on PATH"),
+                       ("sh -c 'unbalanced", "does not split"), ("  ", "is empty")):
+        with pytest.raises(InterlockError, match=words) as refused:
+            check_command(cmd, "--power-loss-cmd")
+        assert str(refused.value).startswith("--power-loss-cmd")

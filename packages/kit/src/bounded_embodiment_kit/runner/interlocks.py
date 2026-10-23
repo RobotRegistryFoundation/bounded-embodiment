@@ -19,6 +19,8 @@ import hashlib
 import json
 import os
 import select
+import shlex
+import shutil
 import sys
 import time
 from collections.abc import Callable
@@ -29,6 +31,7 @@ from bounded_embodiment.canonical import sha256_jcs
 __all__ = [
     "InterlockError",
     "Ledger",
+    "check_command",
     "confirm",
     "default_ledger_path",
     "file_sha256",
@@ -66,15 +69,42 @@ def confirm(prompt: Callable[[str], str], word: str, text: str) -> bool:
 
 def require_terminal(stdin=None) -> None:
     """A hardware run takes its typed words from a terminal: piped or redirected input, or input
-    typed before the question, could answer with nobody at the machine (review S3)."""
+    typed before the question, could answer with nobody at the machine (review S3). ``typed_word``
+    clears input typed ahead with termios: on a platform without it every typed word would be
+    refused once the robot is connected, so the run is refused here instead, before anything
+    connects, and says why (round-2 review of #13, item 2)."""
     stdin = sys.stdin if stdin is None else stdin
+    try:
+        import termios  # noqa: F401
+    except ImportError:
+        raise InterlockError("a hardware run needs a POSIX terminal: its typed words clear input "
+                             "typed ahead with termios, which this platform does not have") from None
     try:
         tty = bool(stdin.isatty())
     except (AttributeError, ValueError, OSError):
         tty = False
     if not tty:
         raise InterlockError("a hardware run needs its typed words from a terminal: run it in one "
-                             "(ssh -t for a remote machine), not with piped or redirected input")
+                             "(ssh -t for a remote machine, inside tmux or screen so that a dropped "
+                             "connection does not end the session), not with piped or redirected input")
+
+
+def check_command(cmd: str | None, flag: str) -> None:
+    """A command the runner starts without a shell (``shlex.split``), checked before anything
+    connects: it must split, and its program must be found (``shutil.which``), so that a typo is
+    found now rather than when the command is needed (round-2 reviews: N-b for the stop sources'
+    commands, item 4 of #13 for ``--estop-cmd``). Nothing is run. None (not given) passes."""
+    if cmd is None:
+        return
+    try:
+        argv = shlex.split(cmd)
+    except ValueError as e:
+        raise InterlockError(f"{flag} {cmd!r} does not split into a program and its arguments: {e}") from None
+    if not argv:
+        raise InterlockError(f"{flag} is empty")
+    if shutil.which(argv[0]) is None:
+        raise InterlockError(f"{flag}: {argv[0]!r} is not a program on PATH, or not executable; the runner "
+                             "starts it without a shell, and it would fail only when it is needed")
 
 
 def typed_word(word: str, text: str, *, cancelled: Callable[[], bool] = lambda: False,
@@ -85,7 +115,8 @@ def typed_word(word: str, text: str, *, cancelled: Callable[[], bool] = lambda: 
     exact word (surrounding spaces ignored) goes ahead; anything else, end of input or
     ``cancelled()`` is False. One helper for every typed word: NEXT uses it now on hardware, and
     RUN and GO can adopt it. POSIX only, from a terminal only: anything else is refused
-    (InterlockError), never answered."""
+    (InterlockError), never answered, and so is a terminal that fails while it asks (an OSError
+    such as EIO after a hangup)."""
     stdin = sys.stdin if stdin is None else stdin
     out = sys.stderr if out is None else out
     try:
@@ -105,10 +136,13 @@ def typed_word(word: str, text: str, *, cancelled: Callable[[], bool] = lambda: 
             out.write("\n")
             out.flush()
             return False
-        ready, _, _ = select.select([fd], [], [], poll_s)
-        if not ready:
-            continue
-        chunk = os.read(fd, 1024)
+        try:
+            ready, _, _ = select.select([fd], [], [], poll_s)
+            if not ready:
+                continue
+            chunk = os.read(fd, 1024)
+        except (OSError, ValueError) as e:  # the terminal went away (EIO after a hangup): no answer
+            raise InterlockError(f"the terminal failed while asking for {word}: {e}") from None
         if not chunk:  # end of input
             return False
         buf += chunk

@@ -81,9 +81,10 @@ anything moves, a plan that needs what the adapter does not declare.
   order: every goal register to the present position, read the goals back, and only then torque on.
 - A plan whose sources need a method the adapter lists but cannot call (`trigger_stop` or
   `reset_stop` missing) is refused before RUN (review N8).
-- `lerobot`: `trigger_stop` calls the lab wrapper's `stop()` and `reset_stop` its `resume(source)`
-  when it takes an argument, else `resume()` (`base.call_resume`; a `resume(source)` should clear
-  only that stop), under the bus lock, only when the wrapper's class defines both (a wrapper
+- `lerobot`: `trigger_stop` calls the lab wrapper's `stop()` and `reset_stop` its
+  `resume(source=...)` when its `resume` has a parameter named `source` or takes `**kwargs`, else
+  `resume()` (`base.call_resume`, round-2 K7: never the first positional parameter, whatever its
+  name; a `resume(source)` should clear only that stop), under the bus lock, only when the wrapper's class defines both (a wrapper
   forwarding unknown attributes to the robot does not count). None of the reference gates in
   `examples/reference-gates/` defines `stop()` or `resume()`. It never resets `hardwired_stop` or `power_loss`: an SO-101 whose
   servo power was cut comes back with torque off and power-up goals, and only `connect_safely`

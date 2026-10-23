@@ -78,3 +78,47 @@ def test_resume_is_told_the_source_when_it_takes_one():
     call_resume(Told(), "heartbeat_loss")
     call_resume(_trial_gates.TrialGate(object(), {}), "stop_message")  # the test gate: plain
     assert seen == ["plain", "heartbeat_loss"]
+
+
+def test_the_lerobot_adapter_tells_a_wrappers_resume_which_stop_to_clear(tmp_path):
+    """Round-2 K6: lerobot's reset_stop goes through call_resume, so a wrapper whose resume has a
+    source parameter is told which stop to clear (a reset_stop calling resume() without it failed
+    no test)."""
+    arm = fakes.sim_adapter(wrapper="_trial_gates:stoppable", estop_file=tmp_path / "e")
+    arm.open()
+    told = []
+    arm._target.resume = lambda source=None: told.append(source)
+    try:
+        arm.reset_stop("stop_message")
+    finally:
+        arm.close()
+    assert told == ["stop_message"]
+
+
+def test_resume_is_told_the_source_by_name_only():
+    """Round-2 K7: the source went to whatever the first positional parameter was, so a gate
+    written as resume(self, clear_all_holds=False) got clear_all_holds="stop_message" (truthy, the
+    opposite of N5's intent), and resume(self, *, source=None) was never told. It is now passed as
+    source=, and only to a resume that has a parameter called source, or takes **kwargs."""
+    seen = []
+
+    class KeywordOnly:
+        def resume(self, *, source=None):
+            seen.append(("keyword-only", source))
+
+    class AnyKeyword:
+        def resume(self, **kw):
+            seen.append(("**kw", kw))
+
+    class OtherFirst:
+        def resume(self, clear_all_holds=False):
+            seen.append(("other", clear_all_holds))
+
+    class Positional:
+        def resume(self, *args):
+            seen.append(("*args", args))
+
+    for gate in (KeywordOnly(), AnyKeyword(), OtherFirst(), Positional()):
+        call_resume(gate, "stop_message")
+    assert seen == [("keyword-only", "stop_message"), ("**kw", {"source": "stop_message"}),
+                    ("other", False), ("*args", ())]

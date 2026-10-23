@@ -58,8 +58,8 @@ adapter MUST refuse both while latched: look at the latch before taking the bus 
 under it, as ``send`` does. After a ``hardwired_stop`` or ``power_loss`` a reset MUST bring the
 machine back the way ``connect_safely`` connects it: every goal register set to the present
 position and read back, and only then torque on, so that nothing moves when power returns.
-``call_resume`` calls a wrapper's ``resume(source)`` when it takes the source (it should then
-clear only that stop), else ``resume()``.
+``call_resume`` calls a wrapper's ``resume(source=...)`` when its ``resume`` has a parameter named
+``source``, or takes ``**kwargs`` (it should then clear only that stop), else ``resume()``.
 """
 from __future__ import annotations
 
@@ -99,17 +99,18 @@ ADAPTER_STOP_SOURCES = ("stop_message",)
 
 
 def call_resume(target, source: str) -> None:
-    """``target.resume(source)`` when its ``resume`` takes an argument, else ``target.resume()``
-    (review N5): a gate that knows which stop to clear is told, and a gate written for the plain
-    ``resume()`` keeps working unchanged."""
+    """``target.resume(source=source)`` when its ``resume`` has a parameter named ``source``, or
+    takes ``**kwargs``; else ``target.resume()`` (review N5, round-2 K7): a gate that knows which
+    stop to clear is told, by name, so that no other first parameter is ever handed the source, and
+    a gate written for the plain ``resume()`` keeps working unchanged."""
     fn = target.resume
     try:
-        params = [p for p in inspect.signature(fn).parameters.values()
-                  if p.kind in (p.POSITIONAL_ONLY, p.POSITIONAL_OR_KEYWORD, p.VAR_POSITIONAL)]
+        params = inspect.signature(fn).parameters.values()
     except (TypeError, ValueError):
-        params = []
-    if params:
-        fn(source)
+        params = ()
+    named = any(p.name == "source" and p.kind in (p.POSITIONAL_OR_KEYWORD, p.KEYWORD_ONLY) for p in params)
+    if named or any(p.kind == p.VAR_KEYWORD for p in params):
+        fn(source=source)
     else:
         fn()
 

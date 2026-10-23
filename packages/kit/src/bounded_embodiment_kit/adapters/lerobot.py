@@ -312,7 +312,7 @@ class LeRobotAdapter:
             self._target.stop()
 
     def reset_stop(self, source: str) -> None:
-        """Command thread only, after the operator's NEXT: the lab wrapper's ``resume(source)``
+        """Command thread only, after the operator's NEXT: the lab wrapper's ``resume(source=...)``
         (or ``resume()``, ``base.call_resume``), which must not move the arm. Hardwired stops and
         power loss are refused (module docstring)."""
         if source not in ("stop_message", "heartbeat_loss", "comms_loss") or not self._wrapper_has("resume"):

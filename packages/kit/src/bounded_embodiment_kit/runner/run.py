@@ -66,6 +66,7 @@ from .feeds import SimFeed, UDPFeed, parse_instrument
 from .interlocks import (
     InterlockError,
     Ledger,
+    check_command,
     default_ledger_path,
     file_sha256,
     require_run_flags,
@@ -421,6 +422,7 @@ def execute_run(args, *, prompt: Callable[[str], str] = _ask, log: Callable[[str
         args.seed = 0 if test == "ev10" else 7
     try:
         require_run_flags(args, mode)
+        check_command(getattr(args, "estop_cmd", None), "--estop-cmd")  # a typo is found now (item 4)
         if test == "ev10" and (mode != "full" or not getattr(args, "waypoints", None)):
             raise RunError("EV-10 runs the be-waypoints/1 tour: --mode full --waypoints FILE")
         if test == "ev10" and getattr(args, "seconds", None):
@@ -649,6 +651,7 @@ def execute_goto_start(args, *, prompt: Callable[[str], str] = _ask,
                        log: Callable[[str], None] = _stderr, limits: Limits = DEFAULT) -> int:
     try:
         require_run_flags(args, "goto-start")
+        check_command(getattr(args, "estop_cmd", None), "--estop-cmd")
         if getattr(args, "wrapper", None):
             raise RunError("goto-start moves the bare robot; drop --wrapper")
         if not args.urdf:

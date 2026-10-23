@@ -388,7 +388,7 @@ def test_model_loss_in_a_velocity_space_starts_each_trial_and_restart_at_rest() 
     # a position space keeps one walk through the whole stream (unchanged)
     pos = streams.split_segments(streams.model_loss_stream(space(), loss_plan(), g.LOSS_SEED, g.LOSS_PARAMS))
     last = [p.payload for p in pos[0] if p.strategy == "motion"][-1]
-    first_next = [p.payload for p in pos[1] if p.strategy == "motion"][0]
+    first_next = next(p.payload for p in pos[1] if p.strategy == "motion")
     assert max(abs(first_next[k] - last[k]) for k in ("x", "y", "z")) <= 0.005 + 1e-12
 
 

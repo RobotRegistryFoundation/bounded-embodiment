@@ -7,17 +7,16 @@ from __future__ import annotations
 import math
 from dataclasses import replace
 
+import _scoring_synth as T
 import pytest
 from _report_helpers import golden, in_repo
-
-import _scoring_synth as T
 from bounded_embodiment import report as rep
 from bounded_embodiment.commandspace import load_command_space
 from bounded_embodiment.envelope import load
 from bounded_embodiment.generator import encode_payload
 from bounded_embodiment.rawdata import Command
-from bounded_embodiment.report.plans import check_plan_commands
 from bounded_embodiment.report import streams
+from bounded_embodiment.report.plans import check_plan_commands
 from bounded_embodiment.scoring import ScoringInput, ev02, ev05
 from bounded_embodiment.scoring import stops as stops_mod
 

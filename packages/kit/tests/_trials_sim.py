@@ -14,7 +14,8 @@ OUT_DIR/CASE/summary.json.
 
 The operator is scripted: RUN at the start, NEXT before each trial after the first (deleting the
 simulated e-stop file first, which is how an operator resets the simulated external stop), and
-Enter at the OFF question. The lab's --estop-cmd is ``touch <the e-stop file>``.
+Enter at the OFF question. The lab's --power-loss-cmd is ``touch <the e-stop file>``, and its
+--estop-cmd (the CUT POWER escalation only) ``touch <case>/escalated``.
 """
 from __future__ import annotations
 

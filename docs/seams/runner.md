@@ -316,7 +316,7 @@ is made, at every command it will send, every walk included (`check_trial_propos
 the stop point may not be commanded faster than its speed limit plus the profile's speed
 tolerance; and in EV-02 the commands that go on after each stop must carry the stop point at least
 (1 + `dead_stop_margin_frac`) x (the source's `max_distance_m` + `tolerance_m`) further, so that a
-stop that does nothing fails rather than passes (review B1). A step-capped walk starts at the
+stop that does nothing fails rather than passes (review B2). A step-capped walk starts at the
 plan's start, so in a position space every capped axis must be within one cap of it when the run
 starts (`be goto-start` first). The source checks (above) run once the adapter is open, before RUN.
 
@@ -399,10 +399,11 @@ EV-02 and EV-05 trial runs (added 22 Oct, draft; `packages/kit/tests/_trials_sim
    1.30 s after the stop instant (0.8 s allowed + 0.5 s grace), by when it has gone 0.65 m, and it
    comes to rest 0.78 m from where it was at the stop instant, against 0.3 m allowed; the arm walks
    on with the commands that continue after the stop (D1), and scores FAIL-shaped
-   (`STOP_DISTANCE_EXCEEDED`, `STOP_TIME_EXCEEDED`, 113 mm), and the catch-up check ends the run
-   before trial 2 (31 deg from where its walk begins). A gate whose `resume()` moves the arm 8 deg:
-   tripwire 3 trips during the start check after the reset, and the runner's stop follows within
-   0.1 ms. A power-loss command that hangs (`sleep 10`): the command thread goes on, the rover runs
+   (`STOP_DISTANCE_EXCEEDED`, `STOP_TIME_EXCEEDED`, 113 mm), and the catch-up guard ends the run
+   before trial 2 (31 deg, 21 step caps, from where its walk begins). A gate whose `resume()`
+   moves the arm 8 deg: tripwire 3 trips during the start check after the reset, and the runner's
+   stop follows within one state period (the test's bound; the round-2 review measured 0.47 ms in
+   real time). A power-loss command that hangs (`sleep 10`): the command thread goes on, the rover runs
    on (nothing was cut) and tripwire 3 trips at 1.30 s; on the arm the command's 5 s timeout trips
    the latch; either way the runner's stop follows within one state period and the stop row says
    the stop was not issued (`external_unfinished`, `external_timeout`), so the trial is unmeasured

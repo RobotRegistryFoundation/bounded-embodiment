@@ -33,8 +33,10 @@ Modes:
   every plan command is checked against the command space, and (joint positions, with FK) every
   zoned point must be inside its zones at each of them; a step-capped walk must start within one
   step of the plan's start; a source the adapter cannot issue, or (hardwired stop, power loss)
-  that has no --estop-cmd or that the adapter cannot reset after, is refused before anything
-  connects or before anything moves. Seed 0 (ev02) or 7 (ev05) unless given.
+  that has no command of its own (--hardwired-stop-cmd, --power-loss-cmd; --estop-cmd is the CUT
+  POWER escalation only), whose command names no program, or that the adapter cannot reset after,
+  is refused before anything connects or before anything moves. Seed 0 (ev02) or 7 (ev05) unless
+  given.
 
 Live supervision. ``--instrument udp:PORT`` (or ``sim``) feeds the external tripwire. A lab whose
 instrument works offline (the markerless tracker records, and `be fit` scores afterwards) runs with
@@ -679,7 +681,7 @@ def trial_segments(test: str, space, plan, params: dict, seed: int, envelope, de
     for k, seg in enumerate(core_report.split_segments(proposals)):
         if test == "ev02":
             source, drive = plan.trials[k]
-            allowed, distance, _ = stop_limits(envelope, source)
+            allowed, _, _ = stop_limits(envelope, source)
             travel = (v_max * (params["drive_s"] + allowed + limits.trial_rest_grace_s) + brake + margin
                       if velocity else None)
             segments.append(TrialSegment(tuple(seg), f"trial {k + 1} ({source}, drive {drive})", "stop",
@@ -690,7 +692,7 @@ def trial_segments(test: str, space, plan, params: dict, seed: int, envelope, de
         else:
             source = plan.source
             timeout = envelope.heartbeat["model_timeout_ms"] / 1000.0
-            allowed, distance, _ = stop_limits(envelope, source)
+            allowed, _, _ = stop_limits(envelope, source)
             allowed += timeout
             manual = plan.resume["rule"] == "manual"
             restart = 0.0 if manual else max(0.0, params["restart_s"] - plan.resume["after_ms"] / 1000.0)

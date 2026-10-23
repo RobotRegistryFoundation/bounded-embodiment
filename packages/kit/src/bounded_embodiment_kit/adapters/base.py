@@ -43,7 +43,8 @@ method                 called from            what it may do
 =====================  =====================  ===================================================
 ``trigger_stop(src)``  command thread         EV-02: issue the system under test's OWN stop
                                               through ``src`` (only "stop_message"; the external
-                                              sources go through the lab's --estop-cmd). It is
+                                              sources go through the lab's own commands,
+                                              --hardwired-stop-cmd and --power-loss-cmd). It is
                                               the system's stop, never the runner's: it does not
                                               latch, and it must return promptly.
 ``reset_stop(src)``    command thread         after the operator typed NEXT: let the system under

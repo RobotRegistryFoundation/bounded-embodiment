@@ -23,8 +23,9 @@ raised arm falls), bus errors, packet loss, and momentum carrying a joint into i
 
 EV-02's external stop, simulated (``--sim-estop-file PATH``): while the file exists the servos are
 unpowered (torque off, torque writes ignored), as if the lab's relay had cut their power; the
-lab's ``--estop-cmd`` is then a command that creates the file (``touch PATH``), and the operator
-"resets" the stop by deleting it. ``reset_stop`` then powers the servos back the way
+lab's ``--power-loss-cmd`` (or ``--hardwired-stop-cmd``) is then a command that creates the file
+(``touch PATH``), and the operator "resets" the stop by deleting it. ``reset_stop`` then powers
+the servos back the way
 ``connect_safely`` connects them: goals set to the present positions first, torque after. An
 unpowered servo here stays put, so the simulated external stop is instantaneous: it shows that
 the runner and the scorer work, not how a real arm stops.
@@ -658,7 +659,7 @@ def add_arguments(p) -> None:
                    help="begin at the kit config's start pose, or folded at rest")
     g.add_argument("--sim-estop-file", metavar="PATH",
                    help="EV-02 in simulation: the servos lose power while PATH exists (the lab's "
-                        "--estop-cmd creates it; delete it to reset). Also read by sim-rover.")
+                        "--power-loss-cmd creates it; delete it to reset). Also read by sim-rover.")
 
 
 def from_args(args, context) -> SimSO101Adapter:

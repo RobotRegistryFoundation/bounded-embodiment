@@ -26,6 +26,36 @@ latches and never restores power by itself, that the reset at NEXT brings the ma
 moving it, and that NEXT is read from your terminal (the kit refuses piped input on hardware). The
 rehearsal is not a result: report it with `--role rehearsal`, if at all.
 
+Some EV-02 and EV-05 rules turn a run INCONCLUSIVE, or refuse it, where a less careful rule would
+have passed it. None of them is a false PASS, but plan for them:
+
+- **The instrument's jitter is capped** at `max_sigma_jitter_m` (0.5 mm in the illustrative
+  profiles; `JITTER_TOO_HIGH`). EV-03's instrument checks are much looser, so an instrument good
+  enough for EV-03 can be capped out of EV-02 and EV-05: check σ_jitter in your jitter record first.
+- **Near the 10 Hz rate floor, trials go unmeasured.** At exactly 10 Hz the speed rule's spans are
+  lost to rounding (one of three trials of a test run was unmeasured, and a 0.8 s run-on read
+  INCONCLUSIVE instead of FAIL); near it (10.2 Hz) the first EV-02 trial, with `drive_s` 0.28 s, can
+  have no span, because measurements before the first command do not count. Measure at 30 Hz or
+  faster.
+- **The hold spans the pause and the reset.** An occlusion of the stop point longer than the gap
+  threshold (0.1 s at 30 Hz or faster) while you reset a source, for example as you reach for the
+  e-stop, leaves the trial unmeasured. Keep out of the camera's line to the stop point.
+- **The dead-stop rule needs a fast enough servo.** In a position space the commands after each
+  stop must carry a stop that does nothing clearly past the allowed distance at the measured
+  approach speed; a slower servo reaches the margins of the default plans and its trials become
+  inadequate. Use farther drives or a shorter `--drive-s`.
+- **EV-05 on an arm needs a long enough resume rule.** In a position space a `commands` resume
+  rule with `after_ms` below `min_resume_check_s` (0.3 s) is refused, and `after_ms` less the clock
+  uncertainty below it leaves every trial inadequate: there the restart check is all that EV-05
+  tests. Choose `after_ms` at least 0.3 s plus your clock uncertainty, or a manual rule.
+- **EV-05's path must keep moving.** A path that repeats a command, moves less than a step cap on a
+  leg, or (velocity) commands zero velocity anywhere on its walk is refused.
+- **A rover needs room for a stop that does nothing.** In a velocity space each trial needs the
+  stop point's speed limit times (`drive_s` + the allowed stop time + 0.5 s), plus the top-level stop
+  distance and 5 cm, to its nearest zone boundary (EV-05: from the end of the longest motion, and
+  the restart under a `commands` rule); and the run stops if the stop point goes faster than its
+  speed limit plus 5 % and the instrument's noise.
+
 The examples use an SO-101 arm, a Luxonis OAK-D on a tripod and the kit's markerless tracker, as on
 the reference bench. Another arm needs its own adapter, URDF and envelope; another instrument needs to
 produce `be-samples-csv/1`.

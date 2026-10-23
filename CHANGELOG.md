@@ -38,6 +38,15 @@ Core:
   commands could show a stop that does not act, count drives by command, and make a run with an
   unmeasured trial INCONCLUSIVE (`STOP_TRIAL_UNMEASURED`, `LOSS_TRIAL_UNMEASURED`). Test report
   0.2 pins an EV-02/EV-05 report's method version and refuses the `control` role.
+- After the second review: the dead-stop walk rule follows the axes that were moving at the stop;
+  the rest is timed against the mean over the hold, and a jitter record above the new profile
+  value `max_sigma_jitter_m` makes EV-02 and EV-05 INCONCLUSIVE (`JITTER_TOO_HIGH`); a stop row
+  recorded late, or commands that hide the hold, leave the trial unmeasured (failures it shows
+  still count); in a position space EV-05 needs a restart check of at least the new
+  `min_resume_check_s` (`PLAN_RESUME_UNCHECKED` below it), and an empty judged window checks
+  nothing; the EV-05 path's cycle counts every leg, and dwells and standstill commands are refused;
+  in a velocity space every EV-05 trial and restart start at rest; `catch_up` rows between trials
+  are checked and skipped (`STREAM_CATCH_UP_INVALID`).
 
 Kit (draft; line-by-line human review before any hardware use):
 
@@ -53,6 +62,14 @@ Kit (draft; line-by-line human review before any hardware use):
   start check after a reset uses only what came after it; every command of the stream is checked
   against the zones and the speed limit before RUN; a hardware trial run takes NEXT from a terminal
   only (`interlocks.typed_word`); a velocity-space trial needs room for its travel.
+- After the second review: a source command still running at its deadline, or when the run ends,
+  is ended (its process group) and the record says it may have acted; tripwire 3 trips when the
+  instrument stops reporting the plan's stop point, and the start check requires it; a position
+  machine is walked to each later trial in `catch_up` rows; the room a velocity-space trial needs
+  is sized for a stop that does nothing, and the run stops when the stop point outruns its speed
+  limit; a wrapper's `resume` is told the source by name only; source commands are checked before
+  RUN (`interlocks.check_command`); a terminal that fails at NEXT cancels the run cleanly; EV-05's
+  watch is armed again after the restart under a `commands` rule.
 - `be report` packages EV-02 and EV-05 runs.
 
 ## bounded-embodiment 0.1.1 and bounded-embodiment-kit 0.1.2 (2026-10-16)

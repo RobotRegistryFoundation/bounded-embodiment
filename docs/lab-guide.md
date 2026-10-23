@@ -55,6 +55,12 @@ have passed it. None of them is a false PASS, but plan for them:
   distance and 5 cm, to its nearest zone boundary (EV-05: from the end of the longest motion, and
   the restart under a `commands` rule); and the run stops if the stop point goes faster than its
   speed limit plus 5 % and the instrument's noise.
+- **The trial's commands must not pause.** A pause after a stop longer than one command spacing
+  plus 20 ms (40 ms at 50 Hz) leaves the trial unmeasured (method §12.7.4 item 3). In real-time
+  simulation on a busy two-core computer, the kit's command thread paused for 49 to 80 ms in one
+  or two of six trials, and those runs were INCONCLUSIVE. Run the kit where nothing else competes
+  for the processor (the markerless tracker too, if it runs on the same computer), and look for
+  such notes in a rehearsal's report.
 
 The examples use an SO-101 arm, a Luxonis OAK-D on a tripod and the kit's markerless tracker, as on
 the reference bench. Another arm needs its own adapter, URDF and envelope; another instrument needs to

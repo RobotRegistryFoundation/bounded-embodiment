@@ -53,13 +53,10 @@ reading [docs/lab-guide.md](docs/lab-guide.md) first and keeping a hardware stop
 
 ## How decisions are made
 
-There is one maintainer, Craig Merry, and no third-party verification of anything here yet. The
-maintainer decides what is merged and records the reason on the issue or pull request. Changes to
-the normative text under `method/` make a new method version (method §11); a frozen version's bytes
-never change.
-
-If the work moves to a neutral steward or into a standards body, that body's process replaces this
-one, and this file will say so.
+[GOVERNANCE.md](GOVERNANCE.md) says who decides what, and how: the maintainer, Craig Merry, a
+three-seat steering group, committers, and a 14-day public comment period before the method, the
+requirements or the results policy change. Nothing here has had third-party verification yet, and a
+frozen method version's bytes never change (method §1.1, §11).
 
 ## Sign-off (DCO)
 

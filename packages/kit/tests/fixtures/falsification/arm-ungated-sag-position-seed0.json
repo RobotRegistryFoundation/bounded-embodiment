@@ -1,0 +1,58 @@
+{
+ "budget_steps": 2000,
+ "draft": true,
+ "found": true,
+ "gate": "reference_gates.passthrough:ungated",
+ "machine": "sim-so101",
+ "property": "position",
+ "robustness": -0.0010818326436765613,
+ "rollouts": 1,
+ "rule_set": "be-falsify/1",
+ "seed": 0,
+ "simulation_only": true,
+ "steps_to_violation": 9,
+ "steps_used": 9,
+ "trace": {
+  "steps": [
+{"command":{"elbow_flex.pos":-96.8,"gripper.pos":30.0,"shoulder_lift.pos":0.0,"shoulder_pan.pos":0.0,"wrist_flex.pos":0.0,"wrist_roll.pos":0.0},"decision":null,"joints":{"elbow_flex":20.6603891294154,"gripper":30.0,"shoulder_lift":-33.7129408899054,"shoulder_pan":0.0,"wrist_flex":69.85811118186137,"wrist_roll":0.0},"points":{"elbow":[0.03004536519647092,-0.018278409792662428,0.22577967860682552],"tool":[0.2408484722010612,-9.891732667447102e-06,0.1237421894287524],"wrist":[0.16028560615838988,-0.018277680076490326,0.2613117716165089]},"robustness":0.0937421894287524,"step":0,"t_s":0.02},
+{"command":{"elbow_flex.pos":-96.8,"gripper.pos":30.0,"shoulder_lift.pos":0.0,"shoulder_pan.pos":0.0,"wrist_flex.pos":0.0,"wrist_roll.pos":0.0},"decision":null,"joints":{"elbow_flex":15.259070448096512,"gripper":30.0,"shoulder_lift":-28.31162220858691,"shoulder_pan":0.0,"wrist_flex":64.45679250054249,"wrist_roll":0.0},"points":{"elbow":[0.04049659469023598,-0.018278352172322602,0.22898382449802124],"tool":[0.26389158387599265,-9.776190349387967e-06,0.13514066448201906],"wrist":[0.17073683565215467,-0.0182776224561505,0.2645159175077056]},"robustness":0.09610841612400733,"step":1,"t_s":0.04},
+{"command":{"elbow_flex.pos":-96.8,"gripper.pos":30.0,"shoulder_lift.pos":0.0,"shoulder_pan.pos":0.0,"wrist_flex.pos":0.0,"wrist_roll.pos":0.0},"decision":null,"joints":{"elbow_flex":9.857751766777627,"gripper":30.0,"shoulder_lift":-23.193242436755877,"shoulder_pan":0.0,"wrist_flex":59.0554738192236,"wrist_roll":0.0},"points":{"elbow":[0.05063738081438883,-0.018278293627797332,0.23109951592435457],"tool":[0.2862114095304227,-9.66846876189893e-06,0.14776188495234585],"wrist":[0.18070056934089024,-0.018277566737302332,0.26727432746209967]},"robustness":0.07378859046957731,"step":2,"t_s":0.06},
+{"command":{"elbow_flex.pos":-96.8,"gripper.pos":30.0,"shoulder_lift.pos":0.0,"shoulder_pan.pos":0.0,"wrist_flex.pos":0.0,"wrist_roll.pos":0.0},"decision":null,"joints":{"elbow_flex":4.456433085458739,"gripper":30.0,"shoulder_lift":-18.951151898656803,"shoulder_pan":0.0,"wrist_flex":53.65415513790471,"wrist_roll":0.0},"points":{"elbow":[0.05915795651024114,-0.018278242537868923,0.2321614814017668],"tool":[0.3069372665114912,-9.58118668793688e-06,0.16428531115817113],"wrist":[0.1884626739594123,-0.018277527408784678,0.2709601932989239]},"robustness":0.05306273348850876,"step":3,"t_s":0.08},
+{"command":{"elbow_flex.pos":-96.8,"gripper.pos":30.0,"shoulder_lift.pos":0.0,"shoulder_pan.pos":0.0,"wrist_flex.pos":0.0,"wrist_roll.pos":0.0},"decision":null,"joints":{"elbow_flex":-0.9448855958600668,"gripper":30.0,"shoulder_lift":-15.456495717384195,"shoulder_pan":0.0,"wrist_flex":48.252836456585825,"wrist_roll":0.0},"points":{"elbow":[0.06622079865053342,-0.018278198912381464,0.23256081649879068],"tool":[0.325244577901065,-9.520068504372344e-06,0.18490217476766863],"wrist":[0.19416303969764864,-0.018277503762484607,0.27564019619904434]},"robustness":0.03475542209893501,"step":4,"t_s":0.1},
+{"command":{"elbow_flex.pos":-96.8,"gripper.pos":30.0,"shoulder_lift.pos":0.0,"shoulder_pan.pos":0.0,"wrist_flex.pos":0.0,"wrist_roll.pos":0.0},"decision":null,"joints":{"elbow_flex":-6.346204277178553,"gripper":30.0,"shoulder_lift":-12.576573233482803,"shoulder_pan":0.0,"wrist_flex":42.85151777526694,"wrist_roll":0.0},"points":{"elbow":[0.07205082285332086,-0.018278162040186476,0.23256578051112062],"tool":[0.34031146388966893,-9.489824454040903e-06,0.20942796172014605],"wrist":[0.19797403026077065,-0.01827749448926842,0.28123194777108407]},"robustness":0.019688536110331056,"step":5,"t_s":0.12000000000000001},
+{"command":{"elbow_flex.pos":-96.8,"gripper.pos":30.0,"shoulder_lift.pos":0.0,"shoulder_pan.pos":0.0,"wrist_flex.pos":0.0,"wrist_roll.pos":0.0},"decision":null,"joints":{"elbow_flex":-11.74752295849704,"gripper":30.0,"shoulder_lift":-10.20360758699886,"shoulder_pan":0.0,"wrist_flex":37.45019909394806,"wrist_roll":0.0},"points":{"elbow":[0.07684988305177533,-0.01827813110421447,0.23234973153940985],"tool":[0.3513520331316148,-9.494300448385383e-06,0.23743824031199662],"wrist":[0.200026200721195,-0.018277498404982443,0.2876004760140492]},"robustness":0.008647966868385204,"step":6,"t_s":0.14},
+{"command":{"elbow_flex.pos":-96.8,"gripper.pos":30.0,"shoulder_lift.pos":0.0,"shoulder_pan.pos":0.0,"wrist_flex.pos":0.0,"wrist_roll.pos":0.0},"decision":null,"joints":{"elbow_flex":-17.148841639815526,"gripper":30.0,"shoulder_lift":-8.250177513768554,"shoulder_pan":0.0,"wrist_flex":32.04888041262917,"wrist_roll":0.0},"points":{"elbow":[0.08079104130093391,-0.0182781053019885,0.23202287978411257],"tool":[0.35766281383916765,-9.536255634768655e-06,0.26829554088865726],"wrist":[0.20042158057148077,-0.018277514428241,0.294581524858067]},"robustness":0.0023371861608323385,"step":7,"t_s":0.16},
+{"command":{"elbow_flex.pos":-96.8,"gripper.pos":30.0,"shoulder_lift.pos":0.0,"shoulder_pan.pos":0.0,"wrist_flex.pos":0.0,"wrist_roll.pos":0.0},"decision":null,"joints":{"elbow_flex":-22.550160321134012,"gripper":30.0,"shoulder_lift":-6.645428330380777,"shoulder_pan":0.0,"wrist_flex":26.683841614864804,"wrist_roll":0.0},"points":{"elbow":[0.08401886965303851,-0.018278083901268453,0.23165397684290365],"tool":[0.35866519099516914,-9.616914726925252e-06,0.30108183264367655],"wrist":[0.1992446038448007,-0.018277541551115033,0.30199656834815897]},"robustness":-0.0010818326436765613,"step":8,"t_s":0.18},
+{"command":{"elbow_flex.pos":-96.8,"gripper.pos":30.0,"shoulder_lift.pos":0.0,"shoulder_pan.pos":0.0,"wrist_flex.pos":0.0,"wrist_roll.pos":0.0},"decision":null,"joints":{"elbow_flex":-27.951479002452498,"gripper":30.0,"shoulder_lift":-5.331893521580011,"shoulder_pan":0.0,"wrist_flex":22.038308876748246,"wrist_roll":0.0},"points":{"elbow":[0.0866524255074956,-0.018278066259754165,0.23128483481132794],"tool":[0.3542817926762227,-9.729249147276582e-06,0.33296392255068796],"wrist":[0.19657067000341166,-0.0182775788101918,0.30966231580362835]},"robustness":-0.032963922550687974,"step":9,"t_s":0.19999999999999998},
+{"command":{"elbow_flex.pos":-96.8,"gripper.pos":30.0,"shoulder_lift.pos":0.0,"shoulder_pan.pos":0.0,"wrist_flex.pos":0.0,"wrist_roll.pos":0.0},"decision":null,"joints":{"elbow_flex":-33.35279768377098,"gripper":30.0,"shoulder_lift":-4.262325047386585,"shoulder_pan":0.0,"wrist_flex":18.23324617306103,"wrist_roll":0.0},"points":{"elbow":[0.08879014548650366,-0.01827805181905987,0.2309397237846174],"tool":[0.3452998397773553,-9.865207651772799e-06,0.36278463306656683],"wrist":[0.19247444784855317,-0.01827762524696151,0.317395582137381]},"robustness":-0.06278463306656684,"step":10,"t_s":0.21999999999999997},
+{"command":{"elbow_flex.pos":-96.8,"gripper.pos":30.0,"shoulder_lift.pos":0.0,"shoulder_pan.pos":0.0,"wrist_flex.pos":0.0,"wrist_roll.pos":0.0},"decision":null,"joints":{"elbow_flex":-38.75411636508947,"gripper":30.0,"shoulder_lift":-3.3971872090898394,"shoulder_pan":0.0,"wrist_flex":15.1143453610218,"wrist_roll":0.0},"points":{"elbow":[0.09051432445747229,-0.018278040092428175,0.23063142099333284],"tool":[0.3324533383679456,-1.0019655577237868e-05,0.3903590223349966],"wrist":[0.18703617156443764,-0.01827767987706796,0.3250167113246649]},"robustness":-0.0903590223349966,"step":11,"t_s":0.23999999999999996},
+{"command":{"elbow_flex.pos":-96.8,"gripper.pos":30.0,"shoulder_lift.pos":0.0,"shoulder_pan.pos":0.0,"wrist_flex.pos":0.0,"wrist_roll.pos":0.0},"decision":null,"joints":{"elbow_flex":-44.15543504640796,"gripper":30.0,"shoulder_lift":-2.7033748446028367,"shoulder_pan":0.0,"wrist_flex":12.555667256241898,"wrist_roll":0.0},"points":{"elbow":[0.091893572977013,-0.01827803066025479,0.23036538346142243],"tool":[0.3163286269740443,-1.018855548329687e-05,0.4155635601684682],"wrist":[0.18034370379305664,-0.01827774168829768,0.3323537374953084]},"robustness":-0.1155635601684682,"step":12,"t_s":0.25999999999999995},
+{"command":{"elbow_flex.pos":-96.8,"gripper.pos":30.0,"shoulder_lift.pos":0.0,"shoulder_pan.pos":0.0,"wrist_flex.pos":0.0,"wrist_roll.pos":0.0},"decision":null,"joints":{"elbow_flex":-49.556753727726445,"gripper":30.0,"shoulder_lift":-2.1531922699764285,"shoulder_pan":0.0,"wrist_flex":10.454405506098947,"wrist_roll":0.0},"points":{"elbow":[0.09298494379170087,-0.01827802316409267,0.23014255858260385],"tool":[0.29740629285231784,-1.036861616426549e-05,0.43830379716937207],"wrist":[0.17249336001937038,-0.018277809643750944,0.33924554547536523]},"robustness":-0.13830379716937208,"step":13,"t_s":0.27999999999999997},
+{"command":{"elbow_flex.pos":-96.8,"gripper.pos":30.0,"shoulder_lift.pos":0.0,"shoulder_pan.pos":0.0,"wrist_flex.pos":0.0,"wrist_roll.pos":0.0},"decision":null,"joints":{"elbow_flex":-54.958072409044924,"gripper":30.0,"shoulder_lift":-1.7234753916827386,"shoulder_pan":0.0,"wrist_flex":8.726624857963602,"wrist_roll":0.0},"points":{"elbow":[0.09383583448005332,-0.018278017299537912,0.22996123954737618],"tool":[0.27609392333713667,-1.0557042931525265e-05,0.45849834613590823],"wrist":[0.16359004161792268,-0.018277882686949333,0.34554411278796093]},"robustness":-0.15849834613590824,"step":14,"t_s":0.3}
+  ],
+  "context": {
+   "command_space_path": "examples/command-spaces/so101.command-space.json",
+   "envelope_path": "examples/envelopes/so101.envelope.json",
+   "kit_config_path": "examples/envelopes/so101.kit.json",
+   "mode": "full",
+   "speed_factor": null,
+   "urdf_path": "examples/robots/so101/so101_new_calib.urdf"
+  },
+  "hold_steps": 15,
+  "machine_options": {
+   "servos": "sag"
+  },
+  "period_s": 0.02,
+  "robustness": -0.15849834613590824,
+  "segments": [
+   [
+    0.0,
+    0.0,
+    -96.8,
+    0.0,
+    0.0,
+    30.0
+   ]
+  ]
+ }
+}

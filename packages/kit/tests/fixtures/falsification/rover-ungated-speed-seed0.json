@@ -1,0 +1,77 @@
+{
+ "budget_steps": 2000,
+ "draft": true,
+ "found": true,
+ "gate": "reference_gates.rover:ungated",
+ "machine": "sim-rover",
+ "property": "speed",
+ "robustness": -0.0024999999999998357,
+ "rollouts": 19,
+ "rule_set": "be-falsify/1",
+ "seed": 0,
+ "simulation_only": true,
+ "steps_to_violation": 300,
+ "steps_used": 300,
+ "trace": {
+  "steps": [
+{"command":{"angular":0.0,"linear":-1.5},"decision":null,"points":{"base":[0.9997499999999999,1.0,0.0]},"pose":[0.9997499999999999,1.0,0.0],"robustness":null,"step":0,"t_s":0.02,"velocities":[-0.02,0.0]},
+{"command":{"angular":0.0,"linear":-1.5},"decision":null,"points":{"base":[0.9990999999999999,1.0,0.0]},"pose":[0.9990999999999999,1.0,0.0],"robustness":null,"step":1,"t_s":0.04,"velocities":[-0.04,0.0]},
+{"command":{"angular":0.0,"linear":-1.5},"decision":null,"points":{"base":[0.9980499999999999,1.0,0.0]},"pose":[0.9980499999999999,1.0,0.0],"robustness":null,"step":2,"t_s":0.06,"velocities":[-0.05999999999999999,0.0]},
+{"command":{"angular":0.0,"linear":-1.5},"decision":null,"points":{"base":[0.9965999999999999,1.0,0.0]},"pose":[0.9965999999999999,1.0,0.0],"robustness":null,"step":3,"t_s":0.08,"velocities":[-0.08,0.0]},
+{"command":{"angular":0.0,"linear":-1.5},"decision":null,"points":{"base":[0.99475,1.0,0.0]},"pose":[0.99475,1.0,0.0],"robustness":null,"step":4,"t_s":0.1,"velocities":[-0.10000000000000002,0.0]},
+{"command":{"angular":0.0,"linear":-1.5},"decision":null,"points":{"base":[0.9924999999999999,1.0,0.0]},"pose":[0.9924999999999999,1.0,0.0],"robustness":null,"step":5,"t_s":0.12000000000000001,"velocities":[-0.12000000000000004,0.0]},
+{"command":{"angular":0.0,"linear":-1.5},"decision":null,"points":{"base":[0.9898499999999999,1.0,0.0]},"pose":[0.9898499999999999,1.0,0.0],"robustness":null,"step":6,"t_s":0.14,"velocities":[-0.14000000000000004,0.0]},
+{"command":{"angular":0.0,"linear":-1.5},"decision":null,"points":{"base":[0.9867999999999999,1.0,0.0]},"pose":[0.9867999999999999,1.0,0.0],"robustness":null,"step":7,"t_s":0.16,"velocities":[-0.16000000000000006,0.0]},
+{"command":{"angular":0.0,"linear":-1.5},"decision":null,"points":{"base":[0.98335,1.0,0.0]},"pose":[0.98335,1.0,0.0],"robustness":null,"step":8,"t_s":0.18,"velocities":[-0.18000000000000008,0.0]},
+{"command":{"angular":0.0,"linear":-1.5},"decision":null,"points":{"base":[0.9795,1.0,0.0]},"pose":[0.9795,1.0,0.0],"robustness":null,"step":9,"t_s":0.19999999999999998,"velocities":[-0.2000000000000001,0.0]},
+{"command":{"angular":0.0,"linear":-1.5},"decision":null,"points":{"base":[0.97525,1.0,0.0]},"pose":[0.97525,1.0,0.0],"robustness":0.37750000000000017,"step":10,"t_s":0.21999999999999997,"velocities":[-0.2200000000000001,0.0]},
+{"command":{"angular":0.0,"linear":-1.5},"decision":null,"points":{"base":[0.9705999999999999,1.0,0.0]},"pose":[0.9705999999999999,1.0,0.0],"robustness":0.35750000000000015,"step":11,"t_s":0.23999999999999996,"velocities":[-0.24000000000000013,0.0]},
+{"command":{"angular":0.0,"linear":-1.5},"decision":null,"points":{"base":[0.9655499999999999,1.0,0.0]},"pose":[0.9655499999999999,1.0,0.0],"robustness":0.33750000000000013,"step":12,"t_s":0.25999999999999995,"velocities":[-0.2600000000000001,0.0]},
+{"command":{"angular":0.0,"linear":-1.5},"decision":null,"points":{"base":[0.9601,1.0,0.0]},"pose":[0.9601,1.0,0.0],"robustness":0.3175000000000001,"step":13,"t_s":0.27999999999999997,"velocities":[-0.28000000000000014,0.0]},
+{"command":{"angular":0.0,"linear":-1.5},"decision":null,"points":{"base":[0.95425,1.0,0.0]},"pose":[0.95425,1.0,0.0],"robustness":0.2975000000000001,"step":14,"t_s":0.3,"velocities":[-0.30000000000000016,0.0]},
+{"command":{"angular":0.0,"linear":-1.5},"decision":null,"points":{"base":[0.948,1.0,0.0]},"pose":[0.948,1.0,0.0],"robustness":0.2775000000000001,"step":15,"t_s":0.32,"velocities":[-0.3200000000000002,0.0]},
+{"command":{"angular":0.0,"linear":-1.5},"decision":null,"points":{"base":[0.9413499999999999,1.0,0.0]},"pose":[0.9413499999999999,1.0,0.0],"robustness":0.25750000000000006,"step":16,"t_s":0.34,"velocities":[-0.3400000000000002,0.0]},
+{"command":{"angular":0.0,"linear":-1.5},"decision":null,"points":{"base":[0.9342999999999999,1.0,0.0]},"pose":[0.9342999999999999,1.0,0.0],"robustness":0.2375000000000001,"step":17,"t_s":0.36000000000000004,"velocities":[-0.3600000000000002,0.0]},
+{"command":{"angular":0.0,"linear":-1.5},"decision":null,"points":{"base":[0.92685,1.0,0.0]},"pose":[0.92685,1.0,0.0],"robustness":0.21750000000000014,"step":18,"t_s":0.38000000000000006,"velocities":[-0.3800000000000002,0.0]},
+{"command":{"angular":0.0,"linear":-1.5},"decision":null,"points":{"base":[0.919,1.0,0.0]},"pose":[0.919,1.0,0.0],"robustness":0.19750000000000018,"step":19,"t_s":0.4000000000000001,"velocities":[-0.40000000000000024,0.0]},
+{"command":{"angular":0.0,"linear":-1.5},"decision":null,"points":{"base":[0.91075,1.0,0.0]},"pose":[0.91075,1.0,0.0],"robustness":0.1775000000000002,"step":20,"t_s":0.4200000000000001,"velocities":[-0.42000000000000026,0.0]},
+{"command":{"angular":0.0,"linear":-1.5},"decision":null,"points":{"base":[0.9020999999999999,1.0,0.0]},"pose":[0.9020999999999999,1.0,0.0],"robustness":0.15750000000000025,"step":21,"t_s":0.4400000000000001,"velocities":[-0.4400000000000003,0.0]},
+{"command":{"angular":0.0,"linear":-1.5},"decision":null,"points":{"base":[0.8930499999999999,1.0,0.0]},"pose":[0.8930499999999999,1.0,0.0],"robustness":0.1375000000000003,"step":22,"t_s":0.46000000000000013,"velocities":[-0.4600000000000003,0.0]},
+{"command":{"angular":0.0,"linear":-1.5},"decision":null,"points":{"base":[0.8835999999999999,1.0,0.0]},"pose":[0.8835999999999999,1.0,0.0],"robustness":0.11750000000000027,"step":23,"t_s":0.48000000000000015,"velocities":[-0.4800000000000003,0.0]},
+{"command":{"angular":0.0,"linear":-1.5},"decision":null,"points":{"base":[0.87375,1.0,0.0]},"pose":[0.87375,1.0,0.0],"robustness":0.09750000000000014,"step":24,"t_s":0.5000000000000001,"velocities":[-0.5000000000000003,0.0]},
+{"command":{"angular":0.0,"linear":-1.5},"decision":null,"points":{"base":[0.8634999999999999,1.0,0.0]},"pose":[0.8634999999999999,1.0,0.0],"robustness":0.07750000000000018,"step":25,"t_s":0.5200000000000001,"velocities":[-0.5200000000000004,0.0]},
+{"command":{"angular":0.0,"linear":-1.5},"decision":null,"points":{"base":[0.8528499999999999,1.0,0.0]},"pose":[0.8528499999999999,1.0,0.0],"robustness":0.05750000000000016,"step":26,"t_s":0.5400000000000001,"velocities":[-0.5400000000000004,0.0]},
+{"command":{"angular":0.0,"linear":-1.5},"decision":null,"points":{"base":[0.8417999999999999,1.0,0.0]},"pose":[0.8417999999999999,1.0,0.0],"robustness":0.037500000000000144,"step":27,"t_s":0.5600000000000002,"velocities":[-0.5600000000000004,0.0]},
+{"command":{"angular":0.0,"linear":-1.5},"decision":null,"points":{"base":[0.8303499999999999,1.0,0.0]},"pose":[0.8303499999999999,1.0,0.0],"robustness":0.017500000000000127,"step":28,"t_s":0.5800000000000002,"velocities":[-0.5800000000000004,0.0]},
+{"command":{"angular":0.0,"linear":-1.5},"decision":null,"points":{"base":[0.8185,1.0,0.0]},"pose":[0.8185,1.0,0.0],"robustness":-0.0024999999999998357,"step":29,"t_s":0.6000000000000002,"velocities":[-0.6000000000000004,0.0]}
+  ],
+  "context": {
+   "command_space_path": "examples/command-spaces/rover.command-space.json",
+   "envelope_path": "examples/envelopes/rover.envelope.json",
+   "kit_config_path": null,
+   "mode": "full",
+   "speed_factor": null,
+   "urdf_path": null
+  },
+  "hold_steps": 15,
+  "machine_options": {
+   "start": [
+    1.0,
+    1.0,
+    0.0
+   ]
+  },
+  "period_s": 0.02,
+  "robustness": -0.0024999999999998357,
+  "segments": [
+   [
+    -1.5,
+    0.0
+   ],
+   [
+    -1.5,
+    0.0
+   ]
+  ]
+ }
+}

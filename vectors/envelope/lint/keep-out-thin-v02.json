@@ -1,0 +1,127 @@
+{
+  "envelope_version": "0.2",
+  "machine": {
+    "id": "loophole-search",
+    "class": "arm",
+    "description": "TEST-ONLY synthetic envelope"
+  },
+  "frame": "base_link",
+  "points": [
+    {
+      "id": "tool",
+      "description": "TEST-ONLY tool point",
+      "max_speed_mps": 0.2176
+    },
+    {
+      "id": "elbow",
+      "description": "TEST-ONLY elbow point"
+    }
+  ],
+  "workspace": {
+    "zones": [
+      {
+        "id": "tool_region",
+        "kind": "keep_in",
+        "applies_to": [
+          "tool"
+        ],
+        "box": {
+          "min_m": [
+            -0.2861,
+            -0.1407,
+            0.1046
+          ],
+          "max_m": [
+            0.3338,
+            0.3759,
+            0.572
+          ]
+        }
+      },
+      {
+        "id": "cell",
+        "kind": "keep_in",
+        "applies_to": [
+          "elbow"
+        ],
+        "box": {
+          "min_m": [
+            -0.6463,
+            -0.6034,
+            -0.3954
+          ],
+          "max_m": [
+            0.6745,
+            0.7173,
+            1.072
+          ]
+        }
+      },
+      {
+        "id": "fixture",
+        "kind": "keep_out",
+        "applies_to": [
+          "*"
+        ],
+        "box": {
+          "min_m": [
+            0.0172,
+            -0.2407,
+            0.0046
+          ],
+          "max_m": [
+            0.0305,
+            0.4759,
+            0.672
+          ]
+        }
+      }
+    ]
+  },
+  "motion": {
+    "max_speed_mps": 0.3782,
+    "max_joint_speed_radps": 2.0,
+    "joints": [
+      {
+        "name": "shoulder",
+        "position_rad": [
+          -1.5,
+          1.5
+        ],
+        "max_speed_radps": 1.5
+      },
+      {
+        "name": "elbow",
+        "position_rad": [
+          -2.0,
+          2.0
+        ],
+        "max_speed_radps": 2.0
+      }
+    ]
+  },
+  "stop": {
+    "category": 1,
+    "max_time_ms": 300,
+    "max_distance_m": 0.0101
+  },
+  "heartbeat": {
+    "model_timeout_ms": 500,
+    "gate_timeout_ms": 200,
+    "on_loss": "stop"
+  },
+  "proximity": [
+    {
+      "when": {
+        "human_within_m": 1.241
+      },
+      "max_speed_mps": 0.1891
+    },
+    {
+      "when": {
+        "human_within_m": 0.2065
+      },
+      "action": "stop"
+    }
+  ]
+}

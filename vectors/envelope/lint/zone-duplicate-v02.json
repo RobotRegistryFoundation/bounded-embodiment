@@ -1,0 +1,127 @@
+{
+  "envelope_version": "0.2",
+  "machine": {
+    "id": "loophole-search",
+    "class": "arm",
+    "description": "TEST-ONLY synthetic envelope"
+  },
+  "frame": "base_link",
+  "points": [
+    {
+      "id": "tool",
+      "description": "TEST-ONLY tool point",
+      "max_speed_mps": 0.2417
+    },
+    {
+      "id": "elbow",
+      "description": "TEST-ONLY elbow point"
+    }
+  ],
+  "workspace": {
+    "zones": [
+      {
+        "id": "tool_region",
+        "kind": "keep_in",
+        "applies_to": [
+          "tool"
+        ],
+        "box": {
+          "min_m": [
+            -0.0626,
+            -0.0596,
+            0.1888
+          ],
+          "max_m": [
+            0.177,
+            0.4017,
+            0.5372
+          ]
+        }
+      },
+      {
+        "id": "cell",
+        "kind": "keep_in",
+        "applies_to": [
+          "elbow"
+        ],
+        "box": {
+          "min_m": [
+            -0.5626,
+            -0.5596,
+            -0.3112
+          ],
+          "max_m": [
+            0.677,
+            0.9017,
+            1.0372
+          ]
+        }
+      },
+      {
+        "id": "fixture",
+        "kind": "keep_out",
+        "applies_to": [
+          "*"
+        ],
+        "box": {
+          "min_m": [
+            -0.004,
+            0.1791,
+            0.2991
+          ],
+          "max_m": [
+            0.0816,
+            0.2425,
+            0.3629
+          ]
+        }
+      },
+      {
+        "id": "fixture_again",
+        "kind": "keep_out",
+        "applies_to": [
+          "*"
+        ],
+        "box": {
+          "min_m": [
+            -0.004,
+            0.1791,
+            0.2991
+          ],
+          "max_m": [
+            0.0816,
+            0.2425,
+            0.3629
+          ]
+        }
+      }
+    ]
+  },
+  "motion": {
+    "max_speed_mps": 0.3353
+  },
+  "stop": {
+    "category": 1,
+    "max_time_ms": 300,
+    "max_distance_m": 0.0132
+  },
+  "heartbeat": {
+    "model_timeout_ms": 500,
+    "gate_timeout_ms": 200,
+    "on_loss": "stop"
+  },
+  "proximity": [
+    {
+      "when": {
+        "human_within_m": 1.215
+      },
+      "max_speed_mps": 0.1676
+    },
+    {
+      "when": {
+        "human_within_m": 0.4632
+      },
+      "action": "stop"
+    }
+  ]
+}

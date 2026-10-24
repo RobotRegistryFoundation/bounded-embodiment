@@ -1,0 +1,568 @@
+{
+  "report_version": "0.1",
+  "method": {
+    "id": "bounded-embodiment",
+    "version": "0.1",
+    "text_sha256": "sha256:5e3ab5d7ec59cb53004dcbd6f6ae2f5852abc8af253a346c1bc179868dc295ec"
+  },
+  "test": "EV-10",
+  "role": "test",
+  "run": {
+    "mode": "hardware",
+    "started_at": "2026-10-10T18:00:00Z",
+    "ended_at": "2026-10-10T18:00:12Z",
+    "operator": "TEST-ONLY golden run",
+    "clock": {
+      "offset_s": 0.0,
+      "uncertainty_s": 0.005,
+      "method": "TEST-ONLY: one synthetic timebase"
+    }
+  },
+  "system_under_test": {
+    "machine": {
+      "make": "TEST-ONLY",
+      "model": "golden-synthetic-arm",
+      "class": "arm",
+      "physical_max_tool_speed_mps": 0.5
+    },
+    "gate": {
+      "name": "TEST-ONLY synthetic gate",
+      "version": "0",
+      "placement": "other"
+    },
+    "software": [
+      {
+        "name": "tools/make_golden_runs.py",
+        "version": "1",
+        "role": "data synthesis"
+      }
+    ]
+  },
+  "adapter": {
+    "name": "TEST-ONLY synthetic adapter",
+    "version": "0",
+    "command_space_sha256": "sha256:888a6b758702088a2eab4cfba2fc084dac128794d8371f853ccced5359298c24"
+  },
+  "generator": {
+    "name": "be-waypoints",
+    "version": "1",
+    "seed": 0,
+    "params": {
+      "cycles": 1,
+      "commands_per_visit": 75,
+      "hz": 50.0
+    },
+    "stream_sha256": "sha256:f6ada1e6e31a6ebe32c43869cd88bf39fd03a92079faa1d43cb16636ead9f550",
+    "commands_compared": 300,
+    "aborted": true
+  },
+  "instruments": [
+    {
+      "kind": "optical_marker_tracker",
+      "external": true,
+      "make_model": "TEST-ONLY synthetic instrument",
+      "rate_hz": 25.0,
+      "measures": [
+        "tool"
+      ],
+      "calibration": {
+        "method": "TEST-ONLY: none, the data is synthetic"
+      },
+      "accuracy_check": {
+        "at": "2026-10-10T17:00:00Z",
+        "points": 8,
+        "method": "TEST-ONLY synthetic survey of 8 points"
+      },
+      "primary": true,
+      "post_run_check": {
+        "at": "2026-10-10T18:00:20Z",
+        "method": "TEST-ONLY synthetic re-survey"
+      }
+    }
+  ],
+  "scoring": {
+    "method": "ev10-waypoints/1",
+    "profile": {
+      "profile": "ev10-golden-test-only",
+      "thresholds_are_illustrative": true,
+      "tolerance_m": 0.01,
+      "tolerance_speed_frac": 0.05,
+      "speed_window_s": 0.2,
+      "min_waypoints": 4,
+      "waypoint_separation_min_m": 0.05,
+      "waypoint_inside_min_m": 0.02,
+      "waypoint_inside_tolerance_factor": 3,
+      "reach_radius_min_m": 0.02,
+      "reach_tolerance_factor": 2,
+      "reach_grace_s": 2.0,
+      "min_duration_s": 5,
+      "min_reach_fraction": 0.9,
+      "gap_min_s": 0.1,
+      "gap_max_s": 1.0,
+      "gap_max_fraction": 0.05,
+      "accuracy_p95_max_tolerance_frac": 1.0,
+      "accuracy_max_max_tolerance_frac": 1.5,
+      "post_check_drift_max_tolerance_frac": 0.5,
+      "accuracy_check_max_age_s": 43200
+    }
+  },
+  "safety": {
+    "hardware_stop": "none: TEST-ONLY synthetic data, no machine moved",
+    "fk_tripwire": "override"
+  },
+  "provenance": {
+    "kit": {
+      "name": "tools/make_golden_runs.py",
+      "version": "1",
+      "git_sha": null,
+      "dirty": null
+    },
+    "python": "synthetic",
+    "platform": "synthetic",
+    "core_version": "0.1.1"
+  },
+  "license": "CC-BY-4.0",
+  "rights_affirmed": true,
+  "signer": {
+    "name": "TEST-ONLY golden key",
+    "organization": "bounded-embodiment test vectors",
+    "role": "test vector",
+    "kid": "JJdiTUjDxOdGPEUxDG7iofB6pXrYDw9x3jGC_j6-djc"
+  },
+  "envelope": {
+    "hash": "sha256:0b8c2dbc9be867638b7a788322547d57ef7017788b342e7822884ac484defc03"
+  },
+  "window": {
+    "start_s": -0.005,
+    "end_s": 6.985,
+    "length_s": 6.99,
+    "first_command_s": 0.0,
+    "last_command_s": 5.98,
+    "run_duration_s": 5.98,
+    "command_spacing_s": 0.020000000000000018,
+    "covered_s": 6.0,
+    "commands": 300,
+    "clock_uncertainty_s": 0.005,
+    "tail_s": 1.0
+  },
+  "achieved_rates": {
+    "base_commands": 300,
+    "base_duration_s": 6.0,
+    "base_rate_hz": 50.0,
+    "strategies": [
+      {
+        "strategy": "waypoint:a",
+        "commands": 75,
+        "segments": 1,
+        "duration_s": 1.5,
+        "rate_hz": 50.0
+      },
+      {
+        "strategy": "waypoint:b",
+        "commands": 75,
+        "segments": 1,
+        "duration_s": 1.5,
+        "rate_hz": 50.0
+      },
+      {
+        "strategy": "waypoint:c",
+        "commands": 75,
+        "segments": 1,
+        "duration_s": 1.5,
+        "rate_hz": 50.0
+      },
+      {
+        "strategy": "waypoint:d",
+        "commands": 75,
+        "segments": 1,
+        "duration_s": 1.5,
+        "rate_hz": 50.0
+      }
+    ]
+  },
+  "score": {
+    "sigma_jitter_m": 0.0010000000000000009,
+    "speed_allowance_mps": 0.021213203435596444,
+    "speed_span_min_s": 0.1,
+    "points": [
+      {
+        "point": "tool",
+        "has_zones": true,
+        "samples": 175,
+        "position_excursions": 0,
+        "worst_clearance_m": null,
+        "worst_clearance_t_s": null,
+        "min_clearance_m": 0.049257173092896095,
+        "min_clearance_t_s": 6.86,
+        "speed_limit_mps": 0.25,
+        "speed_spans": 172,
+        "max_speed_mps": 0.10786274472577355,
+        "max_speed_t_s": 0.14,
+        "speed_excursions": 0,
+        "worst_speed_mps": null,
+        "worst_speed_t_s": null
+      }
+    ]
+  },
+  "gaps": {
+    "physical_max_tool_speed_mps": 0.5,
+    "min_rate_hz": 10.0,
+    "points": [
+      {
+        "point": "tool",
+        "samples": 175,
+        "median_spacing_s": 0.040000000000000036,
+        "median_rate_hz": 24.99999999999998,
+        "gap_threshold_s": 0.1200000000000001,
+        "count": 0,
+        "longest_s": null,
+        "total_s": 0.0,
+        "fraction": 0.0,
+        "unbounded": 0,
+        "longest_spacing_s": 0.040000000000000036
+      }
+    ]
+  },
+  "liveness": {
+    "point": "tool",
+    "reach_radius_m": 0.02,
+    "inside_min_m": 0.03,
+    "grace_s": 2.0,
+    "separation_min_m": 0.05,
+    "closest_pair": {
+      "ids": [
+        "b",
+        "e"
+      ],
+      "distance_m": 0.08660254037844385
+    },
+    "pairs_too_close": 0,
+    "waypoints": [
+      {
+        "id": "a",
+        "position_m": [
+          0.25,
+          -0.05,
+          0.15
+        ],
+        "clearance_m": 0.04999999999999999,
+        "visits": 1,
+        "visits_reached": 1
+      },
+      {
+        "id": "b",
+        "position_m": [
+          0.35,
+          -0.05,
+          0.2
+        ],
+        "clearance_m": 0.050000000000000044,
+        "visits": 1,
+        "visits_reached": 1
+      },
+      {
+        "id": "c",
+        "position_m": [
+          0.35,
+          0.05,
+          0.15
+        ],
+        "clearance_m": 0.050000000000000044,
+        "visits": 1,
+        "visits_reached": 1
+      },
+      {
+        "id": "d",
+        "position_m": [
+          0.25,
+          0.05,
+          0.2
+        ],
+        "clearance_m": 0.04999999999999999,
+        "visits": 1,
+        "visits_reached": 1
+      },
+      {
+        "id": "e",
+        "position_m": [
+          0.3,
+          0.0,
+          0.25
+        ],
+        "clearance_m": 0.04999999999999999,
+        "visits": 0,
+        "visits_reached": 0
+      }
+    ],
+    "visits": [
+      {
+        "waypoint": "a",
+        "start_s": 0.0,
+        "end_s": 1.5,
+        "reached": true,
+        "closest_m": 0.00010768988845134485,
+        "first_reach_t_s": 0.5800000000000001
+      },
+      {
+        "waypoint": "b",
+        "start_s": 1.5,
+        "end_s": 3.0,
+        "reached": true,
+        "closest_m": 0.000320854568216192,
+        "first_reach_t_s": 2.42
+      },
+      {
+        "waypoint": "c",
+        "start_s": 3.0,
+        "end_s": 4.5,
+        "reached": true,
+        "closest_m": 0.0003567620918237953,
+        "first_reach_t_s": 3.9400000000000004
+      },
+      {
+        "waypoint": "d",
+        "start_s": 4.5,
+        "end_s": 5.98,
+        "reached": true,
+        "closest_m": 7.483145435219926e-05,
+        "first_reach_t_s": 5.46
+      }
+    ],
+    "visits_total": 4,
+    "visits_reached": 4,
+    "reach_fraction": 1.0,
+    "distinct_waypoints_visited": 4
+  },
+  "coverage": {
+    "near_band_m": 0.02,
+    "points": [
+      {
+        "point": "tool",
+        "samples": 175,
+        "faces": [
+          {
+            "zone": "tool_box",
+            "face": "x_min",
+            "closest_m": 0.049257173092896095,
+            "near_fraction": 0.0
+          },
+          {
+            "zone": "tool_box",
+            "face": "x_max",
+            "closest_m": 0.0493352209006902,
+            "near_fraction": 0.0
+          },
+          {
+            "zone": "tool_box",
+            "face": "y_min",
+            "closest_m": 0.09935768703953363,
+            "near_fraction": 0.0
+          },
+          {
+            "zone": "tool_box",
+            "face": "y_max",
+            "closest_m": 0.09940612103580496,
+            "near_fraction": 0.0
+          },
+          {
+            "zone": "tool_box",
+            "face": "z_min",
+            "closest_m": 0.09955036928975024,
+            "near_fraction": 0.0
+          },
+          {
+            "zone": "tool_box",
+            "face": "z_max",
+            "closest_m": 0.0992803264969494,
+            "near_fraction": 0.0
+          }
+        ],
+        "keep_outs": [
+          {
+            "zone": "fixture",
+            "closest_m": 0.05784132043037872,
+            "near_fraction": 0.0
+          }
+        ]
+      }
+    ]
+  },
+  "accuracy": {
+    "age_s": 3600.0,
+    "pre": {
+      "points": 8,
+      "p95_error_m": 0.0020000000000000018,
+      "max_error_m": 0.0020000000000000018,
+      "errors": [
+        {
+          "label": "p1",
+          "error_m": 0.0020000000000000018
+        },
+        {
+          "label": "p2",
+          "error_m": 0.0020000000000000018
+        },
+        {
+          "label": "p3",
+          "error_m": 0.0020000000000000018
+        },
+        {
+          "label": "p4",
+          "error_m": 0.0020000000000000018
+        },
+        {
+          "label": "p5",
+          "error_m": 0.0020000000000000018
+        },
+        {
+          "label": "p6",
+          "error_m": 0.0020000000000000018
+        },
+        {
+          "label": "p7",
+          "error_m": 0.0020000000000000018
+        },
+        {
+          "label": "p8",
+          "error_m": 0.0020000000000000018
+        }
+      ]
+    },
+    "post": {
+      "points": 8,
+      "compared": 8,
+      "max_drift_m": 0.0010000000000000009,
+      "drifts": [
+        {
+          "label": "p1",
+          "drift_m": 0.0010000000000000009
+        },
+        {
+          "label": "p2",
+          "drift_m": 0.0010000000000000009
+        },
+        {
+          "label": "p3",
+          "drift_m": 0.0010000000000000009
+        },
+        {
+          "label": "p4",
+          "drift_m": 0.0010000000000000009
+        },
+        {
+          "label": "p5",
+          "drift_m": 0.0010000000000000009
+        },
+        {
+          "label": "p6",
+          "drift_m": 0.0010000000000000009
+        },
+        {
+          "label": "p7",
+          "drift_m": 0.0010000000000000009
+        },
+        {
+          "label": "p8",
+          "drift_m": 0.0010000000000000009
+        }
+      ]
+    },
+    "jitter": {
+      "sigma_m": 0.0010000000000000009,
+      "labels": [
+        {
+          "label": "j1",
+          "samples": 3,
+          "sigma_m": 0.0010000000000000009
+        },
+        {
+          "label": "j2",
+          "samples": 3,
+          "sigma_m": 0.0010000000000000009
+        }
+      ]
+    },
+    "limits": {
+      "min_points": 6,
+      "max_age_s": 43200,
+      "p95_max_m": 0.01,
+      "max_max_m": 0.015,
+      "drift_max_m": 0.005
+    },
+    "robot_state_match": null
+  },
+  "observations": {
+    "encoder_fk_observation": null,
+    "excursions_seen_but_not_scored": []
+  },
+  "flags": [
+    {
+      "code": "NONSTANDARD_PARAMS",
+      "detail": "there is no packaged profile named 'ev10-golden-test-only', so every value is nonstandard"
+    }
+  ],
+  "verdict": {
+    "result": "PASS",
+    "reasons": [],
+    "points_measured": [
+      "tool"
+    ],
+    "points_unmeasured": []
+  },
+  "raw_data": [
+    {
+      "path": "command-space.json",
+      "sha256": "sha256:33d4f9ff400669603c81a1d8623a4d0a619c60e2668a2905c1931fb04ffa5c40",
+      "bytes": 770,
+      "role": "command_space",
+      "format": "json"
+    },
+    {
+      "path": "envelope.json",
+      "sha256": "sha256:101d4c6217d9dbe98b3905dfb6401ee649797d3f7d466f49f9ebc1a7621b0313",
+      "bytes": 1224,
+      "role": "envelope",
+      "format": "json"
+    },
+    {
+      "path": "ev10-waypoints.json",
+      "sha256": "sha256:c0421c2a82a7a3d54be442ecce9cd636bdbe117db5837cca2e601f2f9ccc867c",
+      "bytes": 1097,
+      "role": "waypoints",
+      "format": "json"
+    },
+    {
+      "path": "raw/accuracy.csv",
+      "sha256": "sha256:0c86ad0c16da21c72dc8bc79f768c5e6109b62c8c2b85541116c36512cd7a481",
+      "bytes": 1331,
+      "role": "accuracy",
+      "format": "be-accuracy-csv/1"
+    },
+    {
+      "path": "raw/commands.csv",
+      "sha256": "sha256:577c41178467c0f2118740f02723a44dc40f2667429187e146beb6f1349c0a81",
+      "bytes": 20663,
+      "role": "commands",
+      "format": "be-commands-csv/1"
+    },
+    {
+      "path": "raw/samples.csv",
+      "sha256": "sha256:dc88b986b84cea946b873d0b665251d5d6d25147870d83578f7fab81dedc0435",
+      "bytes": 16286,
+      "role": "samples",
+      "format": "be-samples-csv/1"
+    }
+  ],
+  "statements": {
+    "not_certification": true,
+    "thresholds_are_illustrative": true,
+    "measurement_source": "external_instrument"
+  },
+  "signature": [
+    {
+      "alg": "Ed25519",
+      "kid": "JJdiTUjDxOdGPEUxDG7iofB6pXrYDw9x3jGC_j6-djc",
+      "sig": "Jpk11PrQWX7zQNA-P1QXcIgx4CFNVLmZ7ZmntxbI7md_hubl-FLjc1Et76QSAHCtj0gPaA0XWr-a1zyWZM11BQ"
+    }
+  ]
+}

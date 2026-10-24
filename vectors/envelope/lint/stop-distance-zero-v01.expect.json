@@ -1,0 +1,9 @@
+{
+  "about": "a zero stop distance",
+  "class": "stop-distance-zero",
+  "options": {},
+  "load_error_codes": null,
+  "lint_codes": [
+    "LINT_STOP_DISTANCE_ZERO"
+  ]
+}

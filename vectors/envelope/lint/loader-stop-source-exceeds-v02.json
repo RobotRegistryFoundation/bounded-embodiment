@@ -1,0 +1,135 @@
+{
+  "envelope_version": "0.2",
+  "machine": {
+    "id": "loophole-search",
+    "class": "arm",
+    "description": "TEST-ONLY synthetic envelope"
+  },
+  "frame": "base_link",
+  "points": [
+    {
+      "id": "tool",
+      "description": "TEST-ONLY tool point",
+      "max_speed_mps": 0.223
+    },
+    {
+      "id": "elbow",
+      "description": "TEST-ONLY elbow point"
+    }
+  ],
+  "workspace": {
+    "zones": [
+      {
+        "id": "tool_region",
+        "kind": "keep_in",
+        "applies_to": [
+          "tool"
+        ],
+        "box": {
+          "min_m": [
+            -0.2434,
+            -0.3343,
+            0.3773
+          ],
+          "max_m": [
+            -0.0761,
+            -0.0518,
+            0.8153
+          ]
+        }
+      },
+      {
+        "id": "cell",
+        "kind": "keep_in",
+        "applies_to": [
+          "elbow"
+        ],
+        "box": {
+          "min_m": [
+            -0.7434,
+            -0.8343,
+            -0.1227
+          ],
+          "max_m": [
+            0.4239,
+            0.4482,
+            1.3153
+          ]
+        }
+      },
+      {
+        "id": "fixture",
+        "kind": "keep_out",
+        "applies_to": [
+          "*"
+        ],
+        "box": {
+          "min_m": [
+            -0.2006,
+            -0.2369,
+            0.4977
+          ],
+          "max_m": [
+            -0.1404,
+            -0.1759,
+            0.5883
+          ]
+        }
+      }
+    ]
+  },
+  "motion": {
+    "max_speed_mps": 0.6393,
+    "max_joint_speed_radps": 2.0,
+    "joints": [
+      {
+        "name": "shoulder",
+        "position_rad": [
+          -1.5,
+          1.5
+        ],
+        "max_speed_radps": 1.5
+      },
+      {
+        "name": "elbow",
+        "position_rad": [
+          -2.0,
+          2.0
+        ],
+        "max_speed_radps": 2.0
+      }
+    ]
+  },
+  "stop": {
+    "category": 1,
+    "max_time_ms": 300,
+    "max_distance_m": 0.0151,
+    "sources": [
+      {
+        "source": "comms_loss",
+        "category": 1,
+        "max_time_ms": 781,
+        "max_distance_m": 0.0151
+      }
+    ]
+  },
+  "heartbeat": {
+    "model_timeout_ms": 500,
+    "gate_timeout_ms": 200,
+    "on_loss": "stop"
+  },
+  "proximity": [
+    {
+      "when": {
+        "human_within_m": 1.4293
+      },
+      "max_speed_mps": 0.3196
+    },
+    {
+      "when": {
+        "human_within_m": 0.2908
+      },
+      "action": "stop"
+    }
+  ]
+}

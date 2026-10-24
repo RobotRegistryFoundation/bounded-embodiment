@@ -1,0 +1,510 @@
+{
+  "report_version": "0.1",
+  "method": {
+    "id": "bounded-embodiment",
+    "version": "0.1",
+    "text_sha256": "sha256:5e3ab5d7ec59cb53004dcbd6f6ae2f5852abc8af253a346c1bc179868dc295ec"
+  },
+  "test": "EV-03",
+  "role": "test",
+  "run": {
+    "mode": "hardware",
+    "started_at": "2026-10-10T18:00:00Z",
+    "ended_at": "2026-10-10T18:00:12Z",
+    "operator": "TEST-ONLY golden run",
+    "clock": {
+      "offset_s": 0.0,
+      "uncertainty_s": 0.005,
+      "method": "TEST-ONLY: one synthetic timebase"
+    }
+  },
+  "system_under_test": {
+    "machine": {
+      "make": "TEST-ONLY",
+      "model": "golden-synthetic-arm",
+      "class": "arm",
+      "physical_max_tool_speed_mps": 0.5
+    },
+    "gate": {
+      "name": "TEST-ONLY synthetic gate",
+      "version": "0",
+      "placement": "other"
+    },
+    "software": [
+      {
+        "name": "tools/make_golden_runs.py",
+        "version": "1",
+        "role": "data synthesis"
+      }
+    ]
+  },
+  "adapter": {
+    "name": "TEST-ONLY synthetic adapter",
+    "version": "0",
+    "command_space_sha256": "sha256:888a6b758702088a2eab4cfba2fc084dac128794d8371f853ccced5359298c24"
+  },
+  "generator": {
+    "name": "be-hostile",
+    "version": "1",
+    "seed": 2,
+    "params": {
+      "seconds": 3.0,
+      "base_hz": 50.0,
+      "burst_hz": 100.0,
+      "segment_s": [
+        0.1,
+        0.3
+      ],
+      "amplitude": 1.0,
+      "center": null,
+      "strategies": [
+        "uniform",
+        "boundary",
+        "max",
+        "sign_flip",
+        "drive_out",
+        "fast",
+        "partial",
+        "malformed"
+      ]
+    },
+    "stream_sha256": "sha256:c05e4ed0fb64cabdfc47be796e9467f38a46c190d0d0c82cf6ab2fda816eba0f",
+    "commands_compared": 157,
+    "aborted": false
+  },
+  "instruments": [
+    {
+      "kind": "optical_marker_tracker",
+      "external": true,
+      "make_model": "TEST-ONLY synthetic instrument",
+      "rate_hz": 25.0,
+      "measures": [
+        "tool"
+      ],
+      "calibration": {
+        "method": "TEST-ONLY: none, the data is synthetic"
+      },
+      "accuracy_check": {
+        "at": "2026-10-10T17:00:00Z",
+        "points": 8,
+        "method": "TEST-ONLY synthetic survey of 8 points"
+      },
+      "primary": true,
+      "post_run_check": {
+        "at": "2026-10-10T18:00:20Z",
+        "method": "TEST-ONLY synthetic re-survey"
+      }
+    }
+  ],
+  "scoring": {
+    "method": "ev03-tool-point/1",
+    "profile": {
+      "profile": "ev03-loophole-test-only",
+      "thresholds_are_illustrative": true,
+      "tolerance_m": 0.01,
+      "tolerance_speed_frac": 0.05,
+      "speed_window_s": 0.2,
+      "min_duration_s": 3,
+      "min_base_rate_hz": 45,
+      "burst_rate_hz": 500,
+      "required_strategies": [
+        "uniform",
+        "boundary",
+        "max",
+        "sign_flip",
+        "drive_out",
+        "fast",
+        "partial",
+        "malformed"
+      ],
+      "gap_min_s": 0.1,
+      "gap_max_s": 1.0,
+      "gap_max_fraction": 0.05,
+      "motion_window_s": 1.0,
+      "motion_min_displacement_m": 0.01,
+      "motion_sigma_factor": 6,
+      "motion_min_window_fraction": 0.05,
+      "accuracy_p95_max_tolerance_frac": 1.0,
+      "accuracy_max_max_tolerance_frac": 1.5,
+      "post_check_drift_max_tolerance_frac": 0.5,
+      "accuracy_check_max_age_s": 43200
+    }
+  },
+  "safety": {
+    "hardware_stop": "none: TEST-ONLY synthetic data, no machine moved",
+    "fk_tripwire": "override"
+  },
+  "provenance": {
+    "kit": {
+      "name": "tools/make_golden_runs.py",
+      "version": "1",
+      "git_sha": null,
+      "dirty": null
+    },
+    "python": "synthetic",
+    "platform": "synthetic",
+    "core_version": "0.1.1"
+  },
+  "license": "CC-BY-4.0",
+  "rights_affirmed": true,
+  "signer": {
+    "name": "TEST-ONLY golden key",
+    "organization": "bounded-embodiment test vectors",
+    "role": "test vector",
+    "kid": "JJdiTUjDxOdGPEUxDG7iofB6pXrYDw9x3jGC_j6-djc"
+  },
+  "envelope": {
+    "hash": "sha256:0b8c2dbc9be867638b7a788322547d57ef7017788b342e7822884ac484defc03"
+  },
+  "window": {
+    "start_s": -0.005,
+    "end_s": 3.985000000000002,
+    "length_s": 3.990000000000002,
+    "first_command_s": 0.0,
+    "last_command_s": 2.980000000000002,
+    "run_duration_s": 2.980000000000002,
+    "command_spacing_s": 0.020000000000000018,
+    "covered_s": 3.000000000000002,
+    "commands": 157,
+    "clock_uncertainty_s": 0.005,
+    "tail_s": 1.0
+  },
+  "achieved_rates": {
+    "base_commands": 143,
+    "base_duration_s": 2.860000000000002,
+    "base_rate_hz": 49.999999999999964,
+    "strategies": [
+      {
+        "strategy": "boundary",
+        "commands": 12,
+        "segments": 2,
+        "duration_s": 0.2400000000000002,
+        "rate_hz": 49.99999999999996
+      },
+      {
+        "strategy": "drive_out",
+        "commands": 15,
+        "segments": 2,
+        "duration_s": 0.30000000000000027,
+        "rate_hz": 49.99999999999996
+      },
+      {
+        "strategy": "fast",
+        "commands": 14,
+        "segments": 1,
+        "duration_s": 0.14000000000000012,
+        "rate_hz": 99.99999999999991
+      },
+      {
+        "strategy": "malformed",
+        "commands": 8,
+        "segments": 1,
+        "duration_s": 0.16000000000000014,
+        "rate_hz": 49.99999999999996
+      },
+      {
+        "strategy": "max",
+        "commands": 33,
+        "segments": 3,
+        "duration_s": 0.6600000000000004,
+        "rate_hz": 49.99999999999997
+      },
+      {
+        "strategy": "partial",
+        "commands": 26,
+        "segments": 2,
+        "duration_s": 0.5200000000000005,
+        "rate_hz": 49.99999999999996
+      },
+      {
+        "strategy": "sign_flip",
+        "commands": 30,
+        "segments": 3,
+        "duration_s": 0.6000000000000003,
+        "rate_hz": 49.99999999999997
+      },
+      {
+        "strategy": "uniform",
+        "commands": 19,
+        "segments": 2,
+        "duration_s": 0.38000000000000034,
+        "rate_hz": 49.99999999999996
+      }
+    ]
+  },
+  "score": {
+    "sigma_jitter_m": 0.008000000000000007,
+    "speed_allowance_mps": 0.16970562748477155,
+    "speed_span_min_s": 0.1,
+    "points": [
+      {
+        "point": "tool",
+        "has_zones": true,
+        "samples": 100,
+        "position_excursions": 0,
+        "worst_clearance_m": null,
+        "worst_clearance_t_s": null,
+        "min_clearance_m": 0.04928658121391205,
+        "min_clearance_t_s": 2.42,
+        "speed_limit_mps": 0.25,
+        "speed_spans": 97,
+        "max_speed_mps": 0.4067785813092249,
+        "max_speed_t_s": 2.74,
+        "speed_excursions": 0,
+        "worst_speed_mps": null,
+        "worst_speed_t_s": null
+      }
+    ]
+  },
+  "gaps": {
+    "physical_max_tool_speed_mps": 0.5,
+    "min_rate_hz": 10.0,
+    "points": [
+      {
+        "point": "tool",
+        "samples": 100,
+        "median_spacing_s": 0.040000000000000036,
+        "median_rate_hz": 24.99999999999998,
+        "gap_threshold_s": 0.1200000000000001,
+        "count": 0,
+        "longest_s": null,
+        "total_s": 0.0,
+        "fraction": 0.0,
+        "unbounded": 0,
+        "longest_spacing_s": 0.040000000000000036
+      }
+    ]
+  },
+  "motion": {
+    "window_s": 1.0,
+    "threshold_m": 0.04800000000000004,
+    "windows": 3,
+    "moving": 2,
+    "share": 0.6666666666666666
+  },
+  "coverage": {
+    "near_band_m": 0.02,
+    "points": [
+      {
+        "point": "tool",
+        "samples": 100,
+        "faces": [
+          {
+            "zone": "tool_box",
+            "face": "x_min",
+            "closest_m": 0.0494437960742507,
+            "near_fraction": 0.0
+          },
+          {
+            "zone": "tool_box",
+            "face": "x_max",
+            "closest_m": 0.04928658121391205,
+            "near_fraction": 0.0
+          },
+          {
+            "zone": "tool_box",
+            "face": "y_min",
+            "closest_m": 0.14935768703953362,
+            "near_fraction": 0.0
+          },
+          {
+            "zone": "tool_box",
+            "face": "y_max",
+            "closest_m": 0.14934516690834426,
+            "near_fraction": 0.0
+          },
+          {
+            "zone": "tool_box",
+            "face": "z_min",
+            "closest_m": 0.12429128343113698,
+            "near_fraction": 0.0
+          },
+          {
+            "zone": "tool_box",
+            "face": "z_max",
+            "closest_m": 0.12428528006761336,
+            "near_fraction": 0.0
+          }
+        ],
+        "keep_outs": [
+          {
+            "zone": "fixture",
+            "closest_m": 0.11349056880377965,
+            "near_fraction": 0.0
+          }
+        ]
+      }
+    ]
+  },
+  "accuracy": {
+    "age_s": 3600.0,
+    "pre": {
+      "points": 8,
+      "p95_error_m": 0.0020000000000000018,
+      "max_error_m": 0.0020000000000000018,
+      "errors": [
+        {
+          "label": "p1",
+          "error_m": 0.0020000000000000018
+        },
+        {
+          "label": "p2",
+          "error_m": 0.0020000000000000018
+        },
+        {
+          "label": "p3",
+          "error_m": 0.0020000000000000018
+        },
+        {
+          "label": "p4",
+          "error_m": 0.0020000000000000018
+        },
+        {
+          "label": "p5",
+          "error_m": 0.0020000000000000018
+        },
+        {
+          "label": "p6",
+          "error_m": 0.0020000000000000018
+        },
+        {
+          "label": "p7",
+          "error_m": 0.0020000000000000018
+        },
+        {
+          "label": "p8",
+          "error_m": 0.0020000000000000018
+        }
+      ]
+    },
+    "post": {
+      "points": 8,
+      "compared": 8,
+      "max_drift_m": 0.0010000000000000009,
+      "drifts": [
+        {
+          "label": "p1",
+          "drift_m": 0.0010000000000000009
+        },
+        {
+          "label": "p2",
+          "drift_m": 0.0010000000000000009
+        },
+        {
+          "label": "p3",
+          "drift_m": 0.0010000000000000009
+        },
+        {
+          "label": "p4",
+          "drift_m": 0.0010000000000000009
+        },
+        {
+          "label": "p5",
+          "drift_m": 0.0010000000000000009
+        },
+        {
+          "label": "p6",
+          "drift_m": 0.0010000000000000009
+        },
+        {
+          "label": "p7",
+          "drift_m": 0.0010000000000000009
+        },
+        {
+          "label": "p8",
+          "drift_m": 0.0010000000000000009
+        }
+      ]
+    },
+    "jitter": {
+      "sigma_m": 0.008000000000000007,
+      "labels": [
+        {
+          "label": "j1",
+          "samples": 3,
+          "sigma_m": 0.008000000000000007
+        },
+        {
+          "label": "j2",
+          "samples": 3,
+          "sigma_m": 0.008000000000000007
+        }
+      ]
+    },
+    "limits": {
+      "min_points": 6,
+      "max_age_s": 43200,
+      "p95_max_m": 0.01,
+      "max_max_m": 0.015,
+      "drift_max_m": 0.005
+    },
+    "robot_state_match": null
+  },
+  "observations": {
+    "encoder_fk_observation": null,
+    "excursions_seen_but_not_scored": []
+  },
+  "flags": [
+    {
+      "code": "NONSTANDARD_PARAMS",
+      "detail": "there is no packaged profile named 'ev03-loophole-test-only', so every value is nonstandard"
+    }
+  ],
+  "verdict": {
+    "result": "PASS",
+    "reasons": [],
+    "points_measured": [
+      "tool"
+    ],
+    "points_unmeasured": []
+  },
+  "raw_data": [
+    {
+      "path": "command-space.json",
+      "sha256": "sha256:33d4f9ff400669603c81a1d8623a4d0a619c60e2668a2905c1931fb04ffa5c40",
+      "bytes": 770,
+      "role": "command_space",
+      "format": "json"
+    },
+    {
+      "path": "envelope.json",
+      "sha256": "sha256:101d4c6217d9dbe98b3905dfb6401ee649797d3f7d466f49f9ebc1a7621b0313",
+      "bytes": 1224,
+      "role": "envelope",
+      "format": "json"
+    },
+    {
+      "path": "raw/accuracy.csv",
+      "sha256": "sha256:b5c6940774f31a0de006fe06b25fa97db8d99b4b3c9e69f9b90291daa9f83ca1",
+      "bytes": 1345,
+      "role": "accuracy",
+      "format": "be-accuracy-csv/1"
+    },
+    {
+      "path": "raw/commands.csv",
+      "sha256": "sha256:361d4c7415408f307d3134749bad62215d88c4fc1e53127edaa887273275888c",
+      "bytes": 15354,
+      "role": "commands",
+      "format": "be-commands-csv/1"
+    },
+    {
+      "path": "raw/samples.csv",
+      "sha256": "sha256:793e3d69aa407620d2e2dc7d107e49dc7ce904465210622e1ee7b86f20e9fc13",
+      "bytes": 10602,
+      "role": "samples",
+      "format": "be-samples-csv/1"
+    }
+  ],
+  "statements": {
+    "not_certification": true,
+    "thresholds_are_illustrative": true,
+    "measurement_source": "external_instrument"
+  },
+  "signature": [
+    {
+      "alg": "Ed25519",
+      "kid": "JJdiTUjDxOdGPEUxDG7iofB6pXrYDw9x3jGC_j6-djc",
+      "sig": "FgV_eXSfro8_AnfdgQ0lMIuWgeFabyKI85R8-pw297gtP4iedO6wrY8JFn-tqkjLsglEry6VRjmMNB271ozaBg"
+    }
+  ]
+}

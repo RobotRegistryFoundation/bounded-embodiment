@@ -1,0 +1,9 @@
+{
+  "about": "schema-valid, rejected by the loader: a self-intersecting polygon",
+  "class": "loader-polygon-bowtie",
+  "options": {},
+  "load_error_codes": [
+    "ENVELOPE_POLYGON_NOT_SIMPLE"
+  ],
+  "lint_codes": []
+}

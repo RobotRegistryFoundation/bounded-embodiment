@@ -1,0 +1,9 @@
+{
+  "about": "schema-valid, rejected by the loader: a stop source above the top-level stop",
+  "class": "loader-stop-source-exceeds",
+  "options": {},
+  "load_error_codes": [
+    "ENVELOPE_STOP_SOURCE_EXCEEDS"
+  ],
+  "lint_codes": []
+}

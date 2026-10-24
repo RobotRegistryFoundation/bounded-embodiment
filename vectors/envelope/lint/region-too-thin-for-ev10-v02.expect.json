@@ -1,0 +1,9 @@
+{
+  "about": "a keep_in region too thin to hold any EV-10 waypoint",
+  "class": "region-too-thin-for-ev10",
+  "options": {},
+  "load_error_codes": null,
+  "lint_codes": [
+    "LINT_ALLOWED_REGION_TOO_THIN_FOR_EV10"
+  ]
+}

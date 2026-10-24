@@ -18,7 +18,7 @@ Every workstream builds against these names. If a name here is wrong, say so and
 - **Gates** live in `examples/reference-gates/`. Neither package ever imports them.
 
 **CLI.** `be`, with a `bounded-embodiment` alias.
-- Core registers the subcommands `verify`, `keygen`, `envelope` (`validate`, `convert`, `hash`), and `canon` (debug).
+- Core registers the subcommands `verify`, `keygen`, `envelope` (`validate`, `convert`, `hash`, and `lint`, added 24 Oct 2026: advice only, no verdict depends on it), and `canon` (debug).
 - The kit adds subcommands through the entry-point group `bounded_embodiment.cli`.
 - `be run`, `be goto-start`, `be doctor`, `be adapter`, `be record`, `be fit`, `be instrument`, `be report` and `be submit` all come from the kit.
 

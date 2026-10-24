@@ -1,0 +1,9 @@
+{
+  "about": "two proximity rules with the same distance",
+  "class": "proximity-duplicate-distance",
+  "options": {},
+  "load_error_codes": null,
+  "lint_codes": [
+    "LINT_PROXIMITY_DUPLICATE_DISTANCE"
+  ]
+}

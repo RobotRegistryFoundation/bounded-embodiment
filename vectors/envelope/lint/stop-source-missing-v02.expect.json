@@ -1,0 +1,10 @@
+{
+  "about": "stop.sources itemizes some stop sources and leaves others out",
+  "class": "stop-source-missing",
+  "options": {},
+  "load_error_codes": null,
+  "lint_codes": [
+    "LINT_STOP_SOURCE_MISSING",
+    "LINT_STOP_SOURCE_MISSING"
+  ]
+}

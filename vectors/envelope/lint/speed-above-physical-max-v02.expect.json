@@ -1,0 +1,12 @@
+{
+  "about": "a speed limit above the declared physical maximum speed",
+  "class": "speed-above-physical-max",
+  "options": {
+    "physical_max_speed_mps": 0.2112
+  },
+  "load_error_codes": null,
+  "lint_codes": [
+    "LINT_SPEED_LIMIT_ABOVE_PHYSICAL_MAX",
+    "LINT_SPEED_LIMIT_ABOVE_PHYSICAL_MAX"
+  ]
+}

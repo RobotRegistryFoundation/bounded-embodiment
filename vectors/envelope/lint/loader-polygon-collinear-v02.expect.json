@@ -1,0 +1,9 @@
+{
+  "about": "schema-valid, rejected by the loader: a zero-area polygon",
+  "class": "loader-polygon-collinear",
+  "options": {},
+  "load_error_codes": [
+    "ENVELOPE_POLYGON_DEGENERATE"
+  ],
+  "lint_codes": []
+}

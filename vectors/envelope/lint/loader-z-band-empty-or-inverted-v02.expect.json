@@ -1,0 +1,9 @@
+{
+  "about": "schema-valid, rejected by the loader: an empty or inverted height band",
+  "class": "loader-z-band-empty-or-inverted",
+  "options": {},
+  "load_error_codes": [
+    "ENVELOPE_Z_RANGE_INVERTED"
+  ],
+  "lint_codes": []
+}

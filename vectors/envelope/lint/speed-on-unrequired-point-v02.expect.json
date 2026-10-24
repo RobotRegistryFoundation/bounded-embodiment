@@ -1,0 +1,9 @@
+{
+  "about": "a point with its own speed limit but no zone, so nothing requires measuring it",
+  "class": "speed-on-unrequired-point",
+  "options": {},
+  "load_error_codes": null,
+  "lint_codes": [
+    "LINT_SPEED_LIMIT_ON_UNREQUIRED_POINT"
+  ]
+}

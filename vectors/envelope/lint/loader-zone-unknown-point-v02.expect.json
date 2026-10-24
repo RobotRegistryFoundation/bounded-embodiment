@@ -1,0 +1,9 @@
+{
+  "about": "schema-valid, rejected by the loader: a zone that applies to no declared point",
+  "class": "loader-zone-unknown-point",
+  "options": {},
+  "load_error_codes": [
+    "ENVELOPE_UNKNOWN_POINT"
+  ],
+  "lint_codes": []
+}

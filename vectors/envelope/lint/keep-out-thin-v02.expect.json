@@ -1,0 +1,9 @@
+{
+  "about": "a keep_out wall at most 2 x tolerance_m thick: a point can cross it with no position excursion",
+  "class": "keep-out-thin",
+  "options": {},
+  "load_error_codes": null,
+  "lint_codes": [
+    "LINT_KEEP_OUT_UNENFORCEABLE"
+  ]
+}

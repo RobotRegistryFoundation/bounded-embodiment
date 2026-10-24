@@ -1,0 +1,138 @@
+{
+  "envelope_version": "0.2",
+  "machine": {
+    "id": "loophole-search",
+    "class": "arm",
+    "description": "TEST-ONLY synthetic envelope"
+  },
+  "frame": "base_link",
+  "points": [
+    {
+      "id": "tool",
+      "description": "TEST-ONLY tool point"
+    },
+    {
+      "id": "elbow",
+      "description": "TEST-ONLY elbow point"
+    }
+  ],
+  "workspace": {
+    "zones": [
+      {
+        "id": "tool_region",
+        "kind": "keep_in",
+        "applies_to": [
+          "tool"
+        ],
+        "prism": {
+          "polygon_m": [
+            [
+              0.5133,
+              0.3503
+            ],
+            [
+              0.3398,
+              0.4245
+            ],
+            [
+              0.1583,
+              0.2134
+            ],
+            [
+              0.4518,
+              0.0501
+            ]
+          ],
+          "z_m": [
+            0.3357,
+            0.5366
+          ]
+        }
+      },
+      {
+        "id": "cell",
+        "kind": "keep_in",
+        "applies_to": [
+          "elbow"
+        ],
+        "box": {
+          "min_m": [
+            -0.2424,
+            -0.3739,
+            -0.1643
+          ],
+          "max_m": [
+            0.9571,
+            0.8256,
+            1.0366
+          ]
+        }
+      },
+      {
+        "id": "fixture",
+        "kind": "keep_out",
+        "applies_to": [
+          "*"
+        ],
+        "box": {
+          "min_m": [
+            0.2988,
+            0.2143,
+            0.4249
+          ],
+          "max_m": [
+            0.3598,
+            0.293,
+            0.4911
+          ]
+        }
+      }
+    ]
+  },
+  "motion": {
+    "max_speed_mps": 598.4149,
+    "max_joint_speed_radps": 2.0,
+    "joints": [
+      {
+        "name": "shoulder",
+        "position_rad": [
+          -1.5,
+          1.5
+        ],
+        "max_speed_radps": 1.5
+      },
+      {
+        "name": "elbow",
+        "position_rad": [
+          -2.0,
+          2.0
+        ],
+        "max_speed_radps": 2.0
+      }
+    ]
+  },
+  "stop": {
+    "category": 1,
+    "max_time_ms": 300,
+    "max_distance_m": 0.0136
+  },
+  "heartbeat": {
+    "model_timeout_ms": 500,
+    "gate_timeout_ms": 200,
+    "on_loss": "stop"
+  },
+  "proximity": [
+    {
+      "when": {
+        "human_within_m": 1.1067
+      },
+      "max_speed_mps": 299.2074
+    },
+    {
+      "when": {
+        "human_within_m": 0.2499
+      },
+      "action": "stop"
+    }
+  ]
+}

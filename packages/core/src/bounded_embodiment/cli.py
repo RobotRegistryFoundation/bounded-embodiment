@@ -6,6 +6,7 @@ Core commands::
     be canon FILE [--unsigned] [--sha256]
     be envelope validate FILE [--json]
     be envelope hash FILE
+    be envelope lint FILE [--json] [--physical-max-speed MPS]
     be envelope convert --from harness-arm FILE --machine-id ID --stop JSON --heartbeat JSON
     be verify ...          (arguments are handed to bounded_embodiment.report.cli_verify)
 
@@ -234,6 +235,35 @@ def _cmd_envelope_hash(args: argparse.Namespace) -> int:
     return EXIT_OK
 
 
+def _cmd_envelope_lint(args: argparse.Namespace) -> int:
+    code, envelope = _load_envelope(args, "envelope lint")
+    if envelope is None:
+        return code
+    try:
+        lint_module = importlib.import_module("bounded_embodiment.envelope.lint")
+    except ImportError as exc:
+        return _not_available("envelope lint", f"bounded_embodiment.envelope.lint cannot be imported ({exc})")
+    v_phys = args.physical_max_speed
+    if v_phys is not None and not (v_phys > 0 and v_phys < float("inf")):
+        _err("--physical-max-speed must be a number above 0")
+        return EXIT_USAGE
+    loader = list(getattr(envelope, "findings", ()) or ())
+    found = lint_module.lint(envelope, physical_max_speed_mps=v_phys)
+    errors = [f for f in found if f.severity == "error"]
+    if args.json:
+        print(json.dumps({"valid": True, "version": envelope.version, "hash": envelope.hash,
+                          "findings": [f.as_dict() for f in loader],
+                          "lint": [f.as_dict() for f in found],
+                          "lint_errors": len(errors)}, indent=2))
+    else:
+        for f in loader + found:
+            print(f"{f.severity}: {f.code} at {f.where or '/'}: {f.detail}")
+        warns = len([f for f in found if f.severity == "warn"])
+        print(f"{len(errors)} lint error(s), {warns} warning(s), "
+              f"{len(found) - len(errors) - warns} note(s) for envelope {envelope.hash}")
+    return EXIT_FAIL if errors else EXIT_OK
+
+
 def _cmd_envelope_convert(args: argparse.Namespace) -> int:
     command = "envelope convert"
     if _envelope_module(command) is None:
@@ -384,6 +414,18 @@ def build_parser() -> argparse.ArgumentParser:
     q = env.add_parser("hash", help="print the envelope hash (sha256 of its JCS without signature)")
     q.add_argument("file", help="the envelope JSON file")
     q.set_defaults(func=_cmd_envelope_hash)
+    q = env.add_parser("lint", help="look for limits the schema accepts but that are unsafe, contradictory "
+                       "or vacuous",
+                       description="Load an envelope (0.1 or 0.2) and report semantic problems with stable "
+                       "LINT_* codes: keep-out zones that cover the keep-in region or are too thin to "
+                       "enforce, stop distances longer than the region is deep, proximity rules that "
+                       "allow more speed closer in, and more. Exit status 1 when any problem is an error. "
+                       "Lint is advice: no verdict depends on it.")
+    q.add_argument("file", help="the envelope JSON file")
+    q.add_argument("--json", action="store_true", help="machine-readable output")
+    q.add_argument("--physical-max-speed", type=float, default=None, metavar="MPS",
+                   help="the machine's physical maximum speed (v_phys), to flag speed limits above it")
+    q.set_defaults(func=_cmd_envelope_lint)
     q = env.add_parser("convert", help="convert another envelope format to envelope 0.2")
     q.add_argument("--from", dest="source_format", required=True, choices=["harness-arm"],
                    help="format of the input file")

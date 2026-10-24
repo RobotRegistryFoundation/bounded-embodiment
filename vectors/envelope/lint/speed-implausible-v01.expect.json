@@ -1,0 +1,9 @@
+{
+  "about": "a speed limit above 10 m/s",
+  "class": "speed-implausible",
+  "options": {},
+  "load_error_codes": null,
+  "lint_codes": [
+    "LINT_SPEED_LIMIT_IMPLAUSIBLE"
+  ]
+}

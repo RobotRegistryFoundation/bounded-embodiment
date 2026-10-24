@@ -1,0 +1,117 @@
+{
+  "envelope_version": "0.2",
+  "machine": {
+    "id": "loophole-search",
+    "class": "arm",
+    "description": "TEST-ONLY synthetic envelope"
+  },
+  "frame": "base_link",
+  "points": [
+    {
+      "id": "tool",
+      "description": "TEST-ONLY tool point",
+      "max_speed_mps": 0.2362
+    },
+    {
+      "id": "elbow",
+      "description": "TEST-ONLY elbow point"
+    }
+  ],
+  "workspace": {
+    "zones": [
+      {
+        "id": "tool_region",
+        "kind": "keep_in",
+        "applies_to": [
+          "tool"
+        ],
+        "box": {
+          "min_m": [
+            0.1936,
+            0.1204,
+            0.3187
+          ],
+          "max_m": [
+            0.4379,
+            0.5512,
+            0.4815
+          ]
+        }
+      },
+      {
+        "id": "cell",
+        "kind": "keep_in",
+        "applies_to": [
+          "elbow"
+        ],
+        "box": {
+          "min_m": [
+            -0.3064,
+            -0.3796,
+            -0.1813
+          ],
+          "max_m": [
+            0.9379,
+            1.0512,
+            0.9815
+          ]
+        }
+      },
+      {
+        "id": "fixture",
+        "kind": "keep_out",
+        "applies_to": [
+          "*"
+        ],
+        "box": {
+          "min_m": [
+            0.2764,
+            0.2343,
+            0.3576
+          ],
+          "max_m": [
+            0.3465,
+            0.3788,
+            0.4224
+          ]
+        }
+      }
+    ]
+  },
+  "motion": {
+    "max_speed_mps": 0.3045,
+    "joints": [
+      {
+        "name": "wrist",
+        "position_rad": [
+          -9.0795,
+          6.9207
+        ]
+      }
+    ]
+  },
+  "stop": {
+    "category": 1,
+    "max_time_ms": 300,
+    "max_distance_m": 0.0077
+  },
+  "heartbeat": {
+    "model_timeout_ms": 500,
+    "gate_timeout_ms": 200,
+    "on_loss": "stop"
+  },
+  "proximity": [
+    {
+      "when": {
+        "human_within_m": 1.2864
+      },
+      "max_speed_mps": 0.1522
+    },
+    {
+      "when": {
+        "human_within_m": 0.3073
+      },
+      "action": "stop"
+    }
+  ]
+}

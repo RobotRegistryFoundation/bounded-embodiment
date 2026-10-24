@@ -7,6 +7,19 @@ Generators, scorers and profiles are versioned by name (`be-hostile/1`, `ev03-to
 
 ## Unreleased
 
+Core:
+
+- `be envelope lint FILE [--json] [--physical-max-speed MPS]` (new, `bounded_embodiment.envelope.lint`):
+  reports envelope limits that the schema and the loader accept but that are unsafe, contradictory
+  or vacuous, each with a stable `LINT_*` code: keep_out zones that cover the keep_in region or
+  are too thin to enforce, stop distances longer than the region is deep, proximity rules that
+  allow more speed closer in, speed limits no run can test, and more. Exit status 1 on a lint
+  error. It is advice: no verdict depends on it and `be verify` does not run it.
+- No rule set, profile, format or reason code changes. The loophole search that motivated the lint
+  is in `docs/loopholes.md`, with new vectors in `vectors/envelope/lint/` (made by
+  `tools/envelope_loopholes.py`) and `vectors/loopholes/runs/` (made by
+  `tools/make_loophole_runs.py`). The defects it found are for the next rule-set versions.
+
 Core and kit:
 
 - Package metadata: the Homepage link is https://robotregistryfoundation.org/bounded-embodiment/,

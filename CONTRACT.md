@@ -198,6 +198,7 @@ These documents are part of the contract. Each was built to the plan, then integ
 | `be report` and `be submit`: packaging, timebase, scrubbing, signing, submission checks | `docs/seams/submission.md` | built, exercised in simulation |
 | Reference gates (examples, never imported by core or the kit) and the B6 simulation matrix | `examples/reference-gates/README.md`, `packages/kit/tests/test_b6_matrix.py` | built |
 | `be instrument check` (pre-run accuracy check, jitter record, post-run check) and `be instrument plan` (poses for the surveyed points) | `docs/seams/instrument.md` | built (11 Oct), validated on synthetic data only |
+| Falsification search `be-falsify/1`, `bounded_embodiment_kit.falsify` (`python -m bounded_embodiment_kit.falsify`): simulation only, loads gates by `module:factory`, no verdict, scorer or released rule set depends on it | `docs/falsification-be-falsify-1-draft.md`, `docs/falsification-findings.md` | **draft for method v0.2** (24 Oct) |
 
 Decisions taken while integrating:
 - **Control runs** walk from a declared start pose (`be-control/1` param `start`, every axis, or null for home), so a step cap limits the first command too.

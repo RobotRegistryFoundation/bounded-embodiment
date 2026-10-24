@@ -26,6 +26,15 @@ Core and kit:
   the project's one homepage (it was https://craigmerry.com/bounded-embodiment/, the talk). Both
   package READMEs link the homepage, and core's README names the craigmerry.com page as the talk.
 
+Kit:
+
+- `bounded_embodiment_kit.falsify` (`python -m bounded_embodiment_kit.falsify`), a draft
+  falsification search, rule set `be-falsify/1` (draft for method v0.2): it drives a gate in
+  lockstep with the simulated rover or SO-101 and steers its commands toward a position or speed
+  violation, writing a replayable JSON trace. Simulation only. A violation it finds is evidence of
+  a defect; finding none establishes only that, never a PASS. Results on the reference gates are in
+  `docs/falsification-findings.md`. No released rule set, scorer, golden vector or verdict changes.
+
 ## bounded-embodiment 0.1.1 and bounded-embodiment-kit 0.1.2 (2026-10-16)
 
 Core and kit:

@@ -372,9 +372,9 @@ def test_catch_up_rows_end_the_trial_before_them_and_belong_to_no_trial():
     first of them (its hold, and EV-05's restart window, end there, less U); the next trial
     begins at its own first command."""
     inp = T.ev02_input(noise_m=0.0005)
-    plain = ev02.split_trials(inp.commands)
+    plain = ev02.split_trials(inp.commands, window_s=0.2)
     caught = _with_catch_up_rows(inp, plain[1].first_t)
-    trials = ev02.split_trials(caught.commands)
+    trials = ev02.split_trials(caught.commands, window_s=0.2)
     assert trials[0].next_t == pytest.approx(plain[1].first_t - 0.1)
     assert trials[1].first_t == plain[1].first_t
     out = ev02.score(caught)

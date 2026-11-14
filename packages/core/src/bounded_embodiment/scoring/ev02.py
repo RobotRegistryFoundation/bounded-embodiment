@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import json
 import math
+from collections import deque
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 
@@ -136,38 +137,58 @@ def _direction(a: float, b: float) -> int:
     return (b > a) - (b < a)
 
 
-def walk_end(before: str | None, at_stop: str | None, after: Sequence[tuple[float, str]],
-             t_stop: float) -> float:
-    """The end of the walk after the stop (method §12.7.4 item 3.5): the moving axes are those
-    whose command changed in the last step before the stop (from ``before`` to ``at_stop``), each
-    with its direction; the walk ends at the last continuing row (``after``: send time and payload)
-    up to which every moving axis keeps changing in its own direction, row after row. A row in
-    which one of them stops changing, or turns back, ends it; so does a stop with no moving axis
-    (the walk ends at the stop itself)."""
-    a, b = _numbers(before), _numbers(at_stop)
-    moving = {k: _direction(a[k], b[k]) for k in b if k in a and a[k] != b[k]}
-    end, previous = t_stop, b
+def walk_end(before: Sequence[tuple[float, str | None]], after: Sequence[tuple[float, str]],
+             t_stop: float, *, window_s: float) -> float:
+    """The end of the walk after the stop (method §12.7.4 item 3.5). ``before`` holds the command
+    rows before the stop (send time and payload, in order). The moving axes are those whose command
+    changed in any step between two of them whose later row was sent within ``window_s`` (the speed
+    window) before the stop, and in the last step before the stop in any case, each with the
+    direction of its last change (round-3 finding 6: a lagging servo still carries the stop point
+    at full speed after the axis that carries it has landed). The walk ends at the last continuing
+    row (``after``: send time and payload) up to which every moving axis keeps changing in its own
+    direction, row after row. A row in which one of them stops changing, or turns back, ends it; so
+    does a stop with no moving axis (the walk ends at the stop itself)."""
+    rows = [(t, _numbers(payload)) for t, payload in before]
+    moving: dict[str, int] = {}
+    for i in range(1, len(rows)):
+        t, b = rows[i]
+        if t < t_stop - window_s and i != len(rows) - 1:
+            continue
+        a = rows[i - 1][1]
+        for k in b:
+            if k in a and a[k] != b[k]:
+                moving[k] = _direction(a[k], b[k])
+    end = t_stop
     if not moving:
         return end
+    previous = rows[-1][1]
     for t, payload in after:
         p = _numbers(payload)
-        if any(k not in p or _direction(previous[k], p[k]) != s for k, s in moving.items()):
+        if any(k not in p or k not in previous or _direction(previous[k], p[k]) != s
+               for k, s in moving.items()):
             break
         end, previous = t, p
     return end
 
 
-def split_trials(commands: Sequence[Command]) -> list[Trial]:
+def split_trials(commands: Sequence[Command], *, window_s: float) -> list[Trial]:
     """Rule: "a trial is the run of rows from the first row after the previous trial (or the
     first row) up to and including a stop:<source> row, with the continue:<id> rows that follow
     it". Rows after the last stop row that are not its continuing rows belong to no trial (a run
     stopped early), and so do catch_up rows (round-2 K3: the bench's walk between two trials),
-    though the first of them is the next row after the trial before them. The last step before
-    the stop is between the two command rows (any but stop rows) before it."""
+    though the first of them is the next row after the trial before them. The steps before the
+    stop are between the command rows (any but stop and catch_up rows) before it; ``walk_end``
+    looks at those within ``window_s`` (the profile's speed window) of the stop."""
     trials: list[Trial] = []
     first = None
     drive, drive_t = None, None
-    before, last = None, None  # the payloads of the last two command rows (stop rows aside)
+    history: deque[tuple[float, str | None]] = deque()  # the command rows before the stop, recent ones
+
+    def remember(t: float, payload: str | None) -> None:
+        history.append((t, payload))
+        while len(history) > 2 and history[1][0] < t - window_s:  # keep one row older than the window
+            history.popleft()
+
     k, n = 0, len(commands)
     while k < n:
         c = commands[k]
@@ -190,13 +211,14 @@ def split_trials(commands: Sequence[Command]) -> list[Trial]:
             nxt = commands[k].t_sent_s if k < n else None
             trials.append(
                 Trial(len(trials), c.strategy[len(STOP_PREFIX) :], drive, first, drive_t,
-                      c.t_sent_s, issued, note, tuple(after), walk_end(before, last, walk, c.t_sent_s), nxt)
+                      c.t_sent_s, issued, note, tuple(after),
+                      walk_end(list(history), walk, c.t_sent_s, window_s=window_s), nxt)
             )
-            if walk:
-                before, last = (walk[-2][1] if len(walk) > 1 else last), walk[-1][1]
+            for t, payload in walk:
+                remember(t, payload)
             first, drive, drive_t = None, None, None
             continue
-        before, last = last, c.payload_json
+        remember(c.t_sent_s, c.payload_json)
         k += 1
     return trials
 
@@ -239,7 +261,7 @@ def score(inp: ScoringInput) -> dict:
     )
     spacing = command_spacing(p.commands)
     trials = []
-    for t in split_trials(p.commands):
+    for t in split_trials(p.commands, window_s=profile["speed_window_s"]):
         max_time, max_distance, _ = stop_limits(p.envelope, t.source)
         if not t.issued:
             m = StopTrial(notes=[t.issue_note or "the stop was not issued"])

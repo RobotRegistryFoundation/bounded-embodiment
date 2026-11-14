@@ -337,7 +337,7 @@ def test_split_trials() -> None:
         Command(7, 2.0, 2.0, "drive:b", '{"x":4}', "ok", None),
         Command(8, 2.1, 2.1, "continue:b", '{"x":4}', "ok", None),
     ]
-    trials = ev02.split_trials(rows)
+    trials = ev02.split_trials(rows, window_s=0.2)
     assert [(t.index, t.source, t.drive, t.first_t, t.drive_t, t.stop_t, t.after_times, t.walk_end_t,
              t.next_t, t.issued) for t in trials] == [
         (0, "stop_message", "a", 0.0, 0.1, 0.2, (0.2, 0.3, 0.4, 0.5), 0.4, 1.0, True),

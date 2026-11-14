@@ -138,21 +138,25 @@ def _direction(a: float, b: float) -> int:
 
 
 def walk_end(before: Sequence[tuple[float, str | None]], after: Sequence[tuple[float, str]],
-             t_stop: float, *, window_s: float) -> float:
+             t_stop: float, *, window_s: float, drive_t: float | None = None) -> float:
     """The end of the walk after the stop (method §12.7.4 item 3.5). ``before`` holds the command
     rows before the stop (send time and payload, in order). The moving axes are those whose command
     changed in any step between two of them whose later row was sent within ``window_s`` (the speed
-    window) before the stop, and in the last step before the stop in any case, each with the
-    direction of its last change (round-3 finding 6: a lagging servo still carries the stop point
-    at full speed after the axis that carries it has landed). The walk ends at the last continuing
-    row (``after``: send time and payload) up to which every moving axis keeps changing in its own
-    direction, row after row. A row in which one of them stops changing, or turns back, ends it; so
-    does a stop with no moving axis (the walk ends at the stop itself)."""
+    window) before the stop, or at or after ``drive_t`` (the trial's first drive row), and in the
+    last step before the stop in any case, each with the direction of its last change. Round-3
+    finding 6 added the window: a lagging servo still carries the stop point at full speed after
+    the axis that carries it has landed. Round-4 finding 10 added the whole drive: a machine that
+    tops out under the commanded speed falls behind for as long as the drive lasts, and lands its
+    carrying axis more than w before the stop while it still moves at full speed. The walk ends at
+    the last continuing row (``after``: send time and payload) up to which every moving axis keeps
+    changing in its own direction, row after row. A row in which one of them stops changing, or
+    turns back, ends it; so does a stop with no moving axis (the walk ends at the stop itself)."""
     rows = [(t, _numbers(payload)) for t, payload in before]
+    since = t_stop - window_s if drive_t is None else min(t_stop - window_s, drive_t)
     moving: dict[str, int] = {}
     for i in range(1, len(rows)):
         t, b = rows[i]
-        if t < t_stop - window_s and i != len(rows) - 1:
+        if t < since and i != len(rows) - 1:
             continue
         a = rows[i - 1][1]
         for k in b:
@@ -178,15 +182,18 @@ def split_trials(commands: Sequence[Command], *, window_s: float) -> list[Trial]
     stopped early), and so do catch_up rows (round-2 K3: the bench's walk between two trials),
     though the first of them is the next row after the trial before them. The steps before the
     stop are between the command rows (any but stop and catch_up rows) before it; ``walk_end``
-    looks at those within ``window_s`` (the profile's speed window) of the stop."""
+    looks at those of the trial's drive, and those within ``window_s`` (the profile's speed
+    window) of the stop."""
     trials: list[Trial] = []
     first = None
     drive, drive_t = None, None
+    drive_from = None  # the send time of the trial's first drive row
     history: deque[tuple[float, str | None]] = deque()  # the command rows before the stop, recent ones
 
     def remember(t: float, payload: str | None) -> None:
         history.append((t, payload))
-        while len(history) > 2 and history[1][0] < t - window_s:  # keep one row older than the window
+        keep = t - window_s if drive_from is None else min(t - window_s, drive_from)
+        while len(history) > 2 and history[1][0] < keep:  # keep one row older than that
             history.popleft()
 
     k, n = 0, len(commands)
@@ -199,6 +206,8 @@ def split_trials(commands: Sequence[Command], *, window_s: float) -> list[Trial]
             first = c.t_sent_s
         if c.strategy.startswith(DRIVE_PREFIX):
             drive, drive_t = c.strategy[len(DRIVE_PREFIX) :], c.t_sent_s
+            if drive_from is None:
+                drive_from = c.t_sent_s
         if c.strategy.startswith(STOP_PREFIX):
             issued, note = _issued(c)
             after, walk = [c.t_sent_s], []
@@ -212,11 +221,12 @@ def split_trials(commands: Sequence[Command], *, window_s: float) -> list[Trial]
             trials.append(
                 Trial(len(trials), c.strategy[len(STOP_PREFIX) :], drive, first, drive_t,
                       c.t_sent_s, issued, note, tuple(after),
-                      walk_end(list(history), walk, c.t_sent_s, window_s=window_s), nxt)
+                      walk_end(list(history), walk, c.t_sent_s, window_s=window_s, drive_t=drive_from),
+                      nxt)
             )
+            first, drive, drive_t, drive_from = None, None, None, None
             for t, payload in walk:
                 remember(t, payload)
-            first, drive, drive_t = None, None, None
             continue
         remember(c.t_sent_s, c.payload_json)
         k += 1

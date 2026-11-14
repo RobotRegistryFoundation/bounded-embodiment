@@ -168,3 +168,29 @@ def test_the_catch_up_walk_fails_closed_without_the_whole_state():
     assert far is not None and "gripper" in far and walk == []
     box.put(StateSnapshot(1.0, {}, {}))  # no joints at all
     assert runmod._Live.catch_up(live, seg)[0] is not None
+
+
+def test_the_catch_up_fails_closed_when_no_state_is_recent():
+    """Round-4 kit review, note 3: with no recent state, where the machine rests is not known, and
+    the catch-up refuses the next trial. Round 3's code returned no walk and no guard there, and
+    putting that back failed no test."""
+    from types import SimpleNamespace
+
+    from bounded_embodiment.commandspace import load_command_space
+    from bounded_embodiment.generator import Proposal
+    from bounded_embodiment_kit.runner.trials import TrialSegment
+    from bounded_embodiment_kit.runner.watchdog import StateBox, StateSnapshot
+
+    space = load_command_space(_trials_sim.SO101["command_space"])
+    box = StateBox()
+    live = SimpleNamespace(space=space, caps={k: 1.0 for k in space.keys}, state_box=box, limits=runmod.DEFAULT,
+                           fk=None, envelope=None)
+    seg = TrialSegment((Proposal(0, 0.0, "return", {k: 0.0 for k in space.keys}),), "trial 2", "stop",
+                       "stop_message", 0.3, 0.5, True)
+    far, walk = runmod._Live.catch_up(live, seg)  # no state at all
+    assert far is not None and "not available" in far and walk == []
+    joints = {k.removesuffix(".pos"): 0.0 for k in space.keys}
+    box.put(StateSnapshot(0.0, joints, {j: "percent" if j == "gripper" else "deg" for j in joints}))
+    box.put(StateSnapshot(1000.0, {}, {}))  # long after trial 1, a read that returned no joints
+    far, walk = runmod._Live.catch_up(live, seg)
+    assert far is not None and "not available" in far and walk == []

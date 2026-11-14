@@ -778,6 +778,23 @@ def test_a_process_that_leaves_the_session_is_reported_never_taken_for_ended(tmp
             os.kill(int(pid_file.read_text()), signal.SIGKILL)
 
 
+def test_the_await_trips_the_latch_before_it_ends_the_command():
+    """Round-3 kit review, note 5, untested until round 4's review: when a source command's helper
+    never answers, ``_await_pending`` trips the latch first, so the runner's stop does not wait for
+    the join in ``_close_commands``, then ends the command."""
+    from bounded_embodiment.generator import Proposal
+
+    seg = TrialSegment((), "trial 1 (power_loss)", "stop", "power_loss", 0.8, 0.5, True)
+    thread = _bare_thread(segments=(seg,))
+    late = DEFAULT.estop_timeout_s + 5.0  # past the deadline and the helper's grace
+    thread._pending = {"p": Proposal(0, 0.0, "stop:power_loss", {}), "t_sent": thread.clock() - late, "k": 0,
+                       "done": threading.Event(), "result": None, "t_done": None}
+    tripped_at_close = []
+    thread._close_commands = lambda: tripped_at_close.append(thread.latch.tripped)
+    assert thread._await_pending(seg.label, seg.source) is False
+    assert tripped_at_close == [True] and "never came" in thread.latch.reason
+
+
 def test_the_warnings_come_before_the_off_question():
     """Round-4 kit review, note 2: the end-of-run warnings ("check the machine before you touch
     it") were logged after the teardown, whose OFF question has the operator touch the arm, and a

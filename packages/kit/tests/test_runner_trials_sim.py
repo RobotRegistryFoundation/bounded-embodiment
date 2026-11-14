@@ -19,6 +19,7 @@ as seen but not scored.
 | so101-ev02-broken | SO-101 | ignores its stop | the arm walks on with the commands (D1): FAIL-shaped; the catch-up guard ends the run |
 | so101-ev02-lurching | SO-101 | stops, but its reset moves 8 deg | tripwire 3, still armed through the reset, stops the run |
 | rover-ev02-hung | rover | none | the power-loss command hangs: tripwire 3 stops the run, the stop runs at once |
+| rover-ev02-bg-cut | rover | none | the power-loss command backgrounds its cut, which the kit ends: no cut, the trial unmeasured |
 | rover-ev02-too-fast | rover | stops on request | drives at 1.4 m/s against a 0.5 m/s limit: the trial speed trip stops the run |
 | rover-ev02-cornered | rover | stops on request | 1.4 m from the wall, no room for a stop that does nothing: nothing is sent |
 | so101-ev02-hung | SO-101 | stops on request | the power-loss command hangs: its timeout stops the run, the stop runs at once |
@@ -108,17 +109,20 @@ def test_the_runner_sent_the_declared_stream_and_recorded_each_trial(cases, case
     assert [f.code for f in check.findings if f.severity == "error"] == []
     assert check.aborted is (not s["end"]["stream_finished"])
     stops = [r for r in rows if r.strategy.startswith("stop:")]
-    hung = case_id.endswith("-hung")
+    hung, left = case_id.endswith("-hung"), case_id.endswith("-bg-cut")
     for r in stops:
         if hung and r.strategy == "stop:power_loss":  # the command never returned: not issued
             assert r.result == "not_applied" and r.error_kind in ("external_timeout", "external_unfinished")
+        elif left and r.strategy == "stop:power_loss":  # the kit ended what the command left: not issued
+            assert r.result == "not_applied" and r.error_kind == "external_left_running"
         else:
             assert r.result == ("applied/triggered" if r.strategy == "stop:stop_message" else "applied/issued")
     trials = s["end"]["trials"]
     issued = [t for t in trials if t["instant_t_s"] is not None]
     assert len(issued) == (len(stops) if test == "ev02" else len(issued))
     for t in issued:
-        assert t["issued"] in ("triggered", "issued", "silence", "external_timeout", "external_unfinished")
+        assert t["issued"] in ("triggered", "issued", "silence", "external_timeout", "external_unfinished",
+                               "external_left_running")
     # every trial after the first began only after the operator's NEXT and the start check, on
     # samples taken after the reset (a full still window of them)
     assert sum("Type NEXT" in q for q in s["asked"]) in (len(issued) - 1, len(issued))
@@ -232,6 +236,22 @@ def test_a_hung_source_command_never_blocks_the_runners_stop(cases, case_id):
     # and the end of the run says it may have acted
     assert end["trials"][0]["command"] in ("SIGTERM", "SIGKILL")
     assert any("may have acted" in line for line in s["log_tail"])
+
+
+def test_a_cut_the_kit_had_to_end_leaves_the_trial_unmeasured(cases):
+    """Round-4 kit review, note 1 (decided for Craig): `sh -c '(sleep 0.3; touch ESTOP) &'`
+    backgrounds its own cut, against the lab guide. The kit ends the backgrounded process as soon as
+    the command exits (round-3 K8), so the cut never happens and the rover drives on until tripwire
+    3 stops it. The stop row said issued, so the trial's failures counted and the run read FAIL
+    against a machine that never lost power. The stop is recorded as not issued now
+    (`external_left_running`): the trial is unmeasured, and the run INCONCLUSIVE."""
+    s = _case(cases, "rover-ev02-bg-cut")
+    t = s["end"]["trials"][0]
+    assert t["issued"] == "external_left_running" and t["left_running"] in ("SIGTERM", "SIGKILL")
+    assert not (Path(s["run_dir"]).parent / "estop").exists()  # the cut never happened
+    assert s["scored"]["trials"][0]["status"] == "unmeasured"
+    assert s["scored"]["internal"] == "INCONCLUSIVE" and "STOP_TRIAL_UNMEASURED" in s["scored"]["internal_reasons"]
+    assert any("left a process running in its session" in line for line in s["log_tail"])
 
 
 def test_a_stop_that_does_not_stop_is_stopped_by_the_watchdog(cases):

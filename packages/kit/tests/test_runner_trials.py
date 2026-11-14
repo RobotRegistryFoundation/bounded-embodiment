@@ -5,6 +5,7 @@ moves, and the adapters' stop sources (trigger_stop, reset_stop, the simulated e
 The simulated runs themselves are in test_runner_trials_sim.py."""
 from __future__ import annotations
 
+import contextlib
 import itertools
 import json
 import sys
@@ -31,7 +32,7 @@ from bounded_embodiment_kit.runner.limits import DEFAULT
 from bounded_embodiment_kit.runner.trials import (
     TrialSegment,
     _between_trials,
-    group_alive,
+    session_alive,
 )
 from bounded_embodiment_kit.runner.watchdog import StopLatch, TrialWatch, trial_trip
 
@@ -559,7 +560,8 @@ def _pending(cmd: str, thread) -> tuple[dict, object]:
 def test_a_source_command_that_leaves_a_child_neither_blocks_nor_fails():
     """Review B1, scenario 3: with capture_output, `sh -c 'echo cut; sleep 30 &'` held stdout open
     for the whole 5 s and was taken for a failure. Its streams are closed now, so it ends at once.
-    The sleep it leaves in its group is ended as soon as it exits (round-3 K8), and recorded."""
+    The sleep it leaves in its session is ended as soon as it exits (round-3 K8), recorded, and
+    the trial's stop recorded as not issued (round-4 kit review, note 1); the run goes on."""
     import time
 
     thread = _bare_thread()
@@ -567,8 +569,8 @@ def test_a_source_command_that_leaves_a_child_neither_blocks_nor_fails():
     t0 = time.monotonic()
     thread._wait_for_command(pend, proc, "trial 1", "power_loss")
     assert time.monotonic() - t0 < 0.5
-    assert pend["result"].applied and pend["result"].decision == "issued"
-    assert pend["left_running"] == "SIGTERM" and not group_alive(proc.pid)
+    assert not pend["result"].applied and pend["result"].error_kind == "external_left_running"
+    assert pend["left_running"] == "SIGTERM" and not session_alive(proc.pid)
     assert not thread.latch.tripped
 
 
@@ -641,7 +643,7 @@ def test_a_child_that_ignores_sigterm_is_killed_with_its_group_and_cannot_act_la
     pend, proc = _pending(f"sh -c '(trap \"\" TERM; sleep 1.5; touch {marker}) & wait'", hung)
     hung._wait_for_command(pend, proc, "trial 1", "power_loss")
     assert pend["result"].error_kind == "external_timeout"
-    assert pend["ended"] == "SIGKILL" and not group_alive(proc.pid)
+    assert pend["ended"] == "SIGKILL" and not session_alive(proc.pid)
     time.sleep(2.0)
     assert not marker.exists()
 
@@ -649,8 +651,11 @@ def test_a_child_that_ignores_sigterm_is_killed_with_its_group_and_cannot_act_la
 def test_a_process_a_command_leaves_running_is_ended_and_recorded(tmp_path):
     """Round-3 K8, second reproduction: `sh -c '(sleep 8; date > MARKER) &'` exits 0 at once, so
     its stop row said issued and the trial "command: exited", and the child wrote MARKER after the
-    run with no warning. What a command leaves running in its group is ended as soon as it exits,
-    and the trial and the end of the run say so; that alone does not stop the run."""
+    run with no warning. What a command leaves running in its session is ended as soon as it
+    exits, and the trial and the end of the run say so; that alone does not stop the run. What
+    the kit ended may have been the cut, so the stop is recorded as not issued and core leaves the
+    trial unmeasured (round-4 kit review, note 1: it read FAIL against a machine that never lost
+    power)."""
     import time
     from types import SimpleNamespace
 
@@ -659,11 +664,12 @@ def test_a_process_a_command_leaves_running_is_ended_and_recorded(tmp_path):
     thread = _bare_thread(segments=(seg,))
     pend, proc = _pending(f"sh -c '(sleep 1.5; touch {marker}) &'", thread)
     thread._wait_for_command(pend, proc, seg.label, seg.source)
-    assert pend["result"].applied and pend["result"].decision == "issued"
-    assert thread.trials[0]["command"] == "exited" and thread.trials[0]["left_running"] == "SIGTERM"
-    assert not thread.latch.tripped and not group_alive(proc.pid)
+    assert pend["result"].error_kind == "external_left_running"
+    assert thread.trials[0]["command"] == "exited" and thread.trials[0]["left_running"] in ("SIGTERM", "SIGKILL")
+    assert not thread.latch.tripped and not session_alive(proc.pid)
     warnings = runmod._source_command_warnings(SimpleNamespace(command=thread))
-    assert any("left a process running in its group" in w and "SIGTERM" in w for w in warnings)
+    assert any("left a process running in its session" in w and "the kit ended it" in w and "unmeasured" in w
+               for w in warnings)
     time.sleep(2.0)
     assert not marker.exists()
 
@@ -683,7 +689,7 @@ def test_every_source_commands_group_is_checked_again_when_the_run_ends(tmp_path
     done.set()  # its helper had finished with it
     thread._groups.append(({"k": 0, "done": done}, stray))
     thread._close_commands()
-    assert thread.trials[0]["left_running"] in ("SIGTERM", "SIGKILL") and not group_alive(stray.pid)
+    assert thread.trials[0]["left_running"] in ("SIGTERM", "SIGKILL") and not session_alive(stray.pid)
     time.sleep(2.0)
     assert not marker.exists()
 
@@ -697,7 +703,79 @@ def test_a_group_with_only_a_zombie_left_counts_as_gone():
     proc = subprocess.Popen(["sh", "-c", "sleep 0.2 & exit 0"], start_new_session=True)
     proc.wait()
     time.sleep(0.6)  # the orphaned sleep has exited; it may be left as a zombie
-    assert not group_alive(proc.pid)
+    assert not session_alive(proc.pid)
+
+
+# ----- round-4 K11: the session, not the process group ----------------------------------------------------
+
+
+def test_a_timeout_inside_a_script_is_ended_with_the_session(tmp_path):
+    """Round-4 K11, first reproduction: GNU `timeout` inside a script gives itself and its command a
+    process group of their own (setpgid), so ending the command's process group missed them: the
+    command was recorded as ended (SIGTERM) at its deadline, and MARKER was written after the run.
+    The kit ends the command's session now: every process whose session is the command's."""
+    import time
+
+    marker = tmp_path / "cut-late"
+    hung = _bare_thread(limits=DEFAULT.__class__(estop_timeout_s=0.6))
+    pend, proc = _pending(f"sh -c 'timeout 10 sh -c \"sleep 1.5; touch {marker}\"; true'", hung)
+    hung._wait_for_command(pend, proc, "trial 1", "power_loss")
+    assert pend["result"].error_kind == "external_timeout"
+    assert pend["ended"] in ("SIGTERM", "SIGKILL") and not session_alive(proc.pid)
+    time.sleep(2.0)
+    assert not marker.exists()
+
+
+def test_a_job_control_child_is_ended_with_the_session_and_recorded(tmp_path):
+    """Round-4 K11, second reproduction: with `set -m`, bash gives each background job a process
+    group of its own, so `bash -c 'set -m; (sleep 8; date > MARKER) &'` exited 0, nothing was
+    recorded, and MARKER was written after the run. The kit ends the job with the session, and the
+    record says that it had left the command's process group."""
+    import time
+    from types import SimpleNamespace
+
+    marker = tmp_path / "cut-late"
+    seg = TrialSegment((), "trial 1 (power_loss)", "stop", "power_loss", 0.8, 0.5, True)
+    thread = _bare_thread(segments=(seg,))
+    pend, proc = _pending(f"bash -c 'set -m; (sleep 1.5; touch {marker}) &'", thread)
+    thread._wait_for_command(pend, proc, seg.label, seg.source)
+    t = thread.trials[0]
+    assert pend["result"].error_kind == "external_left_running" and t["left_running"] in ("SIGTERM", "SIGKILL")
+    assert t["outside_group"] and not session_alive(proc.pid) and not thread.latch.tripped
+    warnings = runmod._source_command_warnings(SimpleNamespace(command=thread))
+    assert any("had left the command's process group, but not its session" in w for w in warnings)
+    time.sleep(2.0)
+    assert not marker.exists()
+
+
+def test_a_process_that_leaves_the_session_is_reported_never_taken_for_ended(tmp_path):
+    """What the kit cannot reach it must not call ended: a process it saw in the session that then
+    leaves it (here one that calls setsid when it gets SIGTERM) still runs. The record says it left
+    the session, the latch trips, and the warning says it may still act."""
+    import os
+    import signal
+    import sys
+    from types import SimpleNamespace
+
+    pid_file, marker = tmp_path / "escaped.pid", tmp_path / "cut-late"
+    child = (f"import os, signal, time; open({str(pid_file)!r}, 'w').write(str(os.getpid())); "
+             "signal.signal(signal.SIGTERM, lambda *a: os.setsid()); time.sleep(2.0); "
+             f"open({str(marker)!r}, 'w').close()")
+    seg = TrialSegment((), "trial 1 (power_loss)", "stop", "power_loss", 0.8, 0.5, True)
+    thread = _bare_thread(segments=(seg,))
+    script = tmp_path / "escape.sh"
+    script.write_text(f"#!/bin/sh\n{sys.executable} -c \"{child}\" &\nsleep 0.3\nexit 0\n")
+    pend, proc = _pending(f"sh {script}", thread)
+    try:
+        thread._wait_for_command(pend, proc, seg.label, seg.source)
+        assert thread.trials[0]["left_running"] == "left_session"
+        assert pend["result"].error_kind == "external_left_running"
+        assert thread.latch.tripped and "left its session" in thread.latch.reason
+        warnings = runmod._source_command_warnings(SimpleNamespace(command=thread))
+        assert any("left its session" in w and "may still be running" in w for w in warnings)
+    finally:
+        with contextlib.suppress(OSError, ValueError):
+            os.kill(int(pid_file.read_text()), signal.SIGKILL)
 
 
 def test_the_last_trials_source_command_is_waited_for_before_the_run_finishes(tmp_path):
@@ -980,3 +1058,20 @@ def test_the_end_of_the_run_says_when_an_external_stop_may_still_be_in_force():
     assert len(warnings) == 1 and warnings[0].startswith("*** trial 6 (power_loss): its power_loss was issued")
     thread.trials[1]["issued"] = "external_timeout"  # not issued: nothing to reset
     assert runmod._source_command_warnings(SimpleNamespace(command=thread)) == []
+
+
+def test_the_end_of_the_run_never_says_a_command_it_ended_had_exited():
+    """Round-4 K11: the words name what reached each process. A command the kit ended whose session
+    still had a process when the run ended (one that outlived SIGKILL) is not said to have exited."""
+    from types import SimpleNamespace
+
+    seg = TrialSegment((), "trial 1 (power_loss)", "stop", "power_loss", 0.8, 0.5, True)
+    thread = _bare_thread(segments=(seg,))
+    thread.trials[0].update(issued="external_timeout", command="survived", left_running="survived")
+    first, second = runmod._source_command_warnings(SimpleNamespace(command=thread))
+    assert "did not finish, and the kit could not end it" in first
+    assert "still had a process running in its session when the run ended" in second
+    assert "after it exited" not in second and "unmeasured" in second
+    thread.trials[0].update(command="exited", left_running="SIGTERM", outside_group=2)
+    (only,) = runmod._source_command_warnings(SimpleNamespace(command=thread))
+    assert "after it exited, and the kit ended it (SIGTERM) (2 of its processes had left the command's" in only

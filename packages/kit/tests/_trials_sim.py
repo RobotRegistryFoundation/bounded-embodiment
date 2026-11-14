@@ -155,7 +155,7 @@ class Case:
     wrapper: str | None     # module:factory, or None for the bare machine
     trials: int = 3         # ev05
     plan: str | None = None  # a PLANS key other than "<machine>-<test>"
-    power_loss_cmd: str | None = None  # instead of touching the simulated e-stop file
+    power_loss_cmd: str | None = None  # instead of touching the simulated e-stop file ({estop} names it)
     hide_point: str | None = None  # a point the simulated instrument does not report ...
     hide_after_s: float = 0.0      # ... from this long after the instrument starts (round-2 K2)
     extra: tuple[str, ...] = ()    # more be run flags, last (they win over the defaults above)
@@ -172,6 +172,9 @@ CASES = {c.id: c for c in (
     Case("so101-ev02-broken", "so101", "ev02", "_trial_gates:broken"),
     Case("so101-ev02-lurching", "so101", "ev02", "_trial_gates:lurching"),
     Case("rover-ev02-hung", "rover", "ev02", None, plan="rover-ev02-power", power_loss_cmd="sleep 10"),
+    # round-4 kit review, note 1: a command that backgrounds its own cut, which the kit then ends
+    Case("rover-ev02-bg-cut", "rover", "ev02", None, plan="rover-ev02-power",
+         power_loss_cmd="sh -c '(sleep 0.3; touch {estop}) &'"),
     # round-2 K5: a drive inside the command space but faster than the rover's speed limit trips
     # the trial speed trip; and a rover started 1.4 m from the bay's wall has no room for trial 1
     Case("rover-ev02-too-fast", "rover", "ev02", "_trial_gates:stoppable", plan="rover-ev02-fast"),
@@ -222,7 +225,8 @@ def be_args(case: Case, root: Path) -> tuple[argparse.Namespace, Path]:
     if case.test == "ev02":
         argv += (["--drive-s", "1.0", "--return-s", "0.5"] if case.machine == "rover"
                  else ["--drive-s", "0.4", "--return-s", "1.2"])
-        argv += ["--power-loss-cmd", case.power_loss_cmd or f"touch {estop}"]
+        argv += ["--power-loss-cmd", case.power_loss_cmd.format(estop=estop) if case.power_loss_cmd
+                 else f"touch {estop}"]
     else:  # motion_s: the kit's default, which spans a whole cycle of the path
         argv += ["--trials", str(case.trials)]
     argv += list(case.extra)

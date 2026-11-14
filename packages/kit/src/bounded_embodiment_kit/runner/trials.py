@@ -21,13 +21,18 @@ What is new against an EV-03 session (``session.py``), and nothing else is:
 - A helper thread waits up to ``estop_timeout_s`` for a source command. If it fails or times
   out, the latch trips and the stop row records why (core then leaves the trial unmeasured). A
   command still running at its deadline, or when the run ends, is ended with everything in its
-  process group (SIGTERM, then SIGKILL), and the kit waits until the whole group has gone, not
-  just the command, so that nothing of it can act after the run; how it ended is recorded, and the
-  latch reason says it may have acted. A command that exits but leaves a process running in its
-  group (a source command must latch and leave nothing running) has that process ended at once,
-  and the trial and the end of the run say so; that alone does not stop the run (round-3 K8).
-  Every group is checked again when the run ends. A process that leaves its session (``setsid``)
-  is out of the kit's reach.
+  session (SIGTERM, then SIGKILL, to each process whose session is the command's, read from
+  /proc), and the kit waits until the whole session has gone, not just the command, so that
+  nothing of it can act after the run; how it ended is recorded, and the latch reason says it
+  may have acted. A process can leave the command's process group without leaving its session
+  (``timeout`` in a script, a shell's job control); round-4 K11 moved the line from the group to
+  the session for that reason. A command that exits but leaves a process running in its session
+  (a source command must latch and leave nothing running) has that process ended at once, its
+  stop recorded as not issued (``external_left_running``, so the trial is unmeasured), and the
+  trial and the end of the run say so; that alone does not stop the run (round-3 K8, round-4 kit
+  review note 1). Every session is checked again when the run ends. A process that leaves the
+  session (``setsid``, a daemon) is out of the kit's reach: one the kit saw before it left is
+  reported as such (``left_session``), never as ended.
   Rows sent while the outcome is unknown are written after the stop row, in order, and the
   operator is not asked for NEXT, nor anything reset, until the command has finished: a command
   still running might cut power later.
@@ -77,12 +82,15 @@ from .session import CommandThread, SessionResult, run_session
 __all__ = [
     "EXTERNAL_SOURCES",
     "STOP_PREFIX",
+    "Ended",
     "TrialCommandThread",
     "TrialSegment",
-    "end_group",
+    "end_session",
     "end_source_command",
-    "group_alive",
+    "ending_words",
     "run_trial_session",
+    "session_alive",
+    "session_members",
     "spawn_source_command",
 ]
 
@@ -150,26 +158,52 @@ def spawn_source_command(cmd: str) -> subprocess.Popen:
                             stderr=subprocess.DEVNULL, start_new_session=True)
 
 
-def group_alive(pgid: int) -> bool:
-    """Whether process group ``pgid`` still has a member that has not exited. On Linux the members
-    are read from /proc, so that a zombie does not count (an init that does not reap orphans, as in
-    some containers, leaves them for good); elsewhere ``os.killpg(pgid, 0)`` answers, zombies
-    included."""
-    proc = Path("/proc")
-    if proc.is_dir():
-        for entry in os.scandir(proc):
-            if not entry.name.isdigit():
-                continue
-            try:
-                stat = (proc / entry.name / "stat").read_text()
-            except OSError:  # it ended meanwhile
-                continue
-            fields = stat[stat.rindex(")") + 2 :].split()  # state, ppid, pgrp, ...
-            if len(fields) > 2 and fields[2] == str(pgid) and fields[0] not in ("Z", "X"):
-                return True
-        return False
+#: Where a source command's session is read from (Linux).
+_PROC = Path("/proc")
+
+
+def _stat(pid: int | str) -> list[str] | None:
+    """The fields of ``/proc/<pid>/stat`` after the command name: state, ppid, pgrp, session, ...,
+    starttime at [19]. None when the process is gone."""
     try:
-        os.killpg(pgid, 0)
+        stat = (_PROC / str(pid) / "stat").read_text()
+    except OSError:  # it ended meanwhile
+        return None
+    fields = stat[stat.rindex(")") + 2 :].split()
+    return fields if len(fields) > 19 else None
+
+
+def session_members(sid: int) -> dict[int, tuple[str, int]] | None:
+    """The processes of session ``sid`` that have not exited, as {pid: (start time, process
+    group)}, read from /proc; None without /proc. A zombie does not count: an init that does not
+    reap orphans, as in some containers, leaves them for good. A process cannot join a session from
+    outside it, so these are the session leader's descendants, wherever their process group is."""
+    if not _PROC.is_dir():
+        return None
+    out = {}
+    for entry in os.scandir(_PROC):
+        if not entry.name.isdigit():
+            continue
+        f = _stat(entry.name)
+        if f is not None and f[3] == str(sid) and f[0] not in ("Z", "X"):
+            out[int(entry.name)] = (f[19], int(f[2]))
+    return out
+
+
+def _running(pid: int, start: str) -> bool:
+    """Whether the process seen as ``pid``, started at ``start``, still runs (a pid can be reused)."""
+    f = _stat(pid)
+    return f is not None and f[0] not in ("Z", "X") and f[19] == start
+
+
+def session_alive(sid: int) -> bool:
+    """Whether session ``sid`` still has a process that has not exited. Without /proc,
+    ``os.killpg(sid, 0)`` answers for the session leader's process group only, zombies included."""
+    members = session_members(sid)
+    if members is not None:
+        return bool(members)
+    try:
+        os.killpg(sid, 0)
     except ProcessLookupError:
         return False
     except PermissionError:  # it exists, and is not ours to signal
@@ -177,17 +211,88 @@ def group_alive(pgid: int) -> bool:
     return True
 
 
-def end_group(pgid: int, leader: subprocess.Popen | None = None, grace_s: float = 0.5,
-              kill_s: float = 1.0) -> str | None:
-    """End whatever is left in process group ``pgid`` (round-3 K8): SIGTERM to the group, then
-    SIGKILL once ``grace_s`` has passed with any member still alive, waiting each time until the
-    whole group has gone, not just its leader (``leader`` is reaped when given). Returns None when
-    nothing was left, else how the group ended: "SIGTERM", "SIGKILL", or "survived"."""
+@dataclass(frozen=True)
+class Ended:
+    """How the kit ended what was running in a source command's session (round-3 K8, round-4 K11).
+
+    ``how``: "SIGTERM" or "SIGKILL", the signal after which nothing of the session was left;
+    "survived", a process of the session still ran after SIGKILL; or "left_session", a process the
+    kit saw in the session had left it (``setsid``) and still ran, out of the kit's reach.
+    ``outside_group``: how many of the processes it found had left the command's process group but
+    not its session, as ``timeout`` in a script and a shell's job control make them."""
+
+    how: str
+    outside_group: int = 0
+
+
+def ending_words(how: str) -> str:
+    """What happened to a source command, or what it left running, in words for the log."""
+    if how == "survived":
+        return "the kit could not end it, and it may still be running"
+    if how == "left_session":
+        return "a process it started left its session (setsid), out of the kit's reach, and may still be running"
+    if how == "exited":
+        return "it exited"
+    return f"the kit ended it ({how})"
+
+
+def end_session(sid: int, leader: subprocess.Popen | None = None, grace_s: float = 0.5,
+                kill_s: float = 1.0) -> Ended | None:
+    """End whatever is left in session ``sid`` (round-4 K11): SIGTERM to every process of the
+    session, then SIGKILL once ``grace_s`` has passed with any of them alive, waiting each time
+    until none is left (``leader``, the session's leader, is reaped when given). Round-3 K8 ended
+    the process group instead, which a process can leave without leaving the session. A process the
+    kit saw that has left the session since, and still runs, is reported (``left_session``), never
+    taken for ended. Without /proc it ends the leader's process group (``_end_group``). Returns None
+    when nothing was left."""
+    seen: dict[int, tuple[str, int]] = {}
+
+    def members() -> dict[int, tuple[str, int]] | None:
+        if leader is not None:
+            leader.poll()  # reap it: our own child would otherwise linger as a zombie
+        found = session_members(sid)
+        if found:
+            seen.update(found)
+        return found
+
+    found = members()
+    if found is None:
+        how = _end_group(sid, leader, grace_s, kill_s)
+        return None if how is None else Ended(how)
+    if not found:
+        return None
+    how = "survived"
+    for sig, wait_s in ((signal.SIGTERM, grace_s), (signal.SIGKILL, kill_s)):
+        sent: set[tuple[int, str]] = set()
+        # a process ends in real time, whatever clock the run keeps (the tests' virtual one)
+        deadline = _real_monotonic() + wait_s
+        while found:
+            for pid, (start, _) in found.items():  # a process forked meanwhile is signalled too
+                if (pid, start) not in sent:
+                    sent.add((pid, start))
+                    try:
+                        os.kill(pid, sig)
+                    except (ProcessLookupError, PermissionError):
+                        pass
+            if _real_monotonic() >= deadline:
+                break
+            _real_sleep(0.01)
+            found = members()
+        if not found:
+            how = sig.name
+            break
+    if how != "survived" and any(_running(pid, start) for pid, (start, _) in seen.items()):
+        how = "left_session"
+    return Ended(how, sum(1 for _, pgrp in seen.values() if pgrp != sid))
+
+
+def _end_group(pgid: int, leader: subprocess.Popen | None, grace_s: float, kill_s: float) -> str | None:
+    """Without /proc: SIGTERM, then SIGKILL, to the leader's process group (round-3 K8)."""
 
     def gone() -> bool:
         if leader is not None:
-            leader.poll()  # reap it: our own child would otherwise linger as a zombie
-        return not group_alive(pgid)
+            leader.poll()
+        return not session_alive(pgid)
 
     if gone():
         return None
@@ -196,7 +301,6 @@ def end_group(pgid: int, leader: subprocess.Popen | None = None, grace_s: float 
             os.killpg(pgid, sig)
         except (ProcessLookupError, PermissionError):
             pass
-        # a process ends in real time, whatever clock the run keeps (the tests' virtual one)
         deadline = _real_monotonic() + wait_s
         while True:
             if gone():
@@ -208,10 +312,11 @@ def end_group(pgid: int, leader: subprocess.Popen | None = None, grace_s: float 
 
 
 def end_source_command(proc: subprocess.Popen, grace_s: float = 0.5) -> str:
-    """End a source command that is still running, with everything in its process group (its
-    session's, from ``spawn_source_command``; round-2 K1, round-3 K8), and reap it. Returns how it
-    ended: "exited" (nothing was left running), "SIGTERM", "SIGKILL" or "survived"."""
-    return end_group(proc.pid, proc, grace_s) or "exited"
+    """End a source command that is still running, with everything in its session (round-2 K1,
+    round-4 K11), and reap it. Returns how it ended: "exited" (nothing was left running),
+    "SIGTERM", "SIGKILL", "survived" or "left_session"."""
+    ended = end_session(proc.pid, proc, grace_s)
+    return ended.how if ended is not None else "exited"
 
 
 class TrialCommandThread(CommandThread):
@@ -239,15 +344,15 @@ class TrialCommandThread(CommandThread):
         self.trials: list[dict] = [{"trial": k, "label": s.label, "source": s.source,
                                     "instant_t_s": None, "issued": None, "reset": None,
                                     "start_check": None, "command": None, "left_running": None,
-                                    "catch_up": None}
+                                    "outside_group": None, "catch_up": None}
                                    for k, s in enumerate(self.segments)]
         self._pending: dict | None = None  # a stop row waiting for its source command's outcome
         self._held_rows: list[tuple] = []  # rows sent meanwhile, written after it
         self._release_at: float | None = None
         self._helper: threading.Thread | None = None  # waits for the pending source command
         self._closing = threading.Event()  # the run is ending: end any source command still running
-        # every source command (its pending record and process), whose group is checked again when
-        # the run ends (round-3 K8)
+        # every source command (its pending record and process), whose session is checked again
+        # when the run ends (round-3 K8, round-4 K11)
         self._groups: list[tuple[dict, subprocess.Popen]] = []
         self._groups_lock = threading.Lock()
 
@@ -307,12 +412,17 @@ class TrialCommandThread(CommandThread):
         a failure or a timeout trips the latch. A command normally ends at once, so the first
         half second is one plain wait; after that the thread polls, sleeping on the run's clock.
         A command still running at the deadline, or once the run is ending, is ended with its
-        whole process group (round-2 K1); one that exited has whatever it left running in its
-        group ended too, which is recorded but trips nothing (round-3 K8)."""
+        whole session (round-2 K1, round-4 K11). One that exited has whatever it left running in
+        its session ended too (round-3 K8), and its stop is then recorded as not issued
+        (``external_left_running``): what the kit ended may have been the cut itself, so core
+        leaves the trial unmeasured rather than judge a machine that never lost power (round-4
+        kit review, note 1). That alone does not stop the run, unless something the command
+        started could not be ended or left the session, which may still act."""
         with self._groups_lock:
             self._groups.append((pend, proc))
         deadline = pend["t_sent"] + self.limits.estop_timeout_s
         ended = left = None
+        outside = 0
         t_done = None
         try:
             try:
@@ -323,12 +433,21 @@ class TrialCommandThread(CommandThread):
                     time.sleep(0.01)
                     rc = proc.poll()
             if rc is None:
-                ended = end_source_command(proc)
+                stopped = end_session(proc.pid, proc)
+                ended = stopped.how if stopped is not None else "exited"
+                outside = stopped.outside_group if stopped is not None else 0
                 r = SendResult(False, None, "external_unfinished" if self._closing.is_set() else "external_timeout")
             else:
                 t_done = self.clock()  # the command's own outcome is known now
-                r = SendResult(True, "issued", None) if rc == 0 else SendResult(False, None, f"external_returncode:{rc}")
-                left = end_group(proc.pid, proc)
+                stopped = end_session(proc.pid, proc)
+                left = stopped.how if stopped is not None else None
+                outside = stopped.outside_group if stopped is not None else 0
+                if rc != 0:
+                    r = SendResult(False, None, f"external_returncode:{rc}")
+                elif left is not None:
+                    r = SendResult(False, None, "external_left_running")
+                else:
+                    r = SendResult(True, "issued", None)
         except Exception as e:  # noqa: BLE001 - recorded; the latch trips below
             r = SendResult(False, None, f"external_failed:{type(e).__name__}")
         pend["ended"], pend["left_running"] = ended, left
@@ -336,22 +455,28 @@ class TrialCommandThread(CommandThread):
             self.trials[pend["k"]]["command"] = ended or "exited"
             if left is not None:
                 self.trials[pend["k"]]["left_running"] = left
+            if outside:
+                self.trials[pend["k"]]["outside_group"] = outside
         pend["result"], pend["t_done"] = r, t_done if t_done is not None else self.clock()
         pend["done"].set()
         if left is not None:
-            self.log(f"{label}: the {source} command left a process running in its group, which the kit "
-                     f"ended ({left}); a source command must latch and leave nothing running.")
+            self.log(f"{label}: the {source} command left a process running in its session; {ending_words(left)}. "
+                     "The trial's stop is recorded as not issued. A source command must latch and leave "
+                     "nothing running.")
         if ended is not None:
             self.latch.trip("error", f"{label}: the {source} command did not finish ({r.error_kind}, "
-                                     f"{self.limits.estop_timeout_s:g} s allowed); it was ended ({ended}), and "
-                                     "it may have acted before that: check the machine before touching it")
-        elif not r.applied:
+                                     f"{self.limits.estop_timeout_s:g} s allowed); {ending_words(ended)}, and "
+                                     "it may have acted: check the machine before touching it")
+        elif left in ("survived", "left_session"):
+            self.latch.trip("error", f"{label}: the {source} command left a process running; "
+                                     f"{ending_words(left)}: check the machine before touching it")
+        elif not r.applied and r.error_kind != "external_left_running":
             self.latch.trip("error", f"{label}: the {source} command did not succeed ({r.error_kind})")
 
     def _close_commands(self) -> None:
         """The run is ending: a source command still running is ended (and recorded), every source
-        command's process group is checked again and anything left in one is ended and recorded
-        (round-3 K8), then the pending stop row is written (round-2 K1)."""
+        command's session is checked again and anything left in one is ended and recorded
+        (round-3 K8, round-4 K11), then the pending stop row is written (round-2 K1)."""
         self._closing.set()
         helper = self._helper
         if helper is not None and helper.is_alive():
@@ -360,13 +485,15 @@ class TrialCommandThread(CommandThread):
             groups, self._groups = list(self._groups), []
         for pend, proc in groups:
             if not pend["done"].is_set():
-                continue  # its helper is still ending the command, its whole group with it
-            left = end_group(proc.pid, proc)
+                continue  # its helper is still ending the command, its whole session with it
+            stopped = end_session(proc.pid, proc)
             k = pend["k"]
-            if left is not None and 0 <= k < len(self.trials):
-                self.trials[k]["left_running"] = left
+            if stopped is not None and 0 <= k < len(self.trials):
+                self.trials[k]["left_running"] = stopped.how
+                if stopped.outside_group:
+                    self.trials[k]["outside_group"] = stopped.outside_group
                 self.log(f"{self.trials[k]['label']}: at the end of the run its {self.trials[k]['source']} "
-                         f"command's process group still had a process running, which the kit ended ({left}).")
+                         f"command's session still had a process running; {ending_words(stopped.how)}.")
         self._settle_pending(final=True)
 
     def _await_pending(self, label: str, source: str) -> bool:

@@ -1,0 +1,151 @@
+{
+  "envelope_version": "0.2",
+  "machine": {
+    "id": "loophole-search",
+    "class": "arm",
+    "description": "TEST-ONLY synthetic envelope"
+  },
+  "frame": "base_link",
+  "points": [
+    {
+      "id": "tool",
+      "description": "TEST-ONLY tool point",
+      "max_speed_mps": 0.2169
+    },
+    {
+      "id": "elbow",
+      "description": "TEST-ONLY elbow point"
+    }
+  ],
+  "workspace": {
+    "zones": [
+      {
+        "id": "tool_region",
+        "kind": "keep_in",
+        "applies_to": [
+          "tool"
+        ],
+        "prism": {
+          "polygon_m": [
+            [
+              0.096,
+              -0.3166
+            ],
+            [
+              -0.0555,
+              -0.1172
+            ],
+            [
+              -0.1932,
+              -0.1115
+            ],
+            [
+              -0.3633,
+              -0.3299
+            ],
+            [
+              -0.2903,
+              -0.5018
+            ],
+            [
+              -0.155,
+              -0.5626
+            ],
+            [
+              0.0586,
+              -0.4604
+            ]
+          ],
+          "z_m": [
+            0.1342,
+            0.5421
+          ]
+        }
+      },
+      {
+        "id": "cell",
+        "kind": "keep_in",
+        "applies_to": [
+          "elbow"
+        ],
+        "box": {
+          "min_m": [
+            -0.7484,
+            -0.9486,
+            -0.3658
+          ],
+          "max_m": [
+            0.4817,
+            0.2814,
+            1.0421
+          ]
+        }
+      },
+      {
+        "id": "fixture",
+        "kind": "keep_out",
+        "applies_to": [
+          "*"
+        ],
+        "box": {
+          "min_m": [
+            -0.1585,
+            -0.3929,
+            0.3211
+          ],
+          "max_m": [
+            -0.0708,
+            -0.331,
+            0.4763
+          ]
+        }
+      }
+    ]
+  },
+  "motion": {
+    "max_speed_mps": 0.4138,
+    "max_joint_speed_radps": 2.0,
+    "joints": [
+      {
+        "name": "shoulder",
+        "position_rad": [
+          -1.5,
+          1.5
+        ],
+        "max_speed_radps": 1.5
+      },
+      {
+        "name": "elbow",
+        "position_rad": [
+          -2.0,
+          2.0
+        ],
+        "max_speed_radps": 2.0
+      }
+    ]
+  },
+  "stop": {
+    "category": 1,
+    "max_time_ms": 300,
+    "max_distance_m": 0.0067
+  },
+  "heartbeat": {
+    "model_timeout_ms": 500,
+    "gate_timeout_ms": 200,
+    "on_loss": "stop"
+  },
+  "proximity": [
+    {
+      "when": {
+        "human_within_m": 2.0
+      },
+      "max_speed_mps": 0.1046
+    },
+    {
+      "when": {
+        "human_within_m": 0.5
+      },
+      "max_speed_mps": 0.1435
+    }
+  ]
+}

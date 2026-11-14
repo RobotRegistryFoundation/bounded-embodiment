@@ -42,6 +42,7 @@ maintained by the same person; the method does not depend on it.
 | [`examples/`](examples/) | envelopes, command spaces, the SO-101 URDF, reference gates |
 | [`docs/requirements.md`](docs/requirements.md) | the five requirements, the full test plan, recovery after a gate decision and the assurance levels (scope draft, informative) |
 | [`docs/lab-guide.md`](docs/lab-guide.md) | a lab's session, from setup to a signed submission |
+| [`docs/loopholes.md`](docs/loopholes.md) | where the rules' letter passes and their intent breaks: defects for the next rule-set versions, with vectors |
 | [`docs/accuracy-survey.md`](docs/accuracy-survey.md) | surveying the accuracy check's points with tape, rule and plumb line |
 | [`CONTRACT.md`](CONTRACT.md), [`docs/seams/`](docs/seams/) | the interfaces between the parts |
 

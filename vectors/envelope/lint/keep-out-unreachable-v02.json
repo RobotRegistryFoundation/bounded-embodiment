@@ -1,0 +1,108 @@
+{
+  "envelope_version": "0.2",
+  "machine": {
+    "id": "loophole-search",
+    "class": "arm",
+    "description": "TEST-ONLY synthetic envelope"
+  },
+  "frame": "base_link",
+  "points": [
+    {
+      "id": "tool",
+      "description": "TEST-ONLY tool point",
+      "max_speed_mps": 0.2086
+    },
+    {
+      "id": "elbow",
+      "description": "TEST-ONLY elbow point"
+    }
+  ],
+  "workspace": {
+    "zones": [
+      {
+        "id": "tool_region",
+        "kind": "keep_in",
+        "applies_to": [
+          "tool"
+        ],
+        "box": {
+          "min_m": [
+            -0.0963,
+            0.0204,
+            0.2303
+          ],
+          "max_m": [
+            0.1445,
+            0.2711,
+            0.7209
+          ]
+        }
+      },
+      {
+        "id": "cell",
+        "kind": "keep_in",
+        "applies_to": [
+          "elbow"
+        ],
+        "box": {
+          "min_m": [
+            -0.5431,
+            -0.4252,
+            -0.2697
+          ],
+          "max_m": [
+            0.5942,
+            0.7122,
+            1.2209
+          ]
+        }
+      },
+      {
+        "id": "fixture",
+        "kind": "keep_out",
+        "applies_to": [
+          "tool"
+        ],
+        "box": {
+          "min_m": [
+            0.4485,
+            0.0204,
+            0.2303
+          ],
+          "max_m": [
+            0.5485,
+            0.2711,
+            0.7209
+          ]
+        }
+      }
+    ]
+  },
+  "motion": {
+    "max_speed_mps": 0.8926
+  },
+  "stop": {
+    "category": 1,
+    "max_time_ms": 300,
+    "max_distance_m": 0.0161
+  },
+  "heartbeat": {
+    "model_timeout_ms": 500,
+    "gate_timeout_ms": 200,
+    "on_loss": "stop"
+  },
+  "proximity": [
+    {
+      "when": {
+        "human_within_m": 1.408
+      },
+      "max_speed_mps": 0.4463
+    },
+    {
+      "when": {
+        "human_within_m": 0.3164
+      },
+      "action": "stop"
+    }
+  ]
+}

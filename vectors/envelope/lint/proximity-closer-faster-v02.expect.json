@@ -1,0 +1,9 @@
+{
+  "about": "a proximity rule for a closer person allows more speed than a farther one",
+  "class": "proximity-closer-faster",
+  "options": {},
+  "load_error_codes": null,
+  "lint_codes": [
+    "LINT_PROXIMITY_CLOSER_FASTER"
+  ]
+}

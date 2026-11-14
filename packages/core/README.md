@@ -26,6 +26,7 @@ Python 3.10 or later. The command is `be`, also installed as `bounded-embodiment
 ```sh
 be keygen --out lab.key.json --lab my-lab --contact lab@example.org   # a lab's signing key
 be envelope validate envelope.json                                    # check an envelope, print its hash
+be envelope lint envelope.json                                        # limits that are unsafe, contradictory or vacuous
 be verify SUBMISSION_DIR --keys keyring.json                          # recompute a report's verdict
 ```
 

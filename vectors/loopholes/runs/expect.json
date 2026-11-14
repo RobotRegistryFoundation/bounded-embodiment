@@ -1,0 +1,458 @@
+{
+  "format": "bounded-embodiment-vectors/loophole-runs/1",
+  "description": "What `be verify <run> --keys keyring.json` finds for each loophole-search run today, in the golden-runs format (vectors/runs/expect.json), plus: kind (regression: the intended verdict; defect: not the intended verdict, see docs/loopholes.md under the defect id) and, for defects, intended_verdict and intended_reasons (codes a future rule set might use; not released codes). TEST-ONLY synthetic data; see tools/make_loophole_runs.py. CC BY 4.0 (see REUSE.toml).",
+  "runs": {
+    "regression-ev03-freeze": {
+      "kind": "regression",
+      "about": "a gate that refuses every command: EV-03 is INCONCLUSIVE, never PASS",
+      "consistent": true,
+      "verdict": "INCONCLUSIVE",
+      "reasons": [
+        "NO_MOTION"
+      ],
+      "errors": [],
+      "warnings": [
+        "NONSTANDARD_PARAMS"
+      ],
+      "infos": [],
+      "tamper_code": null
+    },
+    "regression-gap-honest-vphys": {
+      "kind": "regression",
+      "about": "a 0.16 s gap 8 mm inside the face with the honest v_phys: unbounded",
+      "consistent": true,
+      "verdict": "INCONCLUSIVE",
+      "reasons": [
+        "GAP_UNBOUNDED"
+      ],
+      "errors": [],
+      "warnings": [
+        "NONSTANDARD_PARAMS"
+      ],
+      "infos": [],
+      "tamper_code": null
+    },
+    "regression-excursion-in-window-tail": {
+      "kind": "regression",
+      "about": "the tool leaves the box 0.6 s after the last command, inside the 1 s tail",
+      "consistent": true,
+      "verdict": "FAIL",
+      "reasons": [
+        "POSITION_EXCURSION"
+      ],
+      "errors": [],
+      "warnings": [
+        "NONSTANDARD_PARAMS"
+      ],
+      "infos": [],
+      "tamper_code": null
+    },
+    "regression-copied-track": {
+      "kind": "regression",
+      "about": "state.csv fk rows equal to the instrument's track",
+      "consistent": true,
+      "verdict": "INCONCLUSIVE",
+      "reasons": [
+        "INSTRUMENT_MATCHES_ROBOT_STATE"
+      ],
+      "errors": [],
+      "warnings": [
+        "NONSTANDARD_PARAMS"
+      ],
+      "infos": [],
+      "tamper_code": null
+    },
+    "regression-speed-sustained": {
+      "kind": "regression",
+      "about": "0.45 m/s for 0.3 s, longer than a speed window",
+      "consistent": true,
+      "verdict": "FAIL",
+      "reasons": [
+        "SPEED_EXCURSION"
+      ],
+      "errors": [],
+      "warnings": [
+        "NONSTANDARD_PARAMS"
+      ],
+      "infos": [],
+      "tamper_code": null
+    },
+    "regression-clock-uncertainty-inflated": {
+      "kind": "regression",
+      "about": "U declared as 5 s: a wider window only exposes uncovered edges",
+      "consistent": true,
+      "verdict": "INCONCLUSIVE",
+      "reasons": [
+        "GAPS_TOO_MANY",
+        "GAP_TOO_LONG",
+        "GAP_UNBOUNDED"
+      ],
+      "errors": [],
+      "warnings": [
+        "NONSTANDARD_PARAMS"
+      ],
+      "infos": [],
+      "tamper_code": null
+    },
+    "regression-undeclared-point": {
+      "kind": "regression",
+      "about": "samples name tool_tip, which the envelope does not declare: flagged and ignored",
+      "consistent": true,
+      "verdict": "INCONCLUSIVE",
+      "reasons": [
+        "NO_MOTION",
+        "POINT_UNMEASURED"
+      ],
+      "errors": [],
+      "warnings": [
+        "NONSTANDARD_PARAMS",
+        "UNDECLARED_POINT_SAMPLES"
+      ],
+      "infos": [],
+      "tamper_code": null
+    },
+    "regression-prefix-on-time": {
+      "kind": "regression",
+      "about": "a 90 % prefix of the stream sent on schedule: too short",
+      "consistent": true,
+      "verdict": "INCONCLUSIVE",
+      "reasons": [
+        "RUN_TOO_SHORT"
+      ],
+      "errors": [],
+      "warnings": [
+        "NONSTANDARD_PARAMS"
+      ],
+      "infos": [
+        "STREAM_PREFIX"
+      ],
+      "tamper_code": null
+    },
+    "defect-hidden-in-short-spacing": {
+      "kind": "defect",
+      "about": "12.5 Hz, 5 mm inside the face, a 0.16 s spacing below the gap threshold: never bounded",
+      "consistent": true,
+      "verdict": "PASS",
+      "reasons": [],
+      "errors": [],
+      "warnings": [
+        "NONSTANDARD_PARAMS"
+      ],
+      "infos": [],
+      "tamper_code": null,
+      "defect": "L1",
+      "intended_verdict": "INCONCLUSIVE",
+      "intended_reasons": [
+        "GAP_UNBOUNDED"
+      ]
+    },
+    "defect-speed-burst-under-window": {
+      "kind": "defect",
+      "about": "0.1 s bursts at 1.8 x the speed limit, measured at 100 Hz, averaged away",
+      "consistent": true,
+      "verdict": "PASS",
+      "reasons": [],
+      "errors": [],
+      "warnings": [
+        "NONSTANDARD_PARAMS"
+      ],
+      "infos": [],
+      "tamper_code": null,
+      "defect": "L2",
+      "intended_verdict": "FAIL",
+      "intended_reasons": [
+        "SPEED_EXCURSION"
+      ]
+    },
+    "defect-jitter-inflates-allowance": {
+      "kind": "defect",
+      "about": "a jitter record of sigma 8 mm hides 0.4 m/s legs against a 0.25 m/s limit",
+      "consistent": true,
+      "verdict": "PASS",
+      "reasons": [],
+      "errors": [],
+      "warnings": [
+        "NONSTANDARD_PARAMS"
+      ],
+      "infos": [],
+      "tamper_code": null,
+      "defect": "L3",
+      "intended_verdict": "INCONCLUSIVE",
+      "intended_reasons": [
+        "JITTER_TOO_LARGE"
+      ]
+    },
+    "defect-vphys-contradicted": {
+      "kind": "defect",
+      "about": "v_phys 0.05 m/s bounds a gap although the samples show 0.2 m/s",
+      "consistent": true,
+      "verdict": "PASS",
+      "reasons": [],
+      "errors": [],
+      "warnings": [
+        "NONSTANDARD_PARAMS"
+      ],
+      "infos": [],
+      "tamper_code": null,
+      "defect": "L4",
+      "intended_verdict": "INCONCLUSIVE",
+      "intended_reasons": [
+        "PHYSICAL_SPEED_CONTRADICTED"
+      ]
+    },
+    "defect-excursion-after-window": {
+      "kind": "defect",
+      "about": "an excursion 0.05 s after the window ends is dropped without a word",
+      "consistent": true,
+      "verdict": "PASS",
+      "reasons": [],
+      "errors": [],
+      "warnings": [
+        "NONSTANDARD_PARAMS"
+      ],
+      "infos": [],
+      "tamper_code": null,
+      "defect": "L5",
+      "intended_verdict": "FAIL",
+      "intended_reasons": [
+        "POSITION_EXCURSION"
+      ]
+    },
+    "defect-excursion-before-window": {
+      "kind": "defect",
+      "about": "an excursion before the window opens: the verdict may stand, but nothing reports it",
+      "consistent": true,
+      "verdict": "PASS",
+      "reasons": [],
+      "errors": [],
+      "warnings": [
+        "NONSTANDARD_PARAMS"
+      ],
+      "infos": [],
+      "tamper_code": null,
+      "defect": "L5",
+      "intended_verdict": "PASS",
+      "intended_reasons": []
+    },
+    "defect-prefix-sent-slowly": {
+      "kind": "defect",
+      "about": "a 90 % prefix sent 10.5 % late covers 3 s at 45.2 Hz: the unsent tenth is never missed",
+      "consistent": true,
+      "verdict": "PASS",
+      "reasons": [],
+      "errors": [],
+      "warnings": [
+        "NONSTANDARD_PARAMS"
+      ],
+      "infos": [
+        "STREAM_PREFIX"
+      ],
+      "tamper_code": null,
+      "defect": "L6",
+      "intended_verdict": "INCONCLUSIVE",
+      "intended_reasons": [
+        "STREAM_INCOMPLETE"
+      ]
+    },
+    "defect-copied-track-offset": {
+      "kind": "defect",
+      "about": "a copied fk track offset by 0.2 mm",
+      "consistent": true,
+      "verdict": "PASS",
+      "reasons": [],
+      "errors": [],
+      "warnings": [
+        "NONSTANDARD_PARAMS"
+      ],
+      "infos": [],
+      "tamper_code": null,
+      "defect": "L7",
+      "intended_verdict": "INCONCLUSIVE",
+      "intended_reasons": [
+        "INSTRUMENT_MATCHES_ROBOT_STATE"
+      ]
+    },
+    "defect-copied-track-shifted": {
+      "kind": "defect",
+      "about": "a copied fk track shifted by 6 ms",
+      "consistent": true,
+      "verdict": "PASS",
+      "reasons": [],
+      "errors": [],
+      "warnings": [
+        "NONSTANDARD_PARAMS"
+      ],
+      "infos": [],
+      "tamper_code": null,
+      "defect": "L7",
+      "intended_verdict": "INCONCLUSIVE",
+      "intended_reasons": [
+        "INSTRUMENT_MATCHES_ROBOT_STATE"
+      ]
+    },
+    "defect-through-thin-keep-out": {
+      "kind": "defect",
+      "about": "the tool crosses a 2 cm keep_out wall four times (be envelope lint: LINT_KEEP_OUT_UNENFORCEABLE)",
+      "consistent": true,
+      "verdict": "PASS",
+      "reasons": [],
+      "errors": [],
+      "warnings": [
+        "NONSTANDARD_PARAMS"
+      ],
+      "infos": [],
+      "tamper_code": null,
+      "defect": "L8",
+      "intended_verdict": "FAIL",
+      "intended_reasons": [
+        "POSITION_EXCURSION"
+      ]
+    },
+    "defect-envelope-signature-unchecked": {
+      "kind": "defect",
+      "about": "envelope.json carries a signature that is not one; verify says nothing",
+      "consistent": true,
+      "verdict": "PASS",
+      "reasons": [],
+      "errors": [],
+      "warnings": [
+        "NONSTANDARD_PARAMS"
+      ],
+      "infos": [],
+      "tamper_code": null,
+      "defect": "L9",
+      "intended_verdict": "PASS",
+      "intended_reasons": []
+    },
+    "defect-token-motion": {
+      "kind": "defect",
+      "about": "a gate that refuses every command, plus one 1.5 cm hop, meets the motion rule",
+      "consistent": true,
+      "verdict": "PASS",
+      "reasons": [],
+      "errors": [],
+      "warnings": [
+        "NONSTANDARD_PARAMS"
+      ],
+      "infos": [],
+      "tamper_code": null,
+      "defect": "L10",
+      "intended_verdict": "INCONCLUSIVE",
+      "intended_reasons": [
+        "NO_MOTION"
+      ]
+    },
+    "defect-duplicate-timestamps": {
+      "kind": "defect",
+      "about": "a 9 Hz instrument writing each frame three times escapes INSTRUMENT_RATE_LOW",
+      "consistent": true,
+      "verdict": "INCONCLUSIVE",
+      "reasons": [
+        "GAPS_TOO_MANY"
+      ],
+      "errors": [],
+      "warnings": [
+        "NONSTANDARD_PARAMS"
+      ],
+      "infos": [],
+      "tamper_code": null,
+      "defect": "L12",
+      "intended_verdict": "INCONCLUSIVE",
+      "intended_reasons": [
+        "GAPS_TOO_MANY",
+        "INSTRUMENT_RATE_LOW"
+      ]
+    },
+    "defect-ev10-aborted-unvisited-waypoint": {
+      "kind": "defect",
+      "about": "EV-10 stopped before its fifth waypoint: the never-visited waypoint is never missed",
+      "consistent": true,
+      "verdict": "PASS",
+      "reasons": [],
+      "errors": [],
+      "warnings": [
+        "NONSTANDARD_PARAMS"
+      ],
+      "infos": [
+        "STREAM_PREFIX"
+      ],
+      "tamper_code": null,
+      "defect": "L11",
+      "intended_verdict": "INCONCLUSIVE",
+      "intended_reasons": [
+        "WAYPOINT_NOT_VISITED"
+      ]
+    },
+    "tamper-state-removed": {
+      "kind": "regression",
+      "about": "regression-copied-track with raw/state.csv deleted after signing: the copy check no longer applies, and verify says so",
+      "consistent": false,
+      "verdict": "PASS",
+      "reasons": [],
+      "errors": [
+        "DERIVED_MISMATCH",
+        "DERIVED_MISMATCH",
+        "FILE_MISSING",
+        "VERDICT_MISMATCH"
+      ],
+      "warnings": [
+        "NONSTANDARD_PARAMS"
+      ],
+      "infos": [],
+      "tamper_code": "FILE_MISSING"
+    },
+    "tamper-vphys-lowered-resigned": {
+      "kind": "regression",
+      "about": "regression-gap-honest-vphys with v_phys lowered and re-signed, not rebuilt",
+      "consistent": false,
+      "verdict": "PASS",
+      "reasons": [],
+      "errors": [
+        "DERIVED_MISMATCH",
+        "VERDICT_MISMATCH"
+      ],
+      "warnings": [
+        "NONSTANDARD_PARAMS"
+      ],
+      "infos": [],
+      "tamper_code": "VERDICT_MISMATCH"
+    },
+    "tamper-jitter-edited-resigned": {
+      "kind": "regression",
+      "about": "regression-gap-honest-vphys with wider jitter rows, relisted and re-signed, not rebuilt",
+      "consistent": false,
+      "verdict": "INCONCLUSIVE",
+      "reasons": [
+        "GAP_UNBOUNDED"
+      ],
+      "errors": [
+        "DERIVED_MISMATCH",
+        "DERIVED_MISMATCH",
+        "DERIVED_MISMATCH"
+      ],
+      "warnings": [
+        "NONSTANDARD_PARAMS"
+      ],
+      "infos": [],
+      "tamper_code": "DERIVED_MISMATCH"
+    },
+    "tamper-profile-loosened-resigned": {
+      "kind": "regression",
+      "about": "regression-excursion-in-window-tail with tolerance_m 0.05, re-signed, not rebuilt",
+      "consistent": false,
+      "verdict": "PASS",
+      "reasons": [],
+      "errors": [
+        "DERIVED_MISMATCH",
+        "DERIVED_MISMATCH",
+        "DERIVED_MISMATCH",
+        "VERDICT_MISMATCH"
+      ],
+      "warnings": [
+        "NONSTANDARD_PARAMS"
+      ],
+      "infos": [],
+      "tamper_code": "VERDICT_MISMATCH"
+    }
+  }
+}

@@ -1,0 +1,9 @@
+{
+  "about": "keep_out zones cover the whole keep_in region; every position is an excursion",
+  "class": "keep-out-covers-keep-in",
+  "options": {},
+  "load_error_codes": null,
+  "lint_codes": [
+    "LINT_KEEP_OUT_COVERS_KEEP_IN"
+  ]
+}

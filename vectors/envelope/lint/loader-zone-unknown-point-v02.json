@@ -1,0 +1,124 @@
+{
+  "envelope_version": "0.2",
+  "machine": {
+    "id": "loophole-search",
+    "class": "arm",
+    "description": "TEST-ONLY synthetic envelope"
+  },
+  "frame": "base_link",
+  "points": [
+    {
+      "id": "tool",
+      "description": "TEST-ONLY tool point",
+      "max_speed_mps": 0.2481
+    },
+    {
+      "id": "elbow",
+      "description": "TEST-ONLY elbow point"
+    }
+  ],
+  "workspace": {
+    "zones": [
+      {
+        "id": "tool_region",
+        "kind": "keep_in",
+        "applies_to": [
+          "tool"
+        ],
+        "prism": {
+          "polygon_m": [
+            [
+              -0.0092,
+              -0.2418
+            ],
+            [
+              -0.1213,
+              -0.168
+            ],
+            [
+              -0.3031,
+              -0.2458
+            ],
+            [
+              -0.2619,
+              -0.4809
+            ],
+            [
+              -0.0843,
+              -0.5024
+            ]
+          ],
+          "z_m": [
+            0.1803,
+            0.43
+          ]
+        }
+      },
+      {
+        "id": "cell",
+        "kind": "keep_in",
+        "applies_to": [
+          "elbow"
+        ],
+        "box": {
+          "min_m": [
+            -0.7429,
+            -0.9291,
+            -0.3197
+          ],
+          "max_m": [
+            0.4333,
+            0.2471,
+            0.93
+          ]
+        }
+      },
+      {
+        "id": "fixture",
+        "kind": "keep_out",
+        "applies_to": [
+          "gripper"
+        ],
+        "box": {
+          "min_m": [
+            -0.19,
+            -0.3924,
+            0.292
+          ],
+          "max_m": [
+            -0.1271,
+            -0.3309,
+            0.3714
+          ]
+        }
+      }
+    ]
+  },
+  "motion": {
+    "max_speed_mps": 0.8188
+  },
+  "stop": {
+    "category": 1,
+    "max_time_ms": 300,
+    "max_distance_m": 0.0076
+  },
+  "heartbeat": {
+    "model_timeout_ms": 500,
+    "gate_timeout_ms": 200,
+    "on_loss": "stop"
+  },
+  "proximity": [
+    {
+      "when": {
+        "human_within_m": 1.0357
+      },
+      "max_speed_mps": 0.4094
+    },
+    {
+      "when": {
+        "human_within_m": 0.2446
+      },
+      "action": "stop"
+    }
+  ]
+}

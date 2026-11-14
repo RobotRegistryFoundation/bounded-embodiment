@@ -1,0 +1,9 @@
+{
+  "about": "schema-valid, rejected by the loader: a flat or inverted box",
+  "class": "loader-box-flat-or-inverted",
+  "options": {},
+  "load_error_codes": [
+    "ENVELOPE_BOX_INVERTED"
+  ],
+  "lint_codes": []
+}

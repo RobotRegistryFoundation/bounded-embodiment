@@ -1,0 +1,9 @@
+{
+  "about": "a joint range wider than a full turn",
+  "class": "joint-range-vacuous",
+  "options": {},
+  "load_error_codes": null,
+  "lint_codes": [
+    "LINT_JOINT_RANGE_VACUOUS"
+  ]
+}

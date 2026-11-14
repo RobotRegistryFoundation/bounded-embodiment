@@ -1,0 +1,9 @@
+{
+  "about": "a keep_out zone outside the keep_in region: it excludes nothing",
+  "class": "keep-out-unreachable",
+  "options": {},
+  "load_error_codes": null,
+  "lint_codes": [
+    "LINT_KEEP_OUT_UNREACHABLE"
+  ]
+}

@@ -7,11 +7,33 @@ Generators, scorers and profiles are versioned by name (`be-hostile/1`, `ev03-to
 
 ## Unreleased
 
+Core:
+
+- `be envelope lint FILE [--json] [--physical-max-speed MPS]` (new, `bounded_embodiment.envelope.lint`):
+  reports envelope limits that the schema and the loader accept but that are unsafe, contradictory
+  or vacuous, each with a stable `LINT_*` code: keep_out zones that cover the keep_in region or
+  are too thin to enforce, stop distances longer than the region is deep, proximity rules that
+  allow more speed closer in, speed limits no run can test, and more. Exit status 1 on a lint
+  error. It is advice: no verdict depends on it and `be verify` does not run it.
+- No rule set, profile, format or reason code changes. The loophole search that motivated the lint
+  is in `docs/loopholes.md`, with new vectors in `vectors/envelope/lint/` (made by
+  `tools/envelope_loopholes.py`) and `vectors/loopholes/runs/` (made by
+  `tools/make_loophole_runs.py`). The defects it found are for the next rule-set versions.
+
 Core and kit:
 
 - Package metadata: the Homepage link is https://robotregistryfoundation.org/bounded-embodiment/,
   the project's one homepage (it was https://craigmerry.com/bounded-embodiment/, the talk). Both
   package READMEs link the homepage, and core's README names the craigmerry.com page as the talk.
+
+Kit:
+
+- `bounded_embodiment_kit.falsify` (`python -m bounded_embodiment_kit.falsify`), a draft
+  falsification search, rule set `be-falsify/1` (draft for method v0.2): it drives a gate in
+  lockstep with the simulated rover or SO-101 and steers its commands toward a position or speed
+  violation, writing a replayable JSON trace. Simulation only. A violation it finds is evidence of
+  a defect; finding none establishes only that, never a PASS. Results on the reference gates are in
+  `docs/falsification-findings.md`. No released rule set, scorer, golden vector or verdict changes.
 
 ### Method v0.2 draft: EV-02 and EV-05
 

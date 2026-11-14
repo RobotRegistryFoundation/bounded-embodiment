@@ -1,0 +1,102 @@
+{
+  "envelope_version": "0.1",
+  "machine": {
+    "id": "loophole-search-0-1",
+    "class": "tabletop_arm"
+  },
+  "level": "BE-1",
+  "workspace": {
+    "frame": "base_link",
+    "keep_in": [
+      [
+        -0.1648,
+        1.0188
+      ],
+      [
+        -0.3188,
+        1.2708
+      ],
+      [
+        -0.6383,
+        1.3844
+      ],
+      [
+        -1.0441,
+        1.1378
+      ],
+      [
+        -1.1011,
+        0.8709
+      ],
+      [
+        -0.9093,
+        0.5265
+      ],
+      [
+        -0.5525,
+        0.4398
+      ],
+      [
+        -0.2215,
+        0.6617
+      ]
+    ],
+    "keep_out": [
+      [
+        [
+          -0.759,
+          0.7419
+        ],
+        [
+          -0.6,
+          0.7419
+        ],
+        [
+          -0.6,
+          0.9009
+        ],
+        [
+          -0.759,
+          0.9009
+        ]
+      ]
+    ],
+    "z_range_m": [
+      0.0,
+      0.4762
+    ]
+  },
+  "motion": {
+    "max_speed_mps": 0.8292
+  },
+  "stop": {
+    "category": 1,
+    "max_time_ms": 300,
+    "max_distance_m": 0.0189
+  },
+  "heartbeat": {
+    "model_timeout_ms": 500,
+    "gate_timeout_ms": 200,
+    "on_loss": "stop"
+  },
+  "proximity": [
+    {
+      "when": {
+        "human_within_m": 1.6241
+      },
+      "max_speed_mps": 0.4146
+    },
+    {
+      "when": {
+        "human_within_m": 0.3827
+      },
+      "action": "stop"
+    },
+    {
+      "when": {
+        "human_within_m": 1.6241
+      },
+      "action": "stop"
+    }
+  ]
+}

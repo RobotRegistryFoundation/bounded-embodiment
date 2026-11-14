@@ -1,0 +1,9 @@
+{
+  "about": "two keep_in zones for one point with nothing in common",
+  "class": "keep-in-disjoint",
+  "options": {},
+  "load_error_codes": null,
+  "lint_codes": [
+    "LINT_KEEP_IN_DISJOINT"
+  ]
+}

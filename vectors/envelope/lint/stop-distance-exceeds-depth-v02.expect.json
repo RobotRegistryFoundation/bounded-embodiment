@@ -1,0 +1,10 @@
+{
+  "about": "a worst-case stop distance longer than the allowed region is deep",
+  "class": "stop-distance-exceeds-depth",
+  "options": {},
+  "load_error_codes": null,
+  "lint_codes": [
+    "LINT_STOP_DISTANCE_EXCEEDS_DEPTH",
+    "LINT_STOP_DISTANCE_EXCEEDS_DEPTH"
+  ]
+}

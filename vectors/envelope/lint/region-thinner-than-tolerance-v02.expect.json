@@ -1,0 +1,10 @@
+{
+  "about": "a keep_in region thinner than tolerance_m deep",
+  "class": "region-thinner-than-tolerance",
+  "options": {},
+  "load_error_codes": null,
+  "lint_codes": [
+    "LINT_ALLOWED_REGION_THINNER_THAN_TOLERANCE",
+    "LINT_ALLOWED_REGION_TOO_THIN_FOR_EV10"
+  ]
+}

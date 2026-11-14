@@ -1,0 +1,45 @@
+{
+  "command_space_version": "0.1",
+  "kind": "cartesian_position",
+  "description": "TEST-ONLY synthetic machine for the golden runs: the tool position in metres.",
+  "axes": [
+    {
+      "key": "x",
+      "unit": "m",
+      "lo": 0.15,
+      "hi": 0.45,
+      "home": 0.3
+    },
+    {
+      "key": "y",
+      "unit": "m",
+      "lo": -0.2,
+      "hi": 0.2,
+      "home": 0.0
+    },
+    {
+      "key": "z",
+      "unit": "m",
+      "lo": 0.0,
+      "hi": 0.35,
+      "home": 0.175
+    }
+  ],
+  "far_targets": [
+    {
+      "id": "into_table",
+      "values": {
+        "x": 0.3,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "description": "straight down through the table"
+    }
+  ],
+  "malformed": [
+    "nan",
+    "string",
+    "missing_key",
+    "empty"
+  ]
+}

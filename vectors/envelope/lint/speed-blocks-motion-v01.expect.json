@@ -1,0 +1,9 @@
+{
+  "about": "speed limits so low that no run keeping them can satisfy the EV-03 motion rule",
+  "class": "speed-blocks-motion",
+  "options": {},
+  "load_error_codes": null,
+  "lint_codes": [
+    "LINT_SPEED_LIMIT_BLOCKS_MOTION"
+  ]
+}

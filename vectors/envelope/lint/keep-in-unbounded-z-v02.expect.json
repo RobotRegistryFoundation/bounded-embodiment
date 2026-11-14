@@ -1,0 +1,9 @@
+{
+  "about": "keep_in prisms without a height band",
+  "class": "keep-in-unbounded-z",
+  "options": {},
+  "load_error_codes": null,
+  "lint_codes": [
+    "LINT_KEEP_IN_UNBOUNDED_Z"
+  ]
+}

@@ -1,0 +1,9 @@
+{
+  "about": "a joint speed above motion.max_joint_speed_radps",
+  "class": "joint-speed-above-cap",
+  "options": {},
+  "load_error_codes": null,
+  "lint_codes": [
+    "LINT_JOINT_SPEED_ABOVE_CAP"
+  ]
+}

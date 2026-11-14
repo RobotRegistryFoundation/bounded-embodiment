@@ -20,9 +20,14 @@ What is new against an EV-03 session (``session.py``), and nothing else is:
   segment's loss instant is its last motion command's send time; the watch is armed there.
 - A helper thread waits up to ``estop_timeout_s`` for a source command. If it fails or times
   out, the latch trips and the stop row records why (core then leaves the trial unmeasured). A
-  command still running at its deadline, or when the run ends, is ended (its process group:
-  SIGTERM, then SIGKILL) and reaped, so that it cannot act after the run; how it ended is recorded,
-  and the latch reason says it may have acted.
+  command still running at its deadline, or when the run ends, is ended with everything in its
+  process group (SIGTERM, then SIGKILL), and the kit waits until the whole group has gone, not
+  just the command, so that nothing of it can act after the run; how it ended is recorded, and the
+  latch reason says it may have acted. A command that exits but leaves a process running in its
+  group (a source command must latch and leave nothing running) has that process ended at once,
+  and the trial and the end of the run say so; that alone does not stop the run (round-3 K8).
+  Every group is checked again when the run ends. A process that leaves its session (``setsid``)
+  is out of the kit's reach.
   Rows sent while the outcome is unknown are written after the stop row, in order, and the
   operator is not asked for NEXT, nor anything reset, until the command has finished: a command
   still running might cut power later.
@@ -58,6 +63,9 @@ import threading
 import time
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
+from pathlib import Path
+from time import monotonic as _real_monotonic
+from time import sleep as _real_sleep
 
 from bounded_embodiment.generator import Proposal
 
@@ -71,7 +79,9 @@ __all__ = [
     "STOP_PREFIX",
     "TrialCommandThread",
     "TrialSegment",
+    "end_group",
     "end_source_command",
+    "group_alive",
     "run_trial_session",
     "spawn_source_command",
 ]
@@ -140,23 +150,68 @@ def spawn_source_command(cmd: str) -> subprocess.Popen:
                             stderr=subprocess.DEVNULL, start_new_session=True)
 
 
-def end_source_command(proc: subprocess.Popen, grace_s: float = 0.5) -> str:
-    """End a source command that is still running (round-2 K1): its process group (its session's,
-    from ``spawn_source_command``) gets SIGTERM, then SIGKILL after ``grace_s``, and it is reaped.
-    Returns how it ended: "exited" (it had ended by itself), "SIGTERM", "SIGKILL" or "survived"."""
-    if proc.poll() is not None:
-        return "exited"
-    for sig, wait_s in ((signal.SIGTERM, grace_s), (signal.SIGKILL, 1.0)):
+def group_alive(pgid: int) -> bool:
+    """Whether process group ``pgid`` still has a member that has not exited. On Linux the members
+    are read from /proc, so that a zombie does not count (an init that does not reap orphans, as in
+    some containers, leaves them for good); elsewhere ``os.killpg(pgid, 0)`` answers, zombies
+    included."""
+    proc = Path("/proc")
+    if proc.is_dir():
+        for entry in os.scandir(proc):
+            if not entry.name.isdigit():
+                continue
+            try:
+                stat = (proc / entry.name / "stat").read_text()
+            except OSError:  # it ended meanwhile
+                continue
+            fields = stat[stat.rindex(")") + 2 :].split()  # state, ppid, pgrp, ...
+            if len(fields) > 2 and fields[2] == str(pgid) and fields[0] not in ("Z", "X"):
+                return True
+        return False
+    try:
+        os.killpg(pgid, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:  # it exists, and is not ours to signal
+        return True
+    return True
+
+
+def end_group(pgid: int, leader: subprocess.Popen | None = None, grace_s: float = 0.5,
+              kill_s: float = 1.0) -> str | None:
+    """End whatever is left in process group ``pgid`` (round-3 K8): SIGTERM to the group, then
+    SIGKILL once ``grace_s`` has passed with any member still alive, waiting each time until the
+    whole group has gone, not just its leader (``leader`` is reaped when given). Returns None when
+    nothing was left, else how the group ended: "SIGTERM", "SIGKILL", or "survived"."""
+
+    def gone() -> bool:
+        if leader is not None:
+            leader.poll()  # reap it: our own child would otherwise linger as a zombie
+        return not group_alive(pgid)
+
+    if gone():
+        return None
+    for sig, wait_s in ((signal.SIGTERM, grace_s), (signal.SIGKILL, kill_s)):
         try:
-            os.killpg(proc.pid, sig)
+            os.killpg(pgid, sig)
         except (ProcessLookupError, PermissionError):
             pass
-        try:
-            proc.wait(timeout=wait_s)
-            return sig.name
-        except subprocess.TimeoutExpired:
-            continue
+        # a process ends in real time, whatever clock the run keeps (the tests' virtual one)
+        deadline = _real_monotonic() + wait_s
+        while True:
+            if gone():
+                return sig.name
+            if _real_monotonic() >= deadline:
+                break
+            _real_sleep(0.01)
     return "survived"
+
+
+def end_source_command(proc: subprocess.Popen, grace_s: float = 0.5) -> str:
+    """End a source command that is still running, with everything in its process group (its
+    session's, from ``spawn_source_command``; round-2 K1, round-3 K8), and reap it. Returns how it
+    ended: "exited" (nothing was left running), "SIGTERM", "SIGKILL" or "survived"."""
+    return end_group(proc.pid, proc, grace_s) or "exited"
 
 
 class TrialCommandThread(CommandThread):
@@ -183,13 +238,18 @@ class TrialCommandThread(CommandThread):
         self.next_trial = 0               # the index of the trial NEXT would begin
         self.trials: list[dict] = [{"trial": k, "label": s.label, "source": s.source,
                                     "instant_t_s": None, "issued": None, "reset": None,
-                                    "start_check": None, "command": None, "catch_up": None}
+                                    "start_check": None, "command": None, "left_running": None,
+                                    "catch_up": None}
                                    for k, s in enumerate(self.segments)]
         self._pending: dict | None = None  # a stop row waiting for its source command's outcome
         self._held_rows: list[tuple] = []  # rows sent meanwhile, written after it
         self._release_at: float | None = None
         self._helper: threading.Thread | None = None  # waits for the pending source command
         self._closing = threading.Event()  # the run is ending: end any source command still running
+        # every source command (its pending record and process), whose group is checked again when
+        # the run ends (round-3 K8)
+        self._groups: list[tuple[dict, subprocess.Popen]] = []
+        self._groups_lock = threading.Lock()
 
     # ----- recording -------------------------------------------------------------------------------
     def _write(self, p: Proposal, t_sent: float, t_done: float, r: SendResult) -> None:
@@ -246,9 +306,14 @@ class TrialCommandThread(CommandThread):
         """Helper thread: wait for a source command, up to ``estop_timeout_s`` on the run's clock;
         a failure or a timeout trips the latch. A command normally ends at once, so the first
         half second is one plain wait; after that the thread polls, sleeping on the run's clock.
-        A command still running at the deadline, or once the run is ending, is ended (round-2 K1)."""
+        A command still running at the deadline, or once the run is ending, is ended with its
+        whole process group (round-2 K1); one that exited has whatever it left running in its
+        group ended too, which is recorded but trips nothing (round-3 K8)."""
+        with self._groups_lock:
+            self._groups.append((pend, proc))
         deadline = pend["t_sent"] + self.limits.estop_timeout_s
-        ended = None
+        ended = left = None
+        t_done = None
         try:
             try:
                 rc = proc.wait(timeout=min(FIRST_WAIT_S, self.limits.estop_timeout_s))
@@ -260,17 +325,22 @@ class TrialCommandThread(CommandThread):
             if rc is None:
                 ended = end_source_command(proc)
                 r = SendResult(False, None, "external_unfinished" if self._closing.is_set() else "external_timeout")
-            elif rc == 0:
-                r = SendResult(True, "issued", None)
             else:
-                r = SendResult(False, None, f"external_returncode:{rc}")
+                t_done = self.clock()  # the command's own outcome is known now
+                r = SendResult(True, "issued", None) if rc == 0 else SendResult(False, None, f"external_returncode:{rc}")
+                left = end_group(proc.pid, proc)
         except Exception as e:  # noqa: BLE001 - recorded; the latch trips below
             r = SendResult(False, None, f"external_failed:{type(e).__name__}")
-        pend["ended"] = ended
+        pend["ended"], pend["left_running"] = ended, left
         if 0 <= pend["k"] < len(self.trials):
             self.trials[pend["k"]]["command"] = ended or "exited"
-        pend["result"], pend["t_done"] = r, self.clock()
+            if left is not None:
+                self.trials[pend["k"]]["left_running"] = left
+        pend["result"], pend["t_done"] = r, t_done if t_done is not None else self.clock()
         pend["done"].set()
+        if left is not None:
+            self.log(f"{label}: the {source} command left a process running in its group, which the kit "
+                     f"ended ({left}); a source command must latch and leave nothing running.")
         if ended is not None:
             self.latch.trip("error", f"{label}: the {source} command did not finish ({r.error_kind}, "
                                      f"{self.limits.estop_timeout_s:g} s allowed); it was ended ({ended}), and "
@@ -279,12 +349,24 @@ class TrialCommandThread(CommandThread):
             self.latch.trip("error", f"{label}: the {source} command did not succeed ({r.error_kind})")
 
     def _close_commands(self) -> None:
-        """The run is ending: a source command still running is ended (and recorded), then the
-        pending stop row is written (round-2 K1)."""
+        """The run is ending: a source command still running is ended (and recorded), every source
+        command's process group is checked again and anything left in one is ended and recorded
+        (round-3 K8), then the pending stop row is written (round-2 K1)."""
         self._closing.set()
         helper = self._helper
         if helper is not None and helper.is_alive():
             helper.join(FIRST_WAIT_S + 3.0)
+        with self._groups_lock:
+            groups, self._groups = list(self._groups), []
+        for pend, proc in groups:
+            if not pend["done"].is_set():
+                continue  # its helper is still ending the command, its whole group with it
+            left = end_group(proc.pid, proc)
+            k = pend["k"]
+            if left is not None and 0 <= k < len(self.trials):
+                self.trials[k]["left_running"] = left
+                self.log(f"{self.trials[k]['label']}: at the end of the run its {self.trials[k]['source']} "
+                         f"command's process group still had a process running, which the kit ended ({left}).")
         self._settle_pending(final=True)
 
     def _await_pending(self, label: str, source: str) -> bool:
@@ -297,8 +379,10 @@ class TrialCommandThread(CommandThread):
             if self.latch.tripped or self.abort.is_set():
                 return False
             if self.clock() > self._pending["t_sent"] + self.limits.estop_timeout_s + FIRST_WAIT_S + 3.0:
-                self._close_commands()  # the helper never answered: end it, and fail closed
+                # the helper never answered: fail closed first, so the runner's stop does not wait
+                # for the join below (round-3 kit review, note 5), then end the command
                 self.latch.trip("error", f"{label}: the {source} command's outcome never came")
+                self._close_commands()
                 return False
             self._state_if_due()
             time.sleep(0.002)

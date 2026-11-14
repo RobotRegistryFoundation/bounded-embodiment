@@ -26,6 +26,11 @@ latches and never restores power by itself, that the reset at NEXT brings the ma
 moving it, and that NEXT is read from your terminal (the kit refuses piped input on hardware). The
 rehearsal is not a result: report it with `--role rehearsal`, if at all.
 
+A source command must latch in the hardware and then exit, leaving nothing running. The kit ends
+anything a command leaves in its process group, at once, and says so at the end of the run; if
+that process was holding the cut, the cut ends with it. A command that daemonizes, or leaves its
+session (`setsid`), is out of the kit's reach: nothing stops it from acting after the run.
+
 Some EV-02 and EV-05 rules turn a run INCONCLUSIVE, or refuse it, where a less careful rule would
 have passed it. None of them is a false PASS, but plan for them:
 

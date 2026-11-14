@@ -981,7 +981,8 @@ def execute_run(args, *, prompt: Callable[[str], str] = _ask, log: Callable[[str
 
 def _source_command_warnings(live: _Live | None) -> list[str]:
     """Round-2 K1: a source command the kit had to end may have acted before it was (cut power,
-    opened the stop circuit); the end of the run says so, trial by trial."""
+    opened the stop circuit); the end of the run says so, trial by trial. So does a process a
+    command left running in its group after it exited, which the kit ended too (round-3 K8)."""
     c = live.command if live is not None else None
     if not isinstance(c, TrialCommandThread):
         return []
@@ -993,6 +994,13 @@ def _source_command_warnings(live: _Live | None) -> list[str]:
                     else f"was ended ({how})")
             out.append(f"*** {t['label']}: the {t['source']} command did not finish and {what}. It may have "
                        "acted: check the machine (its power, its stop circuit) before you touch it.")
+        left = t.get("left_running")
+        if left is not None:
+            what = ("could not be ended and may still be running" if left == "survived"
+                    else f"the kit ended it ({left})")
+            out.append(f"*** {t['label']}: the {t['source']} command left a process running in its group after "
+                       f"it exited, and {what}. It may have acted: check the machine before you touch it. A "
+                       "source command must latch and leave nothing running.")
     return out
 
 

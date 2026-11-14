@@ -27,7 +27,7 @@ from bounded_embodiment_kit.adapters.sim_rover import SimRoverAdapter
 from bounded_embodiment_kit.runner import run as runmod
 from bounded_embodiment_kit.runner.kin import ArmFK
 from bounded_embodiment_kit.runner.limits import DEFAULT
-from bounded_embodiment_kit.runner.trials import TrialSegment, _between_trials
+from bounded_embodiment_kit.runner.trials import TrialSegment, _between_trials, group_alive
 from bounded_embodiment_kit.runner.watchdog import StopLatch, TrialWatch, trial_trip
 
 # ----- the trial tripwire (a pure function) ----------------------------------------------------------
@@ -548,7 +548,8 @@ def _pending(cmd: str, thread) -> tuple[dict, object]:
 
 def test_a_source_command_that_leaves_a_child_neither_blocks_nor_fails():
     """Review B1, scenario 3: with capture_output, `sh -c 'echo cut; sleep 30 &'` held stdout open
-    for the whole 5 s and was taken for a failure. Its streams are closed now, so it ends at once."""
+    for the whole 5 s and was taken for a failure. Its streams are closed now, so it ends at once.
+    The sleep it leaves in its group is ended as soon as it exits (round-3 K8), and recorded."""
     import time
 
     thread = _bare_thread()
@@ -557,6 +558,7 @@ def test_a_source_command_that_leaves_a_child_neither_blocks_nor_fails():
     thread._wait_for_command(pend, proc, "trial 1", "power_loss")
     assert time.monotonic() - t0 < 0.5
     assert pend["result"].applied and pend["result"].decision == "issued"
+    assert pend["left_running"] == "SIGTERM" and not group_alive(proc.pid)
     assert not thread.latch.tripped
 
 
@@ -615,6 +617,77 @@ def test_a_source_command_still_running_when_the_run_ends_is_ended(tmp_path):
     assert thread.trials[0]["command"] == pend["ended"]
     time.sleep(2.5)
     assert not marker.exists()
+
+
+def test_a_child_that_ignores_sigterm_is_killed_with_its_group_and_cannot_act_later(tmp_path):
+    """Round-3 K8, first reproduction: `sh -c '(trap "" TERM; sleep 8; date > MARKER) & wait'`.
+    SIGTERM ended the command's own process, end_source_command returned, the trial said "ended
+    (SIGTERM)", and the child that ignores SIGTERM wrote MARKER after the run. The kit now waits
+    until the whole group has gone, and sends it SIGKILL when anything outlives the grace."""
+    import time
+
+    marker = tmp_path / "cut-late"
+    hung = _bare_thread(limits=DEFAULT.__class__(estop_timeout_s=0.6))
+    pend, proc = _pending(f"sh -c '(trap \"\" TERM; sleep 1.5; touch {marker}) & wait'", hung)
+    hung._wait_for_command(pend, proc, "trial 1", "power_loss")
+    assert pend["result"].error_kind == "external_timeout"
+    assert pend["ended"] == "SIGKILL" and not group_alive(proc.pid)
+    time.sleep(2.0)
+    assert not marker.exists()
+
+
+def test_a_process_a_command_leaves_running_is_ended_and_recorded(tmp_path):
+    """Round-3 K8, second reproduction: `sh -c '(sleep 8; date > MARKER) &'` exits 0 at once, so
+    its stop row said issued and the trial "command: exited", and the child wrote MARKER after the
+    run with no warning. What a command leaves running in its group is ended as soon as it exits,
+    and the trial and the end of the run say so; that alone does not stop the run."""
+    import time
+    from types import SimpleNamespace
+
+    marker = tmp_path / "cut-late"
+    seg = TrialSegment((), "trial 1 (power_loss)", "stop", "power_loss", 0.8, 0.5, True)
+    thread = _bare_thread(segments=(seg,))
+    pend, proc = _pending(f"sh -c '(sleep 1.5; touch {marker}) &'", thread)
+    thread._wait_for_command(pend, proc, seg.label, seg.source)
+    assert pend["result"].applied and pend["result"].decision == "issued"
+    assert thread.trials[0]["command"] == "exited" and thread.trials[0]["left_running"] == "SIGTERM"
+    assert not thread.latch.tripped and not group_alive(proc.pid)
+    warnings = runmod._source_command_warnings(SimpleNamespace(command=thread))
+    assert any("left a process running in its group" in w and "SIGTERM" in w for w in warnings)
+    time.sleep(2.0)
+    assert not marker.exists()
+
+
+def test_every_source_commands_group_is_checked_again_when_the_run_ends(tmp_path):
+    """Round-3 K8: when the run ends, every source command's process group is checked again, and
+    anything still running in one is ended and recorded."""
+    import time
+
+    from bounded_embodiment_kit.runner.trials import spawn_source_command
+
+    marker = tmp_path / "cut-late"
+    seg = TrialSegment((), "trial 1 (power_loss)", "stop", "power_loss", 0.8, 0.5, True)
+    thread = _bare_thread(segments=(seg,))
+    stray = spawn_source_command(f"sh -c 'sleep 1.5; touch {marker}'")  # still running in its group
+    done = threading.Event()
+    done.set()  # its helper had finished with it
+    thread._groups.append(({"k": 0, "done": done}, stray))
+    thread._close_commands()
+    assert thread.trials[0]["left_running"] in ("SIGTERM", "SIGKILL") and not group_alive(stray.pid)
+    time.sleep(2.0)
+    assert not marker.exists()
+
+
+def test_a_group_with_only_a_zombie_left_counts_as_gone():
+    """An init that does not reap orphans (as in some containers) leaves zombies in a group for
+    good; they cannot act, and must not read as a process the kit failed to end."""
+    import subprocess
+    import time
+
+    proc = subprocess.Popen(["sh", "-c", "sleep 0.2 & exit 0"], start_new_session=True)
+    proc.wait()
+    time.sleep(0.6)  # the orphaned sleep has exited; it may be left as a zombie
+    assert not group_alive(proc.pid)
 
 
 def test_the_last_trials_source_command_is_waited_for_before_the_run_finishes(tmp_path):

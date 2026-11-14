@@ -95,8 +95,10 @@ be-watchdog      every 10 ms: both tripwires; on a trip -> StopLatch.trip() -> a
   once the run has started (`session.STOP_SIGNALS`, round-2 review of #13): the latch trips with
   what happened, the stop phase runs and declared.json's end is written; before, the process ended
   at once, with no stop. The logger, and the OFF question at close, survive a terminal that is
-  gone (torque stays on). A cancelled start (wrong typed word, never still) sends nothing and is
-  not latched.
+  gone (torque stays on). The teardown (the watchdog's join, the OFF question, closing the files)
+  ignores SIGHUP and SIGTERM until it returns (`run._hold_signals`, round-3 review of #13), so a
+  hangup at the OFF question no longer ends the process before the end record is written. A
+  cancelled start (wrong typed word, never still) sends nothing and is not latched.
 - **Stop acknowledgement**: the tool's speed over instrument samples captured after the first
   *executed* stop (span 0.1 to 0.2 s) must drop below 20 mm/s by latch + 0.25 s. Without an
   instrument (goto-start only) the robot's own FK is used. Otherwise, and also if the stop was never

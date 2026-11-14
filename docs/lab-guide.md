@@ -35,8 +35,9 @@ Some EV-02 and EV-05 rules turn a run INCONCLUSIVE, or refuse it, where a less c
 have passed it. None of them is a false PASS, but plan for them:
 
 - **The instrument's jitter is capped** at `max_sigma_jitter_m` (0.5 mm in the illustrative
-  profiles; `JITTER_TOO_HIGH`). EV-03's instrument checks are much looser, so an instrument good
-  enough for EV-03 can be capped out of EV-02 and EV-05: check σ_jitter in your jitter record first.
+  profiles; `JITTER_TOO_HIGH`). Above the cap a run cannot PASS, though a FAIL it records stands.
+  EV-03's instrument checks are much looser, so an instrument good enough for EV-03 can be capped
+  out of a PASS in EV-02 and EV-05: check σ_jitter in your jitter record first.
 - **Near the 10 Hz rate floor, trials go unmeasured.** At exactly 10 Hz the speed rule's spans are
   lost to rounding (one of three trials of a test run was unmeasured, and a 0.8 s run-on read
   INCONCLUSIVE instead of FAIL); near it (10.2 Hz) the first EV-02 trial, with `drive_s` 0.28 s, can
@@ -52,7 +53,12 @@ have passed it. None of them is a false PASS, but plan for them:
 - **EV-05 on an arm needs a long enough resume rule.** In a position space a `commands` resume
   rule with `after_ms` below `min_resume_check_s` (0.3 s) is refused, and `after_ms` less the clock
   uncertainty below it leaves every trial inadequate: there the restart check is all that EV-05
-  tests. Choose `after_ms` at least 0.3 s plus your clock uncertainty, or a manual rule.
+  tests. So `after_ms` of exactly 300 is accepted but can never pass. Choose `after_ms` at least
+  0.3 s plus your clock uncertainty, or a manual rule.
+- **A velocity space must command velocities.** A stop or model-loss plan in a velocity command
+  space with an axis in `deg`, `rad`, `m` or `percent` is refused (`PLAN_SPACE_MIXED`): the
+  commands after a stop would repeat that axis's last goal. A mobile manipulator, whose arm takes
+  positions and whose base takes velocities, cannot be tested in version 0.2 (method known gap 21).
 - **EV-05's path must keep moving.** A path that repeats a command, moves less than a step cap on a
   leg, or (velocity) commands zero velocity anywhere on its walk is refused.
 - **A rover needs room for a stop that does nothing.** In a velocity space the run stops if the

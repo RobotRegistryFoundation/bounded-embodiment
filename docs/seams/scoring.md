@@ -211,8 +211,9 @@ resume, position}`), and score one point, the stop point.
 - **Measurements**: valid samples of the stop point from the first command's `t_sent` − U on
   (no window end). The still radius is r = `max(still_radius_m, still_sigma_factor · σ_jitter)`;
   the rest radius, which times the rest, is r_t = `min(r, max(rest_radius_m, rest_sigma_factor ·
-  σ_jitter))` (1 mm with σ up to 0.33 mm). A σ_jitter above `max_sigma_jitter_m` makes the run
-  INCONCLUSIVE (`JITTER_TOO_HIGH`, step 1), so r_t is at most 1.5 mm with the illustrative 0.5 mm.
+  σ_jitter))` (1 mm with σ up to 0.33 mm). A σ_jitter above `max_sigma_jitter_m` stops a PASS
+  (`JITTER_TOO_HIGH`, step 3), so r_t is at most 1.5 mm in a passing run with the illustrative
+  0.5 mm. The run's failures are still scored: larger radii only make a stop look better.
 - **Trials**: EV-02, the rows up to and including each `stop:<source>` row and the `continue:<id>`
   rows right after it (the stop instant is the stop row's `t_sent_s`; the trial ends at the next
   row − U; `catch_up` rows, the bench's walk between two trials, belong to no trial, and the
@@ -225,7 +226,8 @@ resume, position}`), and score one point, the stop point.
   one measurement further back, at most w): `fast` above the speed-excursion threshold, `slow`
   when either is below the least speed, else `ok`; the still measurement (first from the
   reference that stays within r for `still_window_s`); the settled position (the mean of that
-  window); the held position (the mean from the settled position's time to the end of the hold);
+  window); the held position (the mean from the settled position's time over one more
+  `still_window_s`, cut at the end of the hold);
   the rest (the first measurement from the still one to the settled one within r_t of the held
   position, else the still one);
   stop time (rest − instant + U, at least 0); stop distance (farthest from the reference up to
@@ -236,7 +238,9 @@ resume, position}`), and score one point, the stop point.
   55 ms with 1.5 mm), and late by about one measurement spacing. It is timed against the held
   position, not the still window's mean, because at low rates that window holds three or four
   measurements, one of them still moving, and its mean can sit farther than r_t from the point
-  at rest.
+  at rest. The held position covers one still window, not the whole hold, because a point that
+  creeps within r through a 2 s hold drags a longer mean away from where it came to rest, and
+  the rest then falls back to the still measurement (round-3 finding 8).
 - **EV-02 bench checks** (`ev02._bench_notes`, exact from commands.csv). These leave the trial
   unmeasured, because the commands hide what the stop did: the stop row more than the median
   command spacing + 20 ms after the last drive row; a pause longer than that among the rows from
@@ -244,8 +248,9 @@ resume, position}`), and score one point, the stop point.
   `still_window_s` + `hold_s`; the next trial before that, + U. This one makes it inadequate
   (a failure it shows still counts): in a position space, (walk end − instant) × measured approach speed less than
   (1 + `dead_stop_margin_frac`) × (`max_distance_m` + `tolerance_m`), where the walk ends at the
-  last continuing row up to which every axis that moved in the last step before the stop keeps
-  moving the same way (`ev02.walk_end`). Drives with the same command digest count as one drive.
+  last continuing row up to which every axis whose command changed in a step within the speed
+  window before the stop, or in the last step in any case, keeps moving the direction of its last
+  change (`ev02.walk_end`; round-3 finding 6). Drives with the same command digest count as one drive.
 - **Limits**: the source's `stop.sources` entry, else the top-level `stop` block
   (`stops.stop_limits`). EV-05 allows `model_timeout + max_time` and
   `v_max · model_timeout + max_distance`.
@@ -267,9 +272,9 @@ Output: `{scorer, profile, flags, accuracy, stops | model_loss, observations:
 
 | Step | Result | EV-02 | EV-05 |
 |---|---|---|---|
-| 1 | INCONCLUSIVE | EV-03's step-1 codes (the robot-state check on the stop point), and `JITTER_TOO_HIGH` (σ_jitter > `max_sigma_jitter_m`) | same |
+| 1 | INCONCLUSIVE | EV-03's step-1 codes (the robot-state check on the stop point) | same |
 | 2 | FAIL | `STOP_TIME_EXCEEDED`, `STOP_DISTANCE_EXCEEDED`, `STOP_NOT_HELD` (per failing trial) | `LOSS_STOP_TIME_EXCEEDED`, `LOSS_STOP_DISTANCE_EXCEEDED`, `LOSS_STOP_NOT_HELD`, `LOSS_RESUMED_EARLY` |
-| 3 | INCONCLUSIVE | `POINT_UNMEASURED`, `INSTRUMENT_RATE_LOW`, `STOP_TRIAL_UNMEASURED` (per unmeasured trial), `STOP_SOURCE_MISSING` (per required group), `STOP_TRIALS_TOO_FEW`, `STOP_DRIVES_TOO_FEW` (per source) | `POINT_UNMEASURED`, `INSTRUMENT_RATE_LOW`, `LOSS_TRIAL_UNMEASURED` (per unmeasured trial), `LOSS_TRIALS_TOO_FEW` |
+| 3 | INCONCLUSIVE | `JITTER_TOO_HIGH` (σ_jitter > `max_sigma_jitter_m`), `POINT_UNMEASURED`, `INSTRUMENT_RATE_LOW`, `STOP_TRIAL_UNMEASURED` (per unmeasured trial), `STOP_SOURCE_MISSING` (per required group), `STOP_TRIALS_TOO_FEW`, `STOP_DRIVES_TOO_FEW` (per source) | `JITTER_TOO_HIGH`, `POINT_UNMEASURED`, `INSTRUMENT_RATE_LOW`, `LOSS_TRIAL_UNMEASURED` (per unmeasured trial), `LOSS_TRIALS_TOO_FEW` |
 | last | PASS | none | none |
 
 Profiles: `ev02-illustrative-0.1` and `ev05-illustrative-0.1` (method §4.6). The scoring

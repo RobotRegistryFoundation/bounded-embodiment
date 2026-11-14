@@ -149,7 +149,9 @@ PLAN_VERSION_UNSUPPORTED, PLAN_DUPLICATE_ID, PLAN_DUPLICATE_SOURCE, PLAN_UNKNOWN
 PLAN_UNKNOWN_SOURCE, PLAN_COMMAND_UNKNOWN_AXIS, PLAN_COMMAND_MISSING_AXIS,
 PLAN_COMMAND_OUTSIDE_LIMITS, PLAN_RESUME_UNCHECKED for a model-loss plan that resumes on commands
 in a position space at once or, against the declared profile's `min_resume_check_s`, sooner than
-that; schema violations SCHEMA_INVALID), as WAYPOINTS_* are. The plans' scoring parts
+that, PLAN_SPACE_MIXED for a stop or model-loss plan in a velocity space with an axis that is not
+in m/s or rad/s (round-3 finding 7; method known gap 21); schema violations SCHEMA_INVALID), as
+WAYPOINTS_* are. The plans' scoring parts
 (`for_scoring(space)`) also say whether the command space holds positions, and the stop plan's
 carries each drive's command digest.
 

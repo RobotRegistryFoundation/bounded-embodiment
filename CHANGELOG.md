@@ -61,14 +61,22 @@ Core:
   unmeasured trial INCONCLUSIVE (`STOP_TRIAL_UNMEASURED`, `LOSS_TRIAL_UNMEASURED`). Test report
   0.2 pins an EV-02/EV-05 report's method version and refuses the `control` role.
 - After the second review: the dead-stop walk rule follows the axes that were moving at the stop;
-  the rest is timed against the mean over the hold, and a jitter record above the new profile
-  value `max_sigma_jitter_m` makes EV-02 and EV-05 INCONCLUSIVE (`JITTER_TOO_HIGH`); a stop row
+  the rest is timed against a held position rather than the still window's mean, and a new
+  profile value `max_sigma_jitter_m` caps the jitter record (`JITTER_TOO_HIGH`); a stop row
   recorded late, or commands that hide the hold, leave the trial unmeasured (failures it shows
   still count); in a position space EV-05 needs a restart check of at least the new
   `min_resume_check_s` (`PLAN_RESUME_UNCHECKED` below it), and an empty judged window checks
   nothing; the EV-05 path's cycle counts every leg, and dwells and standstill commands are refused;
   in a velocity space every EV-05 trial and restart start at rest; `catch_up` rows between trials
   are checked and skipped (`STREAM_CATCH_UP_INVALID`).
+- After the third review: the walk rule takes the moving axes from every step within the speed
+  window before the stop, not the last step alone; the held position is the mean over one still
+  window after the settled position, not over the whole hold (`ev02-fail` and four scoring
+  goldens record new numbers, with the same verdicts and reasons); `JITTER_TOO_HIGH` is a step-3
+  reason, so above `max_sigma_jitter_m` a run cannot PASS and its failures still count; a stop or
+  model-loss plan in a velocity space with an axis that is not in m/s or rad/s is refused
+  (`PLAN_SPACE_MIXED`). The loophole vectors' intended code for L3 is `JITTER_TOO_HIGH` (was
+  `JITTER_TOO_LARGE`), so one name serves every test.
 
 Kit (draft; line-by-line human review before any hardware use):
 
@@ -92,6 +100,13 @@ Kit (draft; line-by-line human review before any hardware use):
   limit; a wrapper's `resume` is told the source by name only; source commands are checked before
   RUN (`interlocks.check_command`); a terminal that fails at NEXT cancels the run cleanly; EV-05's
   watch is armed again after the restart under a `commands` rule.
+- After the third review: a source command's whole process group is ended, SIGKILL after a 0.5 s
+  grace, and whatever a command leaves running after it exits is ended at once and recorded
+  (`end.trials[k].left_running`), with every group checked again at the end of the run; an EV-02
+  or EV-05 run in a position space is refused before anything moves when the robot's state does
+  not report every command axis; a velocity-space trial's room is sized at the speed trip's limit,
+  and `sim-rover` runs its physics up to the instant it reads the pose; the end of a run names any
+  external stop still in force.
 - `be report` packages EV-02 and EV-05 runs.
 
 ## bounded-embodiment 0.1.1 and bounded-embodiment-kit 0.1.2 (2026-10-16)

@@ -159,7 +159,15 @@ differs:
   (`spawn_source_command`: split with `shlex`, no shell, stdin, stdout and stderr on /dev/null, in
   a session of its own so a Ctrl+C at the bench does not reach it, never waited for on this
   thread). A helper thread waits up to `estop_timeout_s` for the command; a non-zero exit, a
-  timeout or a failure to start trips the latch, and the row records why. Any other source fails
+  timeout or a failure to start trips the latch, and the row records why. Ending a command means
+  its whole process group (`end_group`, round-3 K8): SIGTERM, a wait until no member is left
+  (read from /proc, zombies aside, since an init that does not reap orphans leaves them for
+  good), then SIGKILL after a 0.5 s grace; the waits run in real time, whatever clock the run
+  keeps. When a command exits, anything it left in its group is ended at once and recorded as the
+  trial's `left_running` (`SIGTERM`, `SIGKILL` or `survived`), with a line in the log and at the
+  end of the run; that alone does not stop the run. Every group is checked again when the run
+  ends, except one whose helper is still ending it. A command that daemonizes or calls `setsid`
+  leaves the group and is out of reach (the lab guide says so). Any other source fails
   closed (`no_way_to_issue`). The row's `result`: `applied/triggered`, `applied/issued`, or
   `not_applied` with `trigger_raised:<Type>`, `external_failed:<Type>`,
   `external_returncode:<n>`, `external_timeout`, `external_unfinished` or `no_way_to_issue`. Rows
@@ -188,29 +196,40 @@ differs:
   after the reset returned: a full still window of them, within `start_timeout_s`. In a velocity
   space the stop point must also have room for the next trial (review S5): its clearance to the
   nearest zone boundary at least the trial's `travel_m`, sized for the failure the test is there to
-  find (round-2 K5, decided): EV-02, v_max x (`drive_s` + the source's allowed time +
-  `trial_rest_grace_s`) + the top-level stop's `max_distance_m` + the margin (a stop that does
-  nothing goes on until the watch trips, then the runner's own stop brakes); EV-05, v_max x (the
-  longest motion + the model timeout + the source's allowed time + `trial_rest_grace_s`, + under a
-  `commands` rule the restart less `after_ms`) + the same; checked before the first trial too. And
-  in a velocity space the stop point may not move faster than its speed limit plus the profile's
-  `tolerance_speed_frac`, plus 3 x sqrt(2) x `max_sigma_jitter_m` over half the speed window (the
-  noise of two measurements), at any time in the run, or the watchdog trips: nothing in the kit
-  maps a velocity command to the point's speed, so the room holds only while the speed does. In a position space with robot state the machine rests
-  short of where the next walk begins, by its servo's lag (round-2 K3): the thread ends the
+  find (round-2 K5, decided), at the speed trip's limit L below rather than at v_max (round-3
+  K10): EV-02, L x (`drive_s` + the source's allowed time + `trial_rest_grace_s`) + the top-level
+  stop's `max_distance_m` x (L / v_max)^2 + the margin (a stop that does nothing goes on until the
+  watch trips, then the runner's own stop brakes); EV-05, L x (the longest motion + the model
+  timeout + the source's allowed time + `trial_rest_grace_s`, + under a `commands` rule the
+  restart less `after_ms`) + the same; checked before the first trial too. 1.66 m for the
+  simulated rover's EV-02 trials, 2.05 m for its EV-05 ones. And in a velocity space the stop
+  point may not move faster than L, its speed limit plus the profile's `tolerance_speed_frac`,
+  plus 3 x sqrt(2) x `max_sigma_jitter_m` over half the speed window (the noise of two
+  measurements; 0.546 m/s for 0.5 m/s, `trip_limit_mps`), at any time in the run, or the watchdog
+  trips: nothing in the kit maps a velocity command to the point's speed, so the room holds only
+  while the speed does. The trip has no debounce, so the instrument's `t` must be the capture
+  time: a feed stamped at send time on a busy computer can read a stall as a jump. In a position space with robot state the machine rests
+  short of where the next walk begins, by its servo's lag (round-2 K3). Before anything moves,
+  `check_trial_state` refuses an EV-02 or EV-05 run in a position space whose robot state does
+  not report every command axis (round-3 K9), so a cartesian-position adapter whose state reports
+  joints is refused. Before each later trial the thread ends the
   previous trial's watch and sends `catch_up` rows, a walk from the robot's present position to
   within one step cap of the trial's first command, one step cap a command at the trial's own
   period, which core checks and skips (`streams.catch_up_problem`; seq counts every row of
   commands.csv). It refuses instead when the machine rests more than `trial_catch_up_steps` step
-  caps from that command on any axis (its stop did not hold, or something moved it), or when a
-  catch-up command would put a zoned point outside its zones. `end.trials[k].catch_up` records
+  caps from that command on any axis (its stop did not hold, or something moved it), when a
+  catch-up command would put a zoned point outside its zones, or when the state no longer names
+  every command axis or is not recent. `end.trials[k].catch_up` records
   how many it sent. Anything but NEXT, a reset that raises, a failed start check, too little room
   or too far to catch up trips the latch.
 - After the last trial's pause the latch trips with `finished`, as at the end of any stream; the
-  end-of-run stop and its acknowledgement follow as for EV-03.
+  end-of-run stop and its acknowledgement follow as for EV-03. The end of the run names every
+  external stop (`hardwired_stop`, `power_loss`) that was issued and not reset since, and asks the
+  operator to reset it by hand before the next run (round-3 kit note 3).
 - declared.json's `end.trials` records, per trial, its label, source, instant, how the stop was
   issued (`triggered`, `issued`, `silence`, or the error), the reset (`done`, `not needed`, or
-  `failed: ...`) and the start check's words; `end.first_stop_t_s` is when the runner's own stop
+  `failed: ...`), the start check's words, and `left_running` (what the kit had to end in the
+  source command's group after it exited, or null); `end.first_stop_t_s` is when the runner's own stop
   was first executed.
 
 ## Tripwires

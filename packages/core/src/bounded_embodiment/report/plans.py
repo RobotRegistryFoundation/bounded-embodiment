@@ -10,7 +10,7 @@ the stop source and the resume rule).
 Finding codes (errors): PLAN_PARSE_ERROR, PLAN_NOT_OBJECT, PLAN_VERSION_UNSUPPORTED,
 PLAN_DUPLICATE_ID, PLAN_DUPLICATE_SOURCE, PLAN_UNKNOWN_DRIVE, PLAN_UNKNOWN_SOURCE,
 PLAN_COMMAND_UNKNOWN_AXIS, PLAN_COMMAND_MISSING_AXIS, PLAN_COMMAND_OUTSIDE_LIMITS,
-PLAN_RESUME_UNCHECKED; schema violations keep SCHEMA_INVALID.
+PLAN_RESUME_UNCHECKED, PLAN_SPACE_MIXED; schema violations keep SCHEMA_INVALID.
 """
 
 from __future__ import annotations
@@ -44,6 +44,9 @@ STOP_SCHEMA = "stop-plan-0.1"
 MODEL_LOSS_SCHEMA = "model-loss-plan-0.1"
 DEFAULT_LOSS_SOURCE = "heartbeat_loss"
 POSITION_KINDS = ("joint_position", "cartesian_position")
+#: The units a velocity command space's axes may have in a stop or model-loss test (round-3
+#: finding 7): a position axis (deg, rad, m) or a percent axis (a gripper or a throttle) is refused.
+VELOCITY_UNITS = ("m/s", "rad/s")
 
 
 class PlanError(ValueError):
@@ -261,8 +264,28 @@ def check_plan_commands(
     once (``after_ms`` 0), nor, given the profile's ``min_resume_check_s``, sooner than that
     (round-2 M4): such a machine settles on its last goal whatever it does about the loss, so only
     the restart check tells, and a shorter one cannot (PLAN_RESUME_UNCHECKED). The scorer also
-    needs ``after_ms`` less the clock uncertainty to reach the minimum."""
+    needs ``after_ms`` less the clock uncertainty to reach the minimum.
+
+    A velocity command space must carry velocities only (round-3 finding 7, PLAN_SPACE_MIXED). In
+    one that also carries a position axis, as a mobile manipulator's would, the commands that go on
+    after a stop or resume after a loss repeat that axis's last goal, so its part of the machine
+    settles there whatever the stop does, and neither the walk rule nor the restart check sees it.
+    A percent axis is refused with them, since it can be a gripper or a throttle. Version 0.2
+    cannot score such a machine (known gap 21)."""
     findings = []
+    if space.kind == "velocity":
+        mixed = [f"{a.key} ({a.unit})" for a in space.axes if a.unit not in VELOCITY_UNITS]
+        if mixed:
+            findings.append(
+                _err(
+                    "PLAN_SPACE_MIXED",
+                    f"a velocity command space with {', '.join(mixed)}: the commands after a stop or "
+                    "a loss would repeat such an axis's last goal, so a stop or a loss handling that "
+                    "does nothing could not be seen; version 0.2 accepts only m/s and rad/s axes in "
+                    "a velocity space for a stop or model-loss test",
+                    file,
+                )
+            )
     after = plan.resume.get("after_ms") if isinstance(plan, ModelLossPlan) else None
     if (
         isinstance(plan, ModelLossPlan)

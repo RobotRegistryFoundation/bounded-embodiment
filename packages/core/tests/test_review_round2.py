@@ -208,18 +208,23 @@ def test_a_resume_check_as_long_as_the_minimum_is_accepted():
     space = load_command_space(golden().COMMAND_SPACE)
     plan = _loss_plan({"rule": "commands", "after_ms": 300, "description": "x"})
     assert check_plan_commands(plan, space, "p", min_resume_check_s=0.3) == []
-    velocity = dict(golden().COMMAND_SPACE, kind="velocity")
-    velocity.pop("far_targets", None)
     plan = _loss_plan({"rule": "commands", "after_ms": 1, "description": "x"})
-    assert check_plan_commands(plan, load_command_space(velocity), "p", min_resume_check_s=0.3) == []
+    assert check_plan_commands(plan, _as_velocities(), "p", min_resume_check_s=0.3) == []
 
 
 def test_ev05s_scoring_plan_says_whether_the_space_holds_positions():
     plan = _loss_plan({"rule": "manual"})
     assert plan.for_scoring(load_command_space(golden().COMMAND_SPACE))["position"] is True
-    velocity = dict(golden().COMMAND_SPACE, kind="velocity")
-    velocity.pop("far_targets", None)
-    assert plan.for_scoring(load_command_space(velocity))["position"] is False
+    assert plan.for_scoring(_as_velocities())["position"] is False
+
+
+def _as_velocities():
+    """The golden command space's axes as velocities (m/s, same limits): a velocity space may
+    carry velocities only (round-3 finding 7)."""
+    doc = dict(golden().COMMAND_SPACE, kind="velocity")
+    doc.pop("far_targets", None)
+    doc["axes"] = [dict(a, unit="m/s") for a in doc["axes"]]
+    return load_command_space(doc)
 
 
 @pytest.mark.parametrize("after_ms", [1, 30, 80])

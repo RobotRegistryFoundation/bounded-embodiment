@@ -5,14 +5,17 @@ machine lags its commands it follows every command exactly, 40 ms late."""
 
 from __future__ import annotations
 
+import json
+
 import _scoring_synth as T
 import pytest
-from _report_helpers import golden, in_repo
+from _report_helpers import REPO_ROOT, golden, in_repo
 from bounded_embodiment import report as rep
 from bounded_embodiment.commandspace import load_command_space
 from bounded_embodiment.envelope import load
 from bounded_embodiment.generator import encode_payload
 from bounded_embodiment.rawdata import Command
+from bounded_embodiment.report.plans import check_plan_commands
 from bounded_embodiment.scoring import ScoringInput, ev02
 
 pytestmark = in_repo
@@ -115,3 +118,64 @@ def test_the_walk_rule_takes_every_step_within_the_window():
     assert ev02.walk_end(back, [(0.08, '{"x": 0.0}'), (0.10, '{"x": 0.1}')], 0.06, window_s=0.2) == 0.08
     # no step at all before the stop: nothing moved, and the walk ends at the stop
     assert ev02.walk_end([(0.00, '{"x": 0.0}')], after, 0.02, window_s=0.2) == 0.02
+
+
+# ----- finding 7: a velocity space may carry velocities only ----------------------------------------
+def _rover_space(extra_axes=()):
+    doc = json.loads((REPO_ROOT / "examples" / "command-spaces" / "rover.command-space.json").read_text())
+    doc["axes"] = doc["axes"] + list(extra_axes)
+    doc.pop("far_targets", None)
+    return load_command_space(doc)
+
+
+def _slide_stop_plan(space):
+    """The reviewer's plan: base velocities plus a position-controlled slide that carries the tool."""
+    cmd = {k: 0.0 for k in space.keys}
+
+    def at(**values):
+        return dict(cmd, **values)
+
+    trials = [("stop_message", "a"), ("stop_message", "b"), ("stop_message", "a"),
+              ("hardwired_stop", "b"), ("hardwired_stop", "a"), ("hardwired_stop", "b")]
+    slide = "slide" in space.keys
+    return rep.load_stop_plan({
+        "stop_plan_version": "0.1", "point": "tool", "description": "TEST-ONLY",
+        "start": at(slide=0.3) if slide else at(),
+        "drives": [{"id": "a", "command": at(slide=0.6) if slide else at(linear=0.4)},
+                   {"id": "b", "command": at(slide=0.59) if slide else at(linear=-0.4)}],
+        "sources": [{"source": s, "description": s} for s in ("stop_message", "hardwired_stop")],
+        "trials": [{"source": s, "drive": d} for s, d in trials]})
+
+
+@pytest.mark.parametrize("axis", [
+    {"key": "slide", "unit": "m", "lo": 0.0, "hi": 0.6, "home": 0.3},
+    {"key": "wrist", "unit": "deg", "lo": -90.0, "hi": 90.0, "home": 0.0},
+    {"key": "wrist", "unit": "rad", "lo": -1.5, "hi": 1.5, "home": 0.0},
+    {"key": "gripper", "unit": "percent", "lo": 0.0, "hi": 100.0, "home": 0.0},
+])
+def test_a_velocity_space_that_carries_a_position_or_percent_axis_is_refused(axis):
+    """Finding 7: a velocity space with a position axis is how a mobile manipulator would be
+    declared. Its continuing commands repeat the arm's last goal, so the arm settles there whatever
+    the stop does, and in the reviewer's reproduction (a slide in metres that carries the tool) a
+    stop that does nothing PASSed. For v0.2 such a plan is refused at plan validation, and so is a
+    percent axis, which can be a gripper or a throttle: in the generator, in derive and in the kit,
+    which all check the plan against the space with check_plan_commands."""
+    space = _rover_space([axis])
+    plan = _slide_stop_plan(space)
+    found = check_plan_commands(plan, space, "ev02-stop-plan.json")
+    assert [f.code for f in found] == ["PLAN_SPACE_MIXED"]
+    assert axis["key"] in found[0].detail and axis["unit"] in found[0].detail
+    params = {"hz": 50.0, "drive_s": 0.8, "return_s": 0.7, "after_s": 3.0,
+              "step_cap": {"linear": 0.05, "angular": 0.05, axis["key"]: 0.005}}
+    with pytest.raises(ValueError, match="PLAN_SPACE_MIXED|velocity command space"):
+        rep.stop_stream(space, plan, params)
+    loss = rep.load_model_loss_plan({
+        "model_loss_plan_version": "0.1", "point": "tool", "description": "TEST-ONLY",
+        "start": dict(plan.start), "path": [dict(plan.drive("a").command), dict(plan.drive("b").command)],
+        "resume": {"rule": "manual", "description": "x"}})
+    assert [f.code for f in check_plan_commands(loss, space, "ev05-model-loss-plan.json")] == ["PLAN_SPACE_MIXED"]
+
+
+def test_a_velocity_space_of_velocities_is_accepted():
+    space = _rover_space()
+    assert check_plan_commands(_slide_stop_plan(space), space, "ev02-stop-plan.json") == []

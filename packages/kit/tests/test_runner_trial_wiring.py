@@ -109,3 +109,62 @@ def test_next_on_hardware_is_a_typed_word(tmp_path, as_hardware, monkeypatch):
     assert end["latch"]["kind"] == "operator" and "before trial 2" in end["latch"]["reason"]
     assert end["trials"][0]["instant_t_s"] is not None and end["trials"][1]["instant_t_s"] is None
     assert code == runmod.EXIT_STOPPED and as_hardware
+
+
+def test_a_position_space_trial_run_needs_every_command_axis_in_the_robots_state(tmp_path, monkeypatch):
+    """Round-3 K9: when the robot's state left out an axis (here the gripper), the catch-up walk
+    and its guard were skipped, and in so101-ev02-broken trial 2's first command slewed the
+    dead-stopped pan 31 degrees until the joint-speed tripwire stopped it. In a position command
+    space a trial run walks the machine from where it rests, so a state without every command axis
+    is refused before anything moves, as round 2's guard refused that case."""
+    sent = []
+    real = sim_so101.from_args
+
+    def from_args(a, c):
+        adapter = real(a, c)
+        read, send = adapter.read_state, adapter.send
+
+        def read_state():
+            st = read()
+            return None if st is None else st.__class__(**{**st.__dict__,
+                "joints": {k: v for k, v in st.joints.items() if k != "gripper"},
+                "units": {k: v for k, v in st.units.items() if k != "gripper"}})
+
+        def counting_send(cmd):
+            sent.append(cmd)
+            return send(cmd)
+
+        adapter.read_state, adapter.send = read_state, counting_send
+        return adapter
+
+    monkeypatch.setattr(sim_so101, "from_args", from_args)
+    args = _so101_ev02(tmp_path)
+    logs = []
+    code = runmod.execute_run(args, prompt=lambda q: "RUN", log=logs.append)
+    assert code == runmod.EXIT_REFUSED, logs
+    assert any("does not report" in m and "gripper" in m for m in logs), logs
+    assert sent == []
+
+
+def test_the_catch_up_walk_fails_closed_without_the_whole_state():
+    """Round-3 K9, mid-run: should the state stop naming an axis, the catch-up refuses the next
+    trial (the run ends through the latch) rather than skip the walk and its guard."""
+    from types import SimpleNamespace
+
+    from bounded_embodiment.commandspace import load_command_space
+    from bounded_embodiment.generator import Proposal
+    from bounded_embodiment_kit.runner.trials import TrialSegment
+    from bounded_embodiment_kit.runner.watchdog import StateBox, StateSnapshot
+
+    space = load_command_space(_trials_sim.SO101["command_space"])
+    caps = {k: 1.0 for k in space.keys}
+    box = StateBox()
+    joints = {k.removesuffix(".pos"): 0.0 for k in space.keys if k != "gripper.pos"}
+    box.put(StateSnapshot(0.0, joints, dict.fromkeys(joints, "deg")))
+    live = SimpleNamespace(space=space, caps=caps, state_box=box, limits=runmod.DEFAULT, fk=None, envelope=None)
+    seg = TrialSegment((Proposal(0, 0.0, "return", {k: 0.0 for k in space.keys}),), "trial 2", "stop",
+                       "stop_message", 0.3, 0.5, True)
+    far, walk = runmod._Live.catch_up(live, seg)
+    assert far is not None and "gripper" in far and walk == []
+    box.put(StateSnapshot(1.0, {}, {}))  # no joints at all
+    assert runmod._Live.catch_up(live, seg)[0] is not None

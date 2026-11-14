@@ -355,13 +355,17 @@ class _Live:
         if space is None or space.kind not in POSITION_KINDS or not caps:
             return None, []
         first = next((q.payload for q in seg.proposals if q.payload), None)
-        recent = [s for s in self.state_box.recent() if s.joints]
-        if first is None or not recent:
+        if first is None:
             return None, []
+        recent = [s for s in self.state_box.recent() if s.joints]
+        if not recent:  # fail closed: where the machine rests is not known (round-3 K9)
+            return "the robot's state is not available, so where the machine rests is not known", []
         present = state_to_command(space, recent[-1])
         keys = space.keys
-        if any(k not in present for k in keys):  # the robot does not report every axis
-            return None, []
+        missing = [k for k in keys if k not in present]
+        if missing:  # fail closed (round-3 K9): the walk and its guard need every axis
+            return (f"the robot's state does not report {', '.join(missing)}, so the machine cannot be "
+                    "walked to where the trial begins, nor its stop checked"), []
         steps = self.limits.trial_catch_up_steps
         far = [k for k in keys if abs(present[k] - first[k]) > steps * caps[k]]
         if far:
@@ -540,6 +544,19 @@ def check_plan_poses(fk: ArmFK, envelope, space, plan) -> None:
             c = envelope.clearance(point, xyz)
             if c < 0:
                 raise RunError(f"the plan's {where} puts {point} {-c * 100:.1f} cm outside its zones")
+
+
+def check_trial_state(space, present: Mapping[str, float] | None, test: str) -> None:
+    """Position command spaces (round-3 K9): a trial run walks the machine from where it rests to
+    each later trial's first command, and checks where it starts, from the robot's state, so the
+    state must report every command axis; else the run is refused before anything moves."""
+    if space.kind not in POSITION_KINDS:
+        return
+    missing = [k for k in space.keys if present is None or k not in present]
+    if missing:
+        raise RunError(f"the robot's state does not report {', '.join(missing)}: in a position command space "
+                       f"{test} walks the machine to each trial from where it rests and checks where it "
+                       "starts, so it needs every command axis in the state")
 
 
 def check_trial_start(space, caps: Mapping[str, float] | None, present: Mapping[str, float] | None,
@@ -878,6 +895,7 @@ def execute_run(args, *, prompt: Callable[[str], str] = _ask, log: Callable[[str
         if trial:
             segments, planned_s = trial_segments(test, space, plan, trial_args, int(args.seed), envelope,
                                                  adapter.describe(), source_cmds(args), limits, adapter)
+            check_trial_state(space, present, test)
             check_trial_start(space, trial_args["step_cap"], present, plan.start)
             if fk is not None:
                 check_trial_proposals(fk, envelope, space, plan, segments, test, trial_args["hz"])

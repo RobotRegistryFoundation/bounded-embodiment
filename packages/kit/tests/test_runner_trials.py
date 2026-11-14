@@ -156,21 +156,26 @@ def _segments(tmp_path: Path, test: str, plan_doc: dict, desc: dict, estop_cmd: 
 
 def test_the_room_is_sized_for_a_stop_that_does_nothing(tmp_path):
     """Round-2 K5 (decided): in a velocity space the room a trial needs is sized for the failure
-    the test is there to find. EV-02: a stop that does nothing goes on at the speed limit until the
-    watch trips, at the allowed time + trial_rest_grace_s, and the runner's own stop then brakes
-    within the top-level stop distance: 0.5 x (1.0 + 0.8 + 0.5) + 0.3 + the 0.05 margin = 1.50 m
-    (it was 0.85 m, which a dead stop outran). EV-05: no loss handling, likewise from the end of
-    the longest motion (0.5 x (1.2 + 0.5 + 0.8 + 0.5) + 0.35 = 1.85 m), and under a commands rule
-    the restart once the rule allows (+ 0.5 x (1.0 - 0.5))."""
+    the test is there to find. EV-02: a stop that does nothing goes on until the watch trips, at the
+    allowed time + trial_rest_grace_s, and the runner's own stop then brakes. Round-3 K10: the point
+    may run at up to the speed trip's limit, 0.546 m/s for the rover's 0.5 m/s, not at v_max, and a
+    stop from there takes the top-level 0.3 m scaled by (0.546 / 0.5)^2: 0.546 x (1.0 + 0.8 + 0.5)
+    + 0.358 + the 0.05 margin = 1.66 m (1.50 m at v_max, which an overspeed under the trip outran).
+    EV-05: no loss handling, likewise from the end of the longest motion (0.546 x (1.2 + 0.5 + 0.8
+    + 0.5) + 0.408 = 2.05 m), and under a commands rule the restart once the rule allows (+ 0.546 x
+    (1.0 - 0.5))."""
+    fast = 0.5 * 1.05 + 3 * 2 ** 0.5 * 0.0005 / 0.1
+    tail = 0.3 * (fast / 0.5) ** 2 + 0.05
     both = {"stop_triggers": ["stop_message"], "stop_resets": ["stop_message", "heartbeat_loss", "power_loss"]}
     ev02 = _rover_segments(tmp_path, "ev02", PLANS["rover-ev02"], both, "touch /tmp/estop")
-    assert {round(s.travel_m, 9) for s in ev02} == {1.5}
+    assert {round(s.travel_m, 9) for s in ev02} == {round(fast * 2.3 + tail, 9)}
+    assert round(fast * 2.3 + tail, 2) == 1.66
     ev05 = _rover_segments(tmp_path, "ev05", PLANS["rover-ev05"], both, None)
-    assert {round(s.travel_m, 9) for s in ev05} == {1.85}
+    assert {round(s.travel_m, 9) for s in ev05} == {round(fast * 3.0 + tail, 9)}
     doc = json.loads(json.dumps(PLANS["rover-ev05"]))
     doc["resume"] = {"rule": "commands", "after_ms": 500}
     ruled = _rover_segments(tmp_path, "ev05", doc, both, None)
-    assert {round(s.travel_m, 9) for s in ruled} == {2.1}
+    assert {round(s.travel_m, 9) for s in ruled} == {round(fast * 3.5 + tail, 9)}
 
 
 def test_a_velocity_trial_trips_on_a_stop_point_faster_than_its_limit():
@@ -911,3 +916,45 @@ def test_a_trigger_the_adapter_cannot_call_is_refused_before_run():
     with pytest.raises(runmod.RunError, match="has no trigger_stop method"):
         runmod.trial_segments("ev02", space, plan, params, 0, envelope, desc,
                               {"power_loss": "true"}, DEFAULT, adapter=object())
+
+
+def test_the_simulated_rover_reports_its_pose_at_the_capture_instant_when_its_physics_stalls():
+    """Round-3 kit review (the false 0.61 m/s speed trip under load): sim-rover's pose moved only
+    when its physics thread ran, every 5 ms. Held up 30 to 60 ms by a busy computer, the thread
+    froze the pose while the simulated instrument went on stamping samples with their capture
+    time, and then the pose jumped, so a speed window across the jump read up to 0.62 m/s for a
+    rover at 0.50 m/s. truth() now advances the physics to the instant it reads the pose."""
+    import time
+
+    a = SimRoverAdapter(command_space_path=ROVER_SPACE, realtime=True, start=(3.0, 3.0, 0.0),
+                        log=lambda m: None, prompt=lambda q: "")
+    a.open()
+    try:
+        a.send({"linear": 0.5, "angular": 0.0})
+        time.sleep(0.7)  # at speed: the rover accelerates at 1 m/s^2
+        truth = a.truth_fn()
+        real_quit = a._physics_quit
+
+        class Stall:  # the physics thread's next wait is held up 60 ms, once
+            done = False
+
+            def wait(self, timeout):
+                if not Stall.done:
+                    Stall.done = True
+                    time.sleep(0.06)
+                return real_quit.wait(timeout)
+
+            def set(self):
+                real_quit.set()
+
+        a._physics_quit = Stall()
+        rows = []
+        t_end = time.perf_counter() + 0.15
+        while time.perf_counter() < t_end:
+            rows.append((time.perf_counter(), truth()["base"][0]))
+            time.sleep(0.005)
+        speeds = [(x1 - x0) / (t1 - t0) for (t0, x0), (t1, x1) in zip(rows, rows[1:]) if t1 - t0 > 0.002]
+        assert Stall.done and max(speeds) < 0.55, max(speeds)
+    finally:
+        a._physics_quit = real_quit
+        a.close()

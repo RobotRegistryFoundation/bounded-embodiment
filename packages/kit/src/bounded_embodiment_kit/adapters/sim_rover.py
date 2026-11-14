@@ -153,6 +153,8 @@ class SimRoverAdapter:
         self._target = None
         self._physics: threading.Thread | None = None
         self._physics_quit = threading.Event()
+        self._physics_lock = threading.Lock()  # one integrator at a time: the thread or truth()
+        self._physics_t = 0.0  # time.perf_counter() up to which the physics has run
 
     def open(self) -> CommandSpace:
         space = load_command_space(self.command_space_path)
@@ -168,6 +170,7 @@ class SimRoverAdapter:
         self._latched.clear()
         if self.realtime:
             self._physics_quit.clear()
+            self._physics_t = time.perf_counter()
             self._physics = threading.Thread(target=self._run_physics, name="be-sim-physics",
                                              daemon=True)
             self._physics.start()
@@ -179,12 +182,24 @@ class SimRoverAdapter:
             self.rover.cut_power()
 
     def _run_physics(self) -> None:
-        last = time.perf_counter()
         while not self._physics_quit.wait(PHYSICS_PERIOD_S):
+            self._advance()
+
+    def _advance(self) -> None:
+        """Run the physics up to now, in steps no longer than PHYSICS_PERIOD_S. The physics thread
+        does it every period, and truth() before it reads the pose, so a thread held up by a busy
+        computer cannot hand the simulated instrument a stale pose that then jumps: a speed window
+        across such a jump read 0.61 m/s for a rover at 0.50 m/s (round-3 kit review)."""
+        with self._physics_lock:
             now = time.perf_counter()
-            self._estop()
-            self.rover.tick(now - last)
-            last = now
+            dt = now - self._physics_t
+            if dt <= 0.0:
+                return
+            n = max(1, math.ceil(dt / PHYSICS_PERIOD_S))
+            for _ in range(n):
+                self._estop()
+                self.rover.tick(dt / n)
+            self._physics_t = now
 
     def describe(self) -> dict:
         resets = ["stop_message", "heartbeat_loss", "comms_loss"]
@@ -284,6 +299,8 @@ class SimRoverAdapter:
         points = list(getattr(envelope, "points", {}) or {"base": None})
 
         def truth() -> dict:
+            if self._physics is not None:  # real-time physics: bring it to the capture instant
+                self._advance()
             x, y, _ = self.rover.pose()
             return {pid: (x, y, 0.0) for pid in points}
 

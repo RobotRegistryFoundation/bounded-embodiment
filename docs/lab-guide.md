@@ -55,11 +55,16 @@ have passed it. None of them is a false PASS, but plan for them:
   tests. Choose `after_ms` at least 0.3 s plus your clock uncertainty, or a manual rule.
 - **EV-05's path must keep moving.** A path that repeats a command, moves less than a step cap on a
   leg, or (velocity) commands zero velocity anywhere on its walk is refused.
-- **A rover needs room for a stop that does nothing.** In a velocity space each trial needs the
-  stop point's speed limit times (`drive_s` + the allowed stop time + 0.5 s), plus the top-level stop
-  distance and 5 cm, to its nearest zone boundary (EV-05: from the end of the longest motion, and
-  the restart under a `commands` rule); and the run stops if the stop point goes faster than its
-  speed limit plus 5 % and the instrument's noise.
+- **A rover needs room for a stop that does nothing.** In a velocity space the run stops if the
+  stop point goes faster than its speed limit plus 5 % and the instrument's noise (0.546 m/s for
+  0.5 m/s). Each trial needs that speed times (`drive_s` + the allowed stop time + 0.5 s), plus the
+  top-level stop distance scaled by the square of that speed over the limit, plus 5 cm, to its
+  nearest zone boundary (EV-05: from the end of the longest motion, and the restart under a
+  `commands` rule): 1.66 m for the kit's simulated rover.
+- **The instrument's `t` must be its capture time.** The watchdog takes speeds from the samples'
+  times, and the velocity-space speed trip sits only 9 % over the speed limit. A bridge that stamps
+  a sample when it sends it, on a busy computer, reads a steady motion as bursts and can stop a
+  run for a speed the machine never reached; keep the stamp's jitter to a millisecond or two.
 - **The trial's commands must not pause.** A pause after a stop longer than one command spacing
   plus 20 ms (40 ms at 50 Hz) leaves the trial unmeasured (method §12.7.4 item 3). In real-time
   simulation on a busy two-core computer, the kit's command thread paused for 49 to 80 ms in one

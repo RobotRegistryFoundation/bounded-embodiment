@@ -259,11 +259,12 @@ def test_a_velocity_trial_faster_than_the_speed_limit_is_stopped(cases):
 
 def test_a_velocity_trial_without_room_for_a_dead_stop_never_starts(cases):
     """Round-2 K5 (decided): 1.4 m from the wall the rover has room for a stop that works (0.85 m)
-    but not for one that does nothing (1.50 m): the run ends before trial 1, with nothing sent."""
+    but not for one that does nothing (1.66 m, at the speed trip's limit since round-3 K10): the
+    run ends before trial 1, with nothing sent."""
     s = _case(cases, "rover-ev02-cornered")
     latch = s["end"]["latch"]
     assert latch["kind"] == "error" and latch["reason"].startswith("before trial 1 (")
-    assert "1.40 m from" in latch["reason"] and "the trial may carry it 1.50 m" in latch["reason"]
+    assert "1.40 m from" in latch["reason"] and "the trial may carry it 1.66 m" in latch["reason"]
     assert rawdata.read_commands(Path(s["run_dir"]) / "raw" / "commands.csv") == []
 
 

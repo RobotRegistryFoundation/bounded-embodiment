@@ -117,13 +117,15 @@ raises the allowance by 0.17 m/s at a 0.2 s span and 0.21 m/s at 0.16 s.
 
 **Repro.** `vectors/loopholes/runs/defect-jitter-inflates-allowance`: σ_jitter = 0.008 m (the
 run's samples scatter 0.3 mm), legs at 0.40 m/s against a 0.25 m/s limit. PASS. Intended:
-INCONCLUSIVE (a code such as `JITTER_TOO_LARGE`) or FAIL.
+INCONCLUSIVE (`JITTER_TOO_HIGH`, the code EV-02 and EV-05 use in method v0.2) or FAIL.
 
 **Why it matters.** The jitter record is the one number a lab can make large without making
 anything else worse: a large σ also raises the motion threshold, but any real motion clears it.
 
 **Proposed fix.** INCONCLUSIVE when σ_jitter is above a profile limit (for example
-`tolerance_m` / 3). And, where the run has a still period at its start (§6 item 6), take σ from
+`tolerance_m` / 3). Method v0.2 does this for EV-02 and EV-05, with the profile key
+`max_sigma_jitter_m` and the code `JITTER_TOO_HIGH` at step 3: above the cap a run cannot PASS,
+and a FAIL it records stands. The same name would serve EV-03. And, where the run has a still period at its start (§6 item 6), take σ from
 that period's samples as well and use the smaller of the two for the allowance.
 
 ### L4 v_phys is never compared with the speeds the run measured
@@ -350,8 +352,22 @@ distance longer than the allowed region is deep (from every position a worst-cas
 it); a zero stop distance; `stop.sources` that itemizes some sources and leaves others to the
 top-level stop; a joint speed above `motion.max_joint_speed_radps`; a joint range wider than a
 full turn; keep_in prisms without a height band, so the point's height is unbounded (every 0.1
-envelope without `z_range_m`). Version 0.1 tests none of these limits (§1.3 item 3), so no
-verdict changes today; EV-02 and EV-09 would inherit them.
+envelope without `z_range_m`). Version 0.1 tests none of these limits (§1.3 item 3). Method
+v0.2's EV-02 and EV-05 (RobotRegistryFoundation/bounded-embodiment#12) test the stop limits: each
+source is judged by its own `stop.sources` entry, and by the top-level stop where it has none,
+exactly where `LINT_STOP_SOURCE_MISSING` warns. The fallback is the method's rule there (§12.3
+item 6), so the warning now marks a source that is judged by the top-level stop, the worst case
+over every source, which may be looser than the lab meant for it. The envelope that v0.2's EV-02
+and EV-05 golden runs share draws four of those warnings. A stop
+distance longer than the region is deep still changes no verdict: EV-02 and EV-05 judge the stop,
+not the zones. EV-09 would inherit the rest.
+
+Lint does not read `heartbeat.model_timeout_ms`, which the 0.2 schema does not bound and which
+sets EV-05's allowed time (τ + T) and distance (v_max × τ + D): the same envelope with a one-hour
+timeout lints identically. A check of v_max × τ + D against the region's depth, as
+`LINT_STOP_DISTANCE_EXCEEDS_DEPTH` checks D, would warn on `vectors/envelope/lint/clean-v02.json`
+itself (its tool point: 0.2072 m/s × 0.5 s + 6.5 mm = 110 mm against a depth of 60 mm), and so
+change the lint vectors; it is left for the next lint version.
 
 **Repro.** `vectors/envelope/lint/proximity-closer-faster-v01.json`, `-v02.json`,
 `proximity-duplicate-distance-v01.json`, `-v02.json`, `stop-distance-exceeds-depth-v01.json`,

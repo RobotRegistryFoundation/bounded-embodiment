@@ -551,7 +551,7 @@ EXPECT: dict[str, dict] = {
         "L2", "PASS", [], "FAIL", ["SPEED_EXCURSION"],
         "0.1 s bursts at 1.8 x the speed limit, measured at 100 Hz, averaged away"),
     "defect-jitter-inflates-allowance": _d(
-        "L3", "PASS", [], "INCONCLUSIVE", ["JITTER_TOO_LARGE"],
+        "L3", "PASS", [], "INCONCLUSIVE", ["JITTER_TOO_HIGH"],
         "a jitter record of sigma 8 mm hides 0.4 m/s legs against a 0.25 m/s limit"),
     "defect-vphys-contradicted": _d(
         "L4", "PASS", [], "INCONCLUSIVE", ["PHYSICAL_SPEED_CONTRADICTED"],

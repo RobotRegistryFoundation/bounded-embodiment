@@ -9,8 +9,8 @@ REQUIRED_FILE_MISSING, RAW_TOO_LARGE, COMMAND_SPACE_DIGEST_MISMATCH, SIMULATION_
 RUN_TIMES_INVERTED, ACCURACY_CHECK_AFTER_RUN_START, ACCURACY_CHECK_POINTS_MISMATCH,
 CALIBRATION_FILE_MISSING, GENERATOR_TEST_MISMATCH, GENERATOR_ROLE_MISMATCH (errors); and those of
 the envelope loader (ENVELOPE_*), the command-space loader (COMMAND_SPACE_*), the waypoints
-loader (WAYPOINTS_*), the raw data readers (RAW_*), the stream check (STREAM_*,
-GENERATOR_UNSUPPORTED) and the scorers (SCORING_*), unchanged.
+loader (WAYPOINTS_*), the plan loaders (PLAN_*), the raw data readers (RAW_*), the stream check
+(STREAM_*, GENERATOR_UNSUPPORTED) and the scorers (SCORING_*), unchanged.
 """
 
 from __future__ import annotations
@@ -32,12 +32,22 @@ from . import streams
 from .files import (
     COMMAND_SPACE_FILE,
     ENVELOPE_FILE,
+    MODEL_LOSS_PLAN_FILE,
+    STOP_PLAN_FILE,
     WAYPOINTS_FILE,
     RunFile,
     RunFiles,
     classify,
     raw_data_entries,
     show,
+)
+from .plans import (
+    ModelLossPlan,
+    PlanError,
+    StopPlan,
+    check_plan_commands,
+    load_model_loss_plan,
+    load_stop_plan,
 )
 from .waypoints import Waypoints, WaypointsError, check_commands, load_waypoints
 
@@ -57,9 +67,24 @@ __all__ = [
     "view_of",
 ]
 
-SCORER_FOR_TEST = {"EV-03": "ev03-tool-point/1", "EV-10": "ev10-waypoints/1"}
-DEFAULT_PROFILE = {"EV-03": "ev03-illustrative-0.1", "EV-10": "ev10-illustrative-0.1"}
-GENERATORS_FOR_TEST = {"EV-03": (streams.HOSTILE, streams.CONTROL), "EV-10": (streams.WAYPOINTS,)}
+SCORER_FOR_TEST = {
+    "EV-03": "ev03-tool-point/1",
+    "EV-10": "ev10-waypoints/1",
+    "EV-02": "ev02-stop/1",
+    "EV-05": "ev05-model-loss/1",
+}
+DEFAULT_PROFILE = {
+    "EV-03": "ev03-illustrative-0.1",
+    "EV-10": "ev10-illustrative-0.1",
+    "EV-02": "ev02-illustrative-0.1",
+    "EV-05": "ev05-illustrative-0.1",
+}
+GENERATORS_FOR_TEST = {
+    "EV-03": (streams.HOSTILE, streams.CONTROL),
+    "EV-10": (streams.WAYPOINTS,),
+    "EV-02": (streams.STOPS,),
+    "EV-05": (streams.MODEL_LOSS,),
+}
 CONTROL_ROLES = ("control", "rehearsal")
 
 SCORER_BLOCKS = (
@@ -69,6 +94,8 @@ SCORER_BLOCKS = (
     "gaps",
     "motion",
     "liveness",
+    "stops",
+    "model_loss",
     "coverage",
     "accuracy",
     "observations",
@@ -80,19 +107,34 @@ DERIVED_BLOCKS = ("envelope", *SCORER_BLOCKS, "raw_data", "statements")
 GENERATOR_DERIVED = ("stream_sha256", "commands_compared", "aborted")
 """Derived members inside the generator block."""
 
+_SHARED_BLOCKS = ("envelope", "accuracy", "observations", "flags", "verdict", "raw_data", "statements")
+_TEST_BLOCKS = {
+    "EV-03": ("window", "achieved_rates", "score", "gaps", "motion", "coverage"),
+    "EV-10": ("window", "achieved_rates", "score", "gaps", "liveness", "coverage"),
+    "EV-02": ("stops",),
+    "EV-05": ("model_loss",),
+}
+
 
 def expected_blocks(test: str | None) -> tuple[str, ...]:
-    """The top-level derived members a report of ``test`` has: motion for EV-03 only, liveness
-    for EV-10 only."""
-    skip = {"EV-03": "liveness", "EV-10": "motion"}.get(test or "", "")
-    return tuple(b for b in DERIVED_BLOCKS if b != skip)
+    """The top-level derived members a report of ``test`` has, in report order: every test's
+    (envelope, accuracy, observations, flags, verdict, raw_data, statements) and its own (EV-03:
+    window, achieved_rates, score, gaps, motion, coverage; EV-10: the same with liveness for
+    motion; EV-02: stops; EV-05: model_loss)."""
+    own = _TEST_BLOCKS.get(test or "", ())
+    return tuple(b for b in DERIVED_BLOCKS if b in _SHARED_BLOCKS or b in own)
 
 
 REQUIRED_ROLES = ("envelope", "command_space", "samples", "commands")
+#: The declared file each test needs besides the four every run has, and which no other test may
+#: hold.
+TEST_FILE_ROLES = {"EV-10": "waypoints", "EV-02": "stop_plan", "EV-05": "model_loss_plan"}
 SINGLE_ROLES = (
     "envelope",
     "command_space",
     "waypoints",
+    "stop_plan",
+    "model_loss_plan",
     "samples",
     "commands",
     "state",
@@ -103,6 +145,8 @@ CANONICAL_PATH = {
     "envelope": ENVELOPE_FILE,
     "command_space": COMMAND_SPACE_FILE,
     "waypoints": WAYPOINTS_FILE,
+    "stop_plan": STOP_PLAN_FILE,
+    "model_loss_plan": MODEL_LOSS_PLAN_FILE,
     "samples": "raw/samples.csv",
     "commands": "raw/commands.csv",
 }
@@ -326,8 +370,9 @@ def layout_checks(
                 )
             )
             continue
-        if kind[0] == "waypoints" and test != "EV-10":
-            findings.append(_err("UNEXPECTED_FILE", f"{path} belongs to EV-10 runs only", path))
+        owner = next((t for t, role in TEST_FILE_ROLES.items() if role == kind[0]), None)
+        if owner is not None and test != owner:
+            findings.append(_err("UNEXPECTED_FILE", f"{path} belongs to {owner} runs only", path))
             continue
         by_role.setdefault(kind[0], []).append(path)
     for role in SINGLE_ROLES:
@@ -339,7 +384,8 @@ def layout_checks(
                     by_role[role][0],
                 )
             )
-    required = REQUIRED_ROLES + (("waypoints",) if test == "EV-10" else ())
+    own = TEST_FILE_ROLES.get(test or "")
+    required = REQUIRED_ROLES + ((own,) if own is not None else ())
     refused_roles = {k[0] for k in (classify(p) for p in files.refused) if k is not None}
     listed_roles = {k[0] for k in (classify(p) for p in listed) if k is not None}
     for role in required:
@@ -579,14 +625,15 @@ def derive(view: View, files: RunFiles) -> Derivation:
     envelope = _envelope(files, d)
     space = _command_space(files, view, d)
     waypoints = _waypoints(files, space, d) if view.test == "EV-10" else None
+    plan = _plan(files, space, view.test, d, view.profile)
     rows = _raw(files, d)
     commands = rows.get("commands")
+    declared_file_ready = (
+        (view.test != "EV-10" or waypoints is not None)
+        and (view.test not in ("EV-02", "EV-05") or plan is not None)
+    )
 
-    if (
-        space is not None
-        and commands is not None
-        and (view.test != "EV-10" or waypoints is not None)
-    ):
+    if space is not None and commands is not None and declared_file_ready:
         gen = view.generator
         check = streams.check(
             gen.get("name"),
@@ -596,6 +643,7 @@ def derive(view: View, files: RunFiles) -> Derivation:
             gen.get("params"),
             [(c.seq, c.strategy, c.payload_json) for c in commands],
             waypoints,
+            plan,
         )
         commands_path = files.with_role("commands")[0].path
         for f in check.findings:
@@ -617,11 +665,11 @@ def derive(view: View, files: RunFiles) -> Derivation:
         and rows.get("samples") is not None
         and "accuracy" in rows
         and "state" in rows
-        and (view.test != "EV-10" or waypoints is not None)
+        and declared_file_ready
         and (view.accuracy_age_s is None or view.accuracy_age_s >= 0)
     )
     if ready:
-        _score(view, envelope, rows, waypoints, d)
+        _score(view, envelope, rows, waypoints, d, plan, space)
     return d
 
 
@@ -712,6 +760,42 @@ def _waypoints(files: RunFiles, space: CommandSpace | None, d: Derivation) -> Wa
     return waypoints
 
 
+def _plan(
+    files: RunFiles, space: CommandSpace | None, test: str, d: Derivation, profile: object = None
+) -> StopPlan | ModelLossPlan | None:
+    """The EV-02 stop plan or the EV-05 model-loss plan, loaded and checked against the command
+    space (and, for EV-05, the declared profile's ``min_resume_check_s``); None for other tests,
+    or with findings when it is absent or not usable."""
+    loaders = {
+        "EV-02": ("stop_plan", STOP_PLAN_FILE, load_stop_plan),
+        "EV-05": ("model_loss_plan", MODEL_LOSS_PLAN_FILE, load_model_loss_plan),
+    }
+    if test not in loaders:
+        return None
+    role, path, loader = loaders[test]
+    f = _single(files, role)
+    if f is None or f.data is None:
+        return None
+    try:
+        plan = loader(f.data)
+    except PlanError as e:
+        d.findings.extend(_located(e.findings, path))
+        return None
+    if space is not None:
+        problems = check_plan_commands(plan, space, path, _min_resume_check(profile))
+        if problems:
+            d.findings.extend(problems)
+            return None
+    return plan
+
+
+def _min_resume_check(profile: object) -> float | None:
+    """The profile's ``min_resume_check_s`` when it is a number (the scorer refuses a profile
+    without one; a declared profile that is not an object is reported elsewhere)."""
+    value = profile.get("min_resume_check_s") if isinstance(profile, Mapping) else None
+    return float(value) if _is_number(value) else None
+
+
 _READERS = {
     "samples": rawdata.read_samples,
     "commands": rawdata.read_commands,
@@ -756,7 +840,13 @@ def _raw(files: RunFiles, d: Derivation) -> dict:
 
 
 def _score(
-    view: View, envelope: Envelope, rows: dict, waypoints: Waypoints | None, d: Derivation
+    view: View,
+    envelope: Envelope,
+    rows: dict,
+    waypoints: Waypoints | None,
+    d: Derivation,
+    plan: StopPlan | ModelLossPlan | None = None,
+    space: CommandSpace | None = None,
 ) -> None:
     declared = Declared(
         primary_instrument_kind=str(view.primary["kind"]),
@@ -777,6 +867,7 @@ def _score(
         fk_samples=rows["state"],
         waypoints=None if waypoints is None else waypoints.for_scoring(),
         liveness_point=None if waypoints is None else waypoints.point,
+        plan=None if plan is None else plan.for_scoring(space),
     )
     try:
         out = scoring.score(view.scorer, inp)

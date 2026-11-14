@@ -28,14 +28,26 @@ from __future__ import annotations
 
 from collections.abc import Callable
 
-from . import ev03, ev10
+from . import ev02, ev03, ev05, ev10
 from .common import Declared, ScoringError, ScoringInput
 
-__all__ = ["SCORERS", "Declared", "ScoringError", "ScoringInput", "ev03", "ev10", "score"]
+__all__ = [
+    "SCORERS",
+    "Declared",
+    "ScoringError",
+    "ScoringInput",
+    "ev02",
+    "ev03",
+    "ev05",
+    "ev10",
+    "score",
+]
 
 SCORERS: dict[str, Callable[[ScoringInput], dict]] = {
     ev03.SCORER: ev03.score,
     ev10.SCORER: ev10.score,
+    ev02.SCORER: ev02.score,
+    ev05.SCORER: ev05.score,
 }
 """Scorer function by scorer name (``report.scoring.method``)."""
 

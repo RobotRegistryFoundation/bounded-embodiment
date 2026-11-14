@@ -28,8 +28,10 @@ __all__ = [
     "ENVELOPE_FILE",
     "MAX_FILE_BYTES",
     "MAX_REPORT_BYTES",
+    "MODEL_LOSS_PLAN_FILE",
     "PARSED_ROLES",
     "REPORT_FILE",
+    "STOP_PLAN_FILE",
     "WAYPOINTS_FILE",
     "RunFile",
     "RunFiles",
@@ -43,6 +45,8 @@ REPORT_FILE = "report.json"
 ENVELOPE_FILE = "envelope.json"
 COMMAND_SPACE_FILE = "command-space.json"
 WAYPOINTS_FILE = "ev10-waypoints.json"
+STOP_PLAN_FILE = "ev02-stop-plan.json"
+MODEL_LOSS_PLAN_FILE = "ev05-model-loss-plan.json"
 
 MAX_REPORT_BYTES = 20 * 1024 * 1024
 """report.json is refused above this (the results repository's per-file limit)."""
@@ -60,6 +64,8 @@ _FIXED: dict[str, tuple[str, str]] = {
     ENVELOPE_FILE: ("envelope", "json"),
     COMMAND_SPACE_FILE: ("command_space", "json"),
     WAYPOINTS_FILE: ("waypoints", "json"),
+    STOP_PLAN_FILE: ("stop_plan", "json"),
+    MODEL_LOSS_PLAN_FILE: ("model_loss_plan", "json"),
     "raw/samples.csv": ("samples", SAMPLES),
     "raw/samples.csv.gz": ("samples", SAMPLES),
     "raw/commands.csv": ("commands", COMMANDS),
@@ -71,7 +77,17 @@ _FIXED: dict[str, tuple[str, str]] = {
 }
 
 PARSED_ROLES = frozenset(
-    {"envelope", "command_space", "waypoints", "samples", "commands", "state", "accuracy"}
+    {
+        "envelope",
+        "command_space",
+        "waypoints",
+        "stop_plan",
+        "model_loss_plan",
+        "samples",
+        "commands",
+        "state",
+        "accuracy",
+    }
 )
 """Roles whose content core reads; their bytes are kept after hashing."""
 

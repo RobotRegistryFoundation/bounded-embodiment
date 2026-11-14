@@ -18,6 +18,10 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import select
+import shlex
+import shutil
+import sys
 import time
 from collections.abc import Callable
 from pathlib import Path
@@ -27,11 +31,14 @@ from bounded_embodiment.canonical import sha256_jcs
 __all__ = [
     "InterlockError",
     "Ledger",
+    "check_command",
     "confirm",
     "default_ledger_path",
     "file_sha256",
     "require_run_flags",
+    "require_terminal",
     "setup_hash",
+    "typed_word",
 ]
 
 
@@ -58,6 +65,89 @@ def confirm(prompt: Callable[[str], str], word: str, text: str) -> bool:
     except (EOFError, KeyboardInterrupt):
         return False
     return answer.strip() == word
+
+
+def require_terminal(stdin=None) -> None:
+    """A hardware run takes its typed words from a terminal: piped or redirected input, or input
+    typed before the question, could answer with nobody at the machine (review S3). ``typed_word``
+    clears input typed ahead with termios: on a platform without it every typed word would be
+    refused once the robot is connected, so the run is refused here instead, before anything
+    connects, and says why (round-2 review of #13, item 2)."""
+    stdin = sys.stdin if stdin is None else stdin
+    try:
+        import termios  # noqa: F401
+    except ImportError:
+        raise InterlockError("a hardware run needs a POSIX terminal: its typed words clear input "
+                             "typed ahead with termios, which this platform does not have") from None
+    try:
+        tty = bool(stdin.isatty())
+    except (AttributeError, ValueError, OSError):
+        tty = False
+    if not tty:
+        raise InterlockError("a hardware run needs its typed words from a terminal: run it in one "
+                             "(ssh -t for a remote machine, inside tmux or screen so that a dropped "
+                             "connection does not end the session), not with piped or redirected input")
+
+
+def check_command(cmd: str | None, flag: str) -> None:
+    """A command the runner starts without a shell (``shlex.split``), checked before anything
+    connects: it must split, and its program must be found (``shutil.which``), so that a typo is
+    found now rather than when the command is needed (round-2 reviews: N-b for the stop sources'
+    commands, item 4 of #13 for ``--estop-cmd``). Nothing is run. None (not given) passes."""
+    if cmd is None:
+        return
+    try:
+        argv = shlex.split(cmd)
+    except ValueError as e:
+        raise InterlockError(f"{flag} {cmd!r} does not split into a program and its arguments: {e}") from None
+    if not argv:
+        raise InterlockError(f"{flag} is empty")
+    if shutil.which(argv[0]) is None:
+        raise InterlockError(f"{flag}: {argv[0]!r} is not a program on PATH, or not executable; the runner "
+                             "starts it without a shell, and it would fail only when it is needed")
+
+
+def typed_word(word: str, text: str, *, cancelled: Callable[[], bool] = lambda: False,
+               stdin=None, out=None, poll_s: float = 0.1) -> bool:
+    """Ask for a typed word at a terminal (review S3, N1). Input typed before the question is
+    thrown away first (``tcflush``), the answer is read by polling, so that ``cancelled()`` (the
+    latch, Ctrl+C) ends the question within ``poll_s`` instead of waiting for Enter, and only the
+    exact word (surrounding spaces ignored) goes ahead; anything else, end of input or
+    ``cancelled()`` is False. One helper for every typed word: NEXT uses it now on hardware, and
+    RUN and GO can adopt it. POSIX only, from a terminal only: anything else is refused
+    (InterlockError), never answered, and so is a terminal that fails while it asks (an OSError
+    such as EIO after a hangup)."""
+    stdin = sys.stdin if stdin is None else stdin
+    out = sys.stderr if out is None else out
+    try:
+        import termios
+    except ImportError:  # pragma: no cover - not POSIX
+        raise InterlockError("cannot clear input typed ahead: no termios on this platform") from None
+    try:
+        fd = stdin.fileno()
+        termios.tcflush(fd, termios.TCIFLUSH)
+    except (termios.error, OSError, ValueError) as e:
+        raise InterlockError(f"cannot clear input typed ahead (not a terminal?): {e}") from None
+    out.write(f"{text}\nType {word} and Enter to start (anything else cancels): ")
+    out.flush()
+    buf = b""
+    while True:
+        if cancelled():
+            out.write("\n")
+            out.flush()
+            return False
+        try:
+            ready, _, _ = select.select([fd], [], [], poll_s)
+            if not ready:
+                continue
+            chunk = os.read(fd, 1024)
+        except (OSError, ValueError) as e:  # the terminal went away (EIO after a hangup): no answer
+            raise InterlockError(f"the terminal failed while asking for {word}: {e}") from None
+        if not chunk:  # end of input
+            return False
+        buf += chunk
+        if b"\n" in buf:
+            return buf.split(b"\n", 1)[0].decode("utf-8", "replace").strip() == word
 
 
 def file_sha256(path: str | Path | None) -> str | None:

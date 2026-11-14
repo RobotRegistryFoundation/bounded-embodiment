@@ -1,4 +1,4 @@
-"""Build and sign a test report 0.1 from a run directory.
+"""Build and sign a test report (0.1, or 0.2 for EV-02 and EV-05) from a run directory.
 
 ``build(declared, run_dir)`` returns the unsigned report: the declared fields as given (with
 ``scoring.profile`` written out, ``scoring.method`` and ``provenance.core_version`` filled in
@@ -6,6 +6,12 @@ and the generator's params normalized) plus every derived member, computed from 
 directory by :func:`derive.derive`, the same function ``be verify`` runs. It refuses
 (ReportError) a run that ``be verify`` would find not consistent for any reason but the
 signature, so a report it returns needs only ``sign_report``.
+
+Report versions. Test report 0.2 (``schemas/test-report-0.2.json``) is 0.1 with the tests EV-02
+and EV-05 added. Unless the declarations name a ``report_version``, build writes 0.2 for EV-02
+and EV-05, which 0.1 cannot express, and 0.1 for EV-03 and EV-10, exactly as before, so an EV-03
+or EV-10 report and the golden runs do not change. An EV-03 or EV-10 report may declare 0.2; its
+members are the same.
 """
 
 from __future__ import annotations
@@ -22,10 +28,31 @@ from . import derive as _derive
 from . import streams
 from .files import scan
 
-__all__ = ["REPORT_VERSION", "SCHEMA_NAME", "ReportError", "build", "sign_report", "to_json"]
+__all__ = [
+    "REPORT_VERSION",
+    "REPORT_VERSIONS",
+    "SCHEMA_NAME",
+    "SCHEMA_NAMES",
+    "ReportError",
+    "build",
+    "report_version_for",
+    "sign_report",
+    "to_json",
+]
 
 REPORT_VERSION = "0.1"
+"""The version build writes for EV-03 and EV-10 (``report_version_for``)."""
 SCHEMA_NAME = "test-report-0.1"
+REPORT_VERSIONS = ("0.1", "0.2")
+"""The report versions this core builds and checks."""
+SCHEMA_NAMES = {"0.1": "test-report-0.1", "0.2": "test-report-0.2"}
+_TESTS_NEEDING_0_2 = ("EV-02", "EV-05")
+
+
+def report_version_for(test: object) -> str:
+    """The report version build writes when the declarations name none: 0.2 for EV-02 and
+    EV-05, 0.1 otherwise."""
+    return "0.2" if test in _TESTS_NEEDING_0_2 else REPORT_VERSION
 
 DECLARED_ORDER = (
     "report_version",
@@ -126,9 +153,20 @@ def _prepare(declared: Mapping, profile: object) -> dict:
                 )
     if problems:
         raise ReportError(problems)
-    doc.setdefault("report_version", REPORT_VERSION)
-
     test = doc.get("test")
+    doc.setdefault("report_version", report_version_for(test))
+    if doc["report_version"] not in REPORT_VERSIONS:
+        raise ReportError(
+            [
+                _err(
+                    "REPORT_VERSION_UNSUPPORTED",
+                    f"report_version {doc['report_version']!r}: this core builds "
+                    f"{' and '.join(REPORT_VERSIONS)}",
+                    "/report_version",
+                )
+            ]
+        )
+
     scoring = doc.get("scoring", {})
     if isinstance(scoring, Mapping):
         method = scoring.get(
@@ -187,8 +225,8 @@ def build(
 ) -> dict:
     """The unsigned report for the run in ``run_dir``.
 
-    ``declared`` holds the declared members (schemas/test-report-0.1.json); a derived member in
-    it is refused. ``profile`` is a packaged profile's name or a profile object; without it,
+    ``declared`` holds the declared members (schemas/test-report-0.1.json, or 0.2 for EV-02 and
+    EV-05); a derived member in it is refused. ``profile`` is a packaged profile's name or a profile object; without it,
     ``declared["scoring"]["profile"]`` (a name or an object), else the packaged illustrative
     profile of the test. ``scoring.method`` defaults to the test's scorer.
 
@@ -218,7 +256,7 @@ def build(
         raise ReportError(
             [_err("INTERNAL_ERROR", f"derived members not computed: {', '.join(missing)}")]
         )
-    problems = schema.validate(report, SCHEMA_NAME)
+    problems = schema.validate(report, SCHEMA_NAMES[report["report_version"]])
     if problems:
         raise ReportError(problems)
     try:
@@ -235,8 +273,8 @@ def sign_report(report: Mapping, private_jwk: Mapping) -> dict:
 
     The key must be the one ``signer.kid`` names (ValueError otherwise), so the report says who
     signed it. A further signature (a co-signer's) can be added with ``signing.sign``."""
-    if not isinstance(report, Mapping) or report.get("report_version") != REPORT_VERSION:
-        raise ValueError("sign_report() takes a test report 0.1")
+    if not isinstance(report, Mapping) or report.get("report_version") not in REPORT_VERSIONS:
+        raise ValueError("sign_report() takes a test report 0.1 or 0.2")
     kid = signing.thumbprint(dict(private_jwk))
     signer = report.get("signer")
     if not isinstance(signer, Mapping) or signer.get("kid") != kid:

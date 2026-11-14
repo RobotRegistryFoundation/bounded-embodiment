@@ -15,7 +15,11 @@ datagram, one sample per datagram::
 
     {"t": 12.345678, "point": "tool", "xyz": [0.281, -0.012, 0.334], "valid": 1}
 
-- ``t``: capture time in seconds on the instrument's own clock (any epoch; monotonic preferred).
+- ``t``: capture time in seconds on the instrument's own clock (any epoch; monotonic preferred):
+  when the camera took the frame, not when the sample was computed or sent. The watchdog takes
+  speeds from these times, so a ``t`` stamped at send time on a busy computer reads a steady
+  motion as bursts; for EV-02 and EV-05 in a velocity command space, whose speed trip sits only
+  9 % over the speed limit, keep its jitter to a millisecond or two (round-3 kit review, K10).
 - ``point``: an envelope point id. Points the envelope does not declare are ignored.
 - ``xyz``: metres, in the envelope frame. Required when ``valid`` is 1.
 - ``valid``: 1, or 0 when the instrument looked and could not measure the point (``xyz`` may then

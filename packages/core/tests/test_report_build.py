@@ -41,7 +41,9 @@ def test_build_sign_verify_round_trip(name: str, tmp_path: Path) -> None:
     assert result.consistent, [f.as_dict() for f in result.findings]
     assert result.verdict["result"] == want["verdict"]
     assert [r["code"] for r in result.verdict["reasons"]] == want["reasons"]
-    assert schema.validate(read_report(run), rep.SCHEMA_NAME) == []
+    report = read_report(run)
+    assert report["report_version"] == rep.report_version_for(report["test"])
+    assert schema.validate(report, rep.SCHEMA_NAMES[report["report_version"]]) == []
 
 
 def test_build_returns_an_unsigned_report_and_sign_adds_one_entry(tmp_path: Path) -> None:

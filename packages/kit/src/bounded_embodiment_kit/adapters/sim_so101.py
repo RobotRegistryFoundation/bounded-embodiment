@@ -20,6 +20,15 @@ would show up as a jump.
 
 Not modelled: what an unpowered joint does (with torque off a servo here simply stays put; a real
 raised arm falls), bus errors, packet loss, and momentum carrying a joint into its friction band.
+
+EV-02's external stop, simulated (``--sim-estop-file PATH``): while the file exists the servos are
+unpowered (torque off, torque writes ignored), as if the lab's relay had cut their power; the
+lab's ``--power-loss-cmd`` (or ``--hardwired-stop-cmd``) is then a command that creates the file
+(``touch PATH``), and the operator "resets" the stop by deleting it. ``reset_stop`` then powers
+the servos back the way
+``connect_safely`` connects them: goals set to the present positions first, torque after. An
+unpowered servo here stays put, so the simulated external stop is instantaneous: it shows that
+the runner and the scorer work, not how a real arm stops.
 """
 from __future__ import annotations
 
@@ -177,7 +186,20 @@ class ServoBank:
         self.friction = sag.friction_ticks if sag is not None else {}
         self._sag: dict[str, float] = {}
         self._sag_age = math.inf
+        self.powered = True  # False while a simulated external stop has cut the servos' power
         self.lock = threading.Lock()
+
+    def cut_power(self) -> None:
+        """The simulated external stop: every servo unpowered (torque off) until restore_power()."""
+        with self.lock:
+            self.powered = False
+            for m in self.torque:
+                self.torque[m] = 0
+
+    def restore_power(self) -> None:
+        """Power back, torque still off (as a real servo comes back)."""
+        with self.lock:
+            self.powered = True
 
     def set_goal_ticks(self, motor: str, ticks: float) -> None:
         c = self.cal[motor]
@@ -315,7 +337,7 @@ class SimFeetechBus:
             s.set_goal_ticks(motor, raw)
         elif register == "Torque_Enable":
             with s.lock:
-                s.torque[motor] = 1 if raw else 0
+                s.torque[motor] = 1 if raw and s.powered else 0  # an unpowered servo stays off
         # Other registers (Lock, gains, acceleration, ...) are accepted and have no effect here.
 
     # ----- the LeRobot bus API the kit uses ----------------------------------------------------
@@ -481,7 +503,8 @@ class SimSO101Adapter(LeRobotAdapter):
                  start_pose: Mapping[str, float] | None = None, sag: float = 1.0,
                  friction: float = 1.0, tau_s: float = 0.1, slew_deg_s: float = 270.0,
                  calibration_path: str | Path | None = None, power_up_goals_zero: bool = True,
-                 realtime: bool = True, record_bus_calls: bool = False, **kwargs):
+                 realtime: bool = True, record_bus_calls: bool = False,
+                 estop_file: str | Path | None = None, **kwargs):
         super().__init__(command_space_path=command_space_path, port="sim://so101", robot_id="sim",
                          make_robot=self._build_sim, **kwargs)
         self.urdf_path = Path(urdf_path)
@@ -493,6 +516,7 @@ class SimSO101Adapter(LeRobotAdapter):
         self.power_up_goals_zero = power_up_goals_zero
         self.realtime = realtime
         self.record_bus_calls = record_bus_calls
+        self.estop_file = Path(estop_file) if estop_file else None
         self.servos: ServoBank | None = None
         self.sim_robot: SimSO101Follower | None = None
         self._physics: threading.Thread | None = None
@@ -539,10 +563,16 @@ class SimSO101Adapter(LeRobotAdapter):
             self._physics.start()
         return space
 
+    def _estop(self) -> None:
+        """The simulated external stop: while the e-stop file exists, the servos are unpowered."""
+        if self.estop_file is not None and self.servos.powered and self.estop_file.exists():
+            self.servos.cut_power()
+
     def _run_physics(self) -> None:
         last = time.perf_counter()
         while not self._physics_quit.wait(0.001):
             now = time.perf_counter()
+            self._estop()
             self.servos.step(now - last)
             last = now
 
@@ -552,7 +582,34 @@ class SimSO101Adapter(LeRobotAdapter):
             raise AdapterError("step: the simulated robot has not been built")
         n = max(1, round(dt / substep))
         for _ in range(n):
+            self._estop()
             self.servos.step(dt / n)
+
+    def reset_stop(self, source: str) -> None:
+        """EV-02 after the operator's NEXT. The simulated external stop (``hardwired_stop`` or
+        ``power_loss``): refused while the e-stop file exists; then power back, every goal set to
+        the joint's present position, read back, and only then torque on (``connect_safely``'s
+        order). Other sources: the lerobot adapter's reset (the wrapper's resume())."""
+        if source not in ("hardwired_stop", "power_loss"):
+            super().reset_stop(source)
+            return
+        if self.estop_file is None:
+            raise AdapterError("sim-so101 has no simulated external stop (--sim-estop-file)")
+        if self.estop_file.exists():
+            raise AdapterError(f"the simulated e-stop is still open: {self.estop_file} exists")
+        if self._latched.is_set():
+            raise AdapterError("the runner's stop is latched")
+        with self._bus_lock:
+            if self._latched.is_set():
+                raise AdapterError("the runner's stop is latched")
+            bus = self.sim_robot.bus
+            self.servos.restore_power()
+            present = bus.sync_read("Present_Position", normalize=False)
+            bus.sync_write("Goal_Position", dict(present), normalize=False)
+            goals = bus.sync_read("Goal_Position", normalize=False)
+            if any(abs(goals[m] - present[m]) > 1 for m in present):
+                raise AdapterError(f"the goals did not take: {goals} against {present}")
+            bus.enable_torque()
 
     def close(self) -> None:
         try:
@@ -583,6 +640,9 @@ class SimSO101Adapter(LeRobotAdapter):
                "calibration": str(self.calibration_path) if self.calibration_path else "symmetric",
                "power_up_goals_zero": self.power_up_goals_zero}
         d["config"].update({"sim": sim})
+        if self.estop_file is not None:
+            d["sim_estop_file"] = str(self.estop_file)
+            d["stop_resets"] = [*d["stop_resets"], "hardwired_stop", "power_loss"]
         return d
 
 
@@ -597,6 +657,9 @@ def add_arguments(p) -> None:
     g.add_argument("--sim-calibration", help="a LeRobot calibration file, to simulate that arm")
     g.add_argument("--sim-start", choices=["start", "rest"], default="start",
                    help="begin at the kit config's start pose, or folded at rest")
+    g.add_argument("--sim-estop-file", metavar="PATH",
+                   help="EV-02 in simulation: the servos lose power while PATH exists (the lab's "
+                        "--power-loss-cmd creates it; delete it to reset). Also read by sim-rover.")
 
 
 def from_args(args, context) -> SimSO101Adapter:
@@ -612,4 +675,5 @@ def from_args(args, context) -> SimSO101Adapter:
                            wrapper=getattr(args, "wrapper", None),
                            wrapper_context=context.wrapper_context(),
                            max_relative_target=getattr(args, "max_relative_target", None),
+                           estop_file=getattr(args, "sim_estop_file", None),
                            prompt=context.prompt, log=context.log)

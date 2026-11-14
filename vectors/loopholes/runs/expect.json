@@ -179,7 +179,7 @@
       "defect": "L3",
       "intended_verdict": "INCONCLUSIVE",
       "intended_reasons": [
-        "JITTER_TOO_LARGE"
+        "JITTER_TOO_HIGH"
       ]
     },
     "defect-vphys-contradicted": {

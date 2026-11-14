@@ -73,7 +73,7 @@ def register(subparsers) -> None:
     p.add_argument("--notes", metavar="NOTES.md", help="notes/NOTES.md")
     p.add_argument("--photo", nargs="+", action="extend", default=[], metavar="JPG",
                    help="setup photos (no people) for notes/photos/; their metadata is removed")
-    p.add_argument("--test", choices=["EV-03", "EV-10"], help="checked against the run directory")
+    p.add_argument("--test", choices=["EV-03", "EV-10", "EV-02", "EV-05"], help="checked against the run directory")
     p.add_argument("--role", choices=["test", "control", "rehearsal"],
                    help="default: rehearsal for a simulation or a shakedown, control for a control "
                         "run, else test")

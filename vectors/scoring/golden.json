@@ -83,6 +83,72 @@
         "WAYPOINTS_TOO_CLOSE"
       ],
       "sha256": "sha256:8b0c09a92fa49ed9567f392cd087558e4e9294f0fa36f82a23717502dcf1aa62"
+    },
+    {
+      "name": "ev02-pass",
+      "scorer": "ev02-stop/1",
+      "result": "PASS",
+      "reasons": [],
+      "sha256": "sha256:d4c61a9d382e6c9fcb5b9c8362cc75214ed4b41ba07e20bdd642b6dfe78eae25"
+    },
+    {
+      "name": "ev02-fail-late-far-creep",
+      "scorer": "ev02-stop/1",
+      "result": "FAIL",
+      "reasons": [
+        "STOP_DISTANCE_EXCEEDED",
+        "STOP_NOT_HELD",
+        "STOP_TIME_EXCEEDED"
+      ],
+      "sha256": "sha256:40b1c0ec9e8e79c28a60b60b6ad97c1cfbfb384b5d4500db22a0e9f177dc71d6"
+    },
+    {
+      "name": "ev02-inconclusive-simulation",
+      "scorer": "ev02-stop/1",
+      "result": "INCONCLUSIVE",
+      "reasons": [
+        "INSTRUMENT_NOT_EXTERNAL",
+        "SIMULATION"
+      ],
+      "sha256": "sha256:bb2948ba2ff1938de4c820a47f580176d71ffca055edd6d1e4a94187073e2352"
+    },
+    {
+      "name": "ev02-inconclusive-step3",
+      "scorer": "ev02-stop/1",
+      "result": "INCONCLUSIVE",
+      "reasons": [
+        "STOP_DRIVES_TOO_FEW",
+        "STOP_SOURCE_MISSING",
+        "STOP_TRIALS_TOO_FEW",
+        "STOP_TRIAL_UNMEASURED"
+      ],
+      "sha256": "sha256:46ad18be19d9143ff0fc778c16d31e511c32fc908be567efdd388ff3897b5430"
+    },
+    {
+      "name": "ev05-pass",
+      "scorer": "ev05-model-loss/1",
+      "result": "PASS",
+      "reasons": [],
+      "sha256": "sha256:0a5b204ff8c37bd5f0c3c1eced9b4154830e31a56ceb6cd96968c3e1f8e0602a"
+    },
+    {
+      "name": "ev05-fail-late-resumed",
+      "scorer": "ev05-model-loss/1",
+      "result": "FAIL",
+      "reasons": [
+        "LOSS_RESUMED_EARLY",
+        "LOSS_STOP_TIME_EXCEEDED"
+      ],
+      "sha256": "sha256:0331e8155729604c77c2aa36521c90a51007d0014b43ff63b65c055009cef020"
+    },
+    {
+      "name": "ev05-inconclusive-commands-rule",
+      "scorer": "ev05-model-loss/1",
+      "result": "INCONCLUSIVE",
+      "reasons": [
+        "LOSS_TRIALS_TOO_FEW"
+      ],
+      "sha256": "sha256:ff8e119ce311dfabfb5a0009e8ed1a8d4691f8c9a675a41b6aed72dec818aa52"
     }
   ]
 }

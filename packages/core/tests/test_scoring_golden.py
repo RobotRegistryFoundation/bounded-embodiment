@@ -24,7 +24,9 @@ sys.path.insert(0, str(Path(__file__).parent))
 from _scoring_synth import (
     STRATEGIES,
     declared,
+    ev02_input,
     ev03_input,
+    ev05_input,
     ev10_input,
     fk_state_rows,
     out_and_back,
@@ -60,6 +62,8 @@ def _copied_track() -> ScoringInput:
 
 
 STACKED = [{"id": k, "position_m": [0.30, 0.0, 0.175]} for k in "abcd"]
+SIM = {"run_mode": "simulation", "primary_instrument_kind": "simulation_ground_truth"}
+ONE_SOURCE = (("stop_message", "x_plus"),) * 3
 
 
 CASES = {
@@ -82,6 +86,26 @@ CASES = {
     # four waypoint ids on the pose a frozen gate holds
     "ev10-inconclusive-stacked-waypoints": lambda: ("ev10-waypoints/1", ev10_input(
         waypoints=STACKED, freeze=True)),
+    # three stop messages and three hardwired stops, two drives each
+    "ev02-pass": lambda: ("ev02-stop/1", ev02_input(noise_m=0.0005)),
+    # one stop brakes over 0.5 s, one creeps at 1 cm/s after its rest
+    "ev02-fail-late-far-creep": lambda: ("ev02-stop/1", ev02_input(
+        noise_m=0.0005, slow={1: 0.5}, creep={4: 0.01})),
+    # the slow stop in simulation: INCONCLUSIVE, the failures observed
+    "ev02-inconclusive-simulation": lambda: ("ev02-stop/1", ev02_input(
+        slow={1: 0.5}, declared=declared(**SIM))),
+    # stop messages only, one drive, and a tracking gap over the second stop
+    "ev02-inconclusive-step3": lambda: ("ev02-stop/1", ev02_input(
+        trials=ONE_SOURCE, noise_m=0.0005, drop=lambda pid, k, t: 4.75 < t < 5.2)),
+    "ev05-pass": lambda: ("ev05-model-loss/1", ev05_input(noise_m=0.0005)),
+    # the first loss runs on for 1 s; the third follows the restarted commands
+    "ev05-fail-late-resumed": lambda: ("ev05-model-loss/1", ev05_input(
+        noise_m=0.0005, late={0: 1.0}, resumes=(2,))),
+    # resume rule "commands" after 0 ms (a velocity space): following the restart is allowed;
+    # two trials only
+    "ev05-inconclusive-commands-rule": lambda: ("ev05-model-loss/1", ev05_input(
+        motion_s=(1.2, 1.3), resumes=(0, 1), restart_s=1.6, noise_m=0.0005,
+        resume={"rule": "commands", "after_ms": 0}, position=False)),
 }
 
 
@@ -130,7 +154,8 @@ def _via_csv(inp: ScoringInput) -> ScoringInput:
 
 
 def test_csv_round_trip_scores_identically():
-    for name in ("ev03-pass-jitter-gap", "ev03-inconclusive-simulation", "ev10-pass"):
+    for name in ("ev03-pass-jitter-gap", "ev03-inconclusive-simulation", "ev10-pass", "ev02-pass",
+                 "ev05-pass"):
         scorer, inp = CASES[name]()
         assert canonicalize(score(scorer, _via_csv(inp))) == canonicalize(score(scorer, inp)), name
 

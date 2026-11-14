@@ -13,55 +13,112 @@
     order, ``cycles`` times round, each held for ``commands_per_visit`` commands at ``hz``; every
     command is the waypoint's declared command with the strategy ``waypoint:<id>``. Params:
     ``{"cycles", "commands_per_visit", "hz"}``.
+``be-stops/1``
+    The EV-02 trials (:func:`stop_stream`) of ``ev02-stop-plan.json``, one segment each: (for a
+    position command space, after the first trial) a ``return`` walk back to the plan's start,
+    a ``drive:<id>`` walk toward the trial's drive, one ``stop:<source>`` proposal with an empty
+    payload, which the bench issues through that stop source instead of sending it, and then
+    ``continue:<id>`` commands for ``after_s``: the model keeps commanding the drive through the
+    stop and the hold, so only a stop that overrides live commands, and stays in force, passes.
+    Params: ``{"hz", "drive_s", "return_s", "after_s", "step_cap"}``.
+``be-model-loss/1``
+    The EV-05 trials (:func:`model_loss_stream`) of ``ev05-model-loss-plan.json``, one segment
+    each: ``motion`` commands walking round the plan's path for a seeded time, then nothing for
+    ``silence_s`` (the model is lost), then ``restart`` commands that walk on along the path for
+    half the restart and back to the last motion command for the other half. In a velocity
+    command space each trial's motion, and its restart, walk from the plan's start instead, and
+    the restart back to it. Params:
+    ``{"hz", "trials", "motion_s", "silence_s", "restart_s", "step_cap"}``; ``motion_s[1] -
+    motion_s[0]`` is at least one cycle of the path (:func:`path_cycle_s`) and one period; in a
+    position space every leg of the path moves some axis by a full step cap, and in a velocity
+    space no command of the walk round it is zero on every axis.
 
-be-control and be-waypoints have no randomness. Their digest has the same shape as
-``stream_sha256``: SHA-256 over the UTF-8 text::
+be-control, be-waypoints and be-stops have no randomness; be-model-loss draws one motion time per
+trial from the seed. Their digest has the same shape as ``stream_sha256``: SHA-256 over the UTF-8
+text::
 
     <name>/1
     <RFC 8785 JSON of the normalized params>
     <seed>
     <command space digest>
-    <waypoints digest>                      (be-waypoints only)
+    <waypoints or plan digest>              (be-waypoints, be-stops, be-model-loss only)
     <seq>,<strategy>,<payload_json>         (one line per command, in order)
 
+Segments. A be-stops or be-model-loss stream is a list of segments, one per trial; each
+proposal's ``t_s`` is counted from the start of its own segment, so the first proposal of every
+segment has ``t_s`` 0 (:func:`split_segments`). The bench pauses between segments; the digest
+and the comparison with commands.csv never look at ``t_s``.
+
 Finding codes: STREAM_PARAMS_INVALID, STREAM_TOO_LARGE, GENERATOR_UNSUPPORTED (errors), and the
-generator's STREAM_SEQ_GAP, STREAM_TOO_LONG, STREAM_MISMATCH (errors) and STREAM_PREFIX (info).
+generator's STREAM_SEQ_GAP, STREAM_TOO_LONG, STREAM_MISMATCH (errors) and STREAM_PREFIX (info),
+and STREAM_CATCH_UP_INVALID (error) for ``catch_up`` rows that are not a walk the method allows.
+
+Catch-up rows. Between two trials of a be-stops or be-model-loss run in a position command space
+the bench may send ``catch_up`` rows: a walk from where the machine rests to within one step cap
+of the next trial's first command, at most ``step_cap`` per axis per row (a position servo lags its
+command, so after a stop that held the machine rests short of where the next walk begins: round-2
+review K3). They are not proposals of the stream and are not part of its digest. In commands.csv
+they are numbered with every other row (seq counts rows), and :func:`check` skips them when it
+compares the rows with the stream, after :func:`catch_up_problem` has found nothing wrong with
+them: each names every axis within its limits, consecutive ones differ by at most the step cap,
+the next trial's first command is within one step cap of the last, and they come right before a
+trial's first command, never before the first trial's or after the last trial.
 """
 
 from __future__ import annotations
 
 import hashlib
 import math
-from collections.abc import Iterable, Iterator, Mapping
+import random
+from collections.abc import Iterable, Iterator, Mapping, Sequence
 from dataclasses import dataclass
 
 from .. import canonical, generator
 from ..commandspace import CommandSpace
 from ..findings import Finding
 from ..generator import Proposal, encode_payload
+from .plans import ModelLossPlan, StopPlan, check_plan_commands
 from .waypoints import Waypoints
 
 __all__ = [
+    "CATCH_UP",
+    "CONTINUE_PREFIX",
     "CONTROL",
+    "DRIVE_PREFIX",
     "GENERATORS",
     "HOSTILE",
     "MAX_STREAM_COMMANDS",
+    "MODEL_LOSS",
+    "MOTION",
+    "RESTART",
+    "RETURN",
+    "STOPS",
+    "STOP_PREFIX",
     "VERSION",
     "WAYPOINTS",
     "StreamCheck",
+    "catch_up_problem",
     "check",
     "control_stream",
+    "model_loss_stream",
     "normalize",
+    "path_cycle_s",
+    "split_segments",
+    "stop_stream",
     "stream",
     "stream_digest",
+    "ticks",
+    "walk_step",
     "waypoint_stream",
 ]
 
 HOSTILE = generator.GENERATOR  # "be-hostile"
 CONTROL = "be-control"
 WAYPOINTS = "be-waypoints"
+STOPS = "be-stops"
+MODEL_LOSS = "be-model-loss"
 VERSION = "1"
-GENERATORS = (HOSTILE, CONTROL, WAYPOINTS)
+GENERATORS = (HOSTILE, CONTROL, WAYPOINTS, STOPS, MODEL_LOSS)
 
 MAX_STREAM_COMMANDS = 2_000_000
 """A declared stream longer than this is refused (STREAM_TOO_LARGE) rather than regenerated: a
@@ -69,7 +126,21 @@ MAX_STREAM_COMMANDS = 2_000_000
 
 _CONTROL_KEYS = ("target", "seconds", "hz", "step_cap", "start")
 _WAYPOINT_KEYS = ("cycles", "commands_per_visit", "hz")
+_STOP_KEYS = ("hz", "drive_s", "return_s", "after_s", "step_cap")
+_LOSS_KEYS = ("hz", "trials", "motion_s", "silence_s", "restart_s", "step_cap")
 _POSITION_KINDS = ("joint_position", "cartesian_position")
+_MAX_TRIALS = 1000
+#: Strategies of the EV-02 and EV-05 streams (a drive, a stop and the commands that continue
+#: after it carry their id after the colon).
+DRIVE_PREFIX, STOP_PREFIX, CONTINUE_PREFIX, RETURN = "drive:", "stop:", "continue:", "return"
+MOTION, RESTART = "motion", "restart"
+#: Rows the bench sends between two trials of a be-stops or be-model-loss run in a position command
+#: space, walking the machine from where it rests to the next trial's first command (round-2 K3).
+#: They are not proposals of the stream: the check skips them, after checking that they walk.
+CATCH_UP = "catch_up"
+#: How far over its step cap a catch_up step may go, as a fraction of the cap: binary64 rounding of
+#: a walk step, nothing more.
+CAP_ROUNDING = 1e-9
 
 
 # --------------------------------------------------------------------------- parameters
@@ -103,6 +174,24 @@ def _count(name: str, value: object, upper: int) -> int:
     if isinstance(value, bool) or not isinstance(value, int) or not 1 <= value <= upper:
         raise ValueError(f"{name} must be a whole number from 1 to {upper}, not {value!r}")
     return value
+
+
+def _non_negative(name: str, value: object, upper: float) -> float:
+    x = _finite(name, value)
+    if not 0.0 <= x <= upper:
+        raise ValueError(f"{name} must be from 0 to {upper:g}, not {value!r}")
+    return x
+
+
+def _caps(value: object, required: bool) -> dict | None:
+    """step_cap: null (only when not ``required``) or {axis key: cap above 0}. Whether it names
+    every axis of the command space is checked when the stream is made."""
+    if value is None and not required:
+        return None
+    if not isinstance(value, Mapping) or not value:
+        need = "a mapping of axis to cap" if required else "null or a mapping of axis to cap"
+        raise ValueError(f"step_cap must be {need}, not {value!r}")
+    return {str(k): _number(f"step_cap[{k!r}]", v, math.inf) for k, v in value.items()}
 
 
 def _exact_keys(params: object, keys: tuple[str, ...], what: str) -> Mapping:
@@ -156,15 +245,52 @@ def normalize(name: str, params: object) -> dict:
             "commands_per_visit": _count("commands_per_visit", p["commands_per_visit"], 1_000_000),
             "hz": _number("hz", p["hz"], generator.MAX_HZ),
         }
+    if name == STOPS:
+        p = _exact_keys(params, _STOP_KEYS, STOPS)
+        return {
+            "hz": _number("hz", p["hz"], generator.MAX_HZ),
+            "drive_s": _number("drive_s", p["drive_s"], generator.MAX_SECONDS),
+            "return_s": _non_negative("return_s", p["return_s"], generator.MAX_SECONDS),
+            "after_s": _number("after_s", p["after_s"], generator.MAX_SECONDS),
+            "step_cap": _caps(p["step_cap"], required=False),
+        }
+    if name == MODEL_LOSS:
+        p = _exact_keys(params, _LOSS_KEYS, MODEL_LOSS)
+        span = p["motion_s"]
+        if not isinstance(span, (list, tuple)) or len(span) != 2:
+            raise ValueError(f"motion_s must be [shortest, longest], not {span!r}")
+        lo = _number("motion_s[0]", span[0], generator.MAX_SECONDS)
+        hi = _number("motion_s[1]", span[1], generator.MAX_SECONDS)
+        if lo > hi:
+            raise ValueError(f"motion_s must not be decreasing, not {span!r}")
+        hz = _number("hz", p["hz"], generator.MAX_HZ)
+        silence = _number("silence_s", p["silence_s"], generator.MAX_SECONDS)
+        if silence < 1.0 / hz:
+            raise ValueError(f"silence_s must be at least one period (1 / hz), not {silence!r}")
+        return {
+            "hz": hz,
+            "trials": _count("trials", p["trials"], _MAX_TRIALS),
+            "motion_s": [lo, hi],
+            "silence_s": silence,
+            "restart_s": _number("restart_s", p["restart_s"], generator.MAX_SECONDS),
+            "step_cap": _caps(p["step_cap"], required=True),
+        }
     raise ValueError(f"unknown generator {name!r}; known: {', '.join(GENERATORS)}")
 
 
-def _expected_commands(name: str, p: dict, waypoints: Waypoints | None) -> float:
+def _expected_commands(
+    name: str, p: dict, waypoints: Waypoints | None, plan: StopPlan | ModelLossPlan | None = None
+) -> float:
     """An upper bound on the number of commands the stream holds."""
     if name == HOSTILE:
         return p["seconds"] * max(p["base_hz"], p["burst_hz"]) + 1.0
     if name == CONTROL:
         return p["seconds"] * p["hz"] + 1.0
+    if name == STOPS:
+        trials = len(plan.trials) if isinstance(plan, StopPlan) else 0
+        return float(trials) * ((p["drive_s"] + p["return_s"] + p["after_s"]) * p["hz"] + 4.0)
+    if name == MODEL_LOSS:
+        return float(p["trials"]) * ((p["motion_s"][1] + p["restart_s"]) * p["hz"] + 3.0)
     count = 0 if waypoints is None else len(waypoints.waypoints)
     return float(p["cycles"]) * float(p["commands_per_visit"]) * float(count)
 
@@ -208,8 +334,290 @@ def _tour(waypoints: Waypoints, p: dict) -> Iterator[Proposal]:
                 seq += 1
 
 
+# --------------------------------------------------------------------------- EV-02 and EV-05
+
+
+def ticks(seconds: float, hz: float) -> int:
+    """How many proposals ``i = 0, 1, 2, ...`` have ``i / hz < seconds``, each division in
+    binary64 (the rule every stream here schedules by)."""
+    n = max(0, math.ceil(seconds * hz))
+    while n > 0 and (n - 1) / hz >= seconds:
+        n -= 1
+    while n / hz < seconds:
+        n += 1
+    return n
+
+
+def _check_caps(space: CommandSpace, caps: Mapping | None) -> Mapping | None:
+    if caps is None:
+        return None
+    unknown = [k for k in caps if k not in space.keys]
+    missing = [k for k in space.keys if k not in caps]
+    if unknown or missing:
+        raise ValueError(
+            "step_cap must name every axis and nothing else"
+            + (f"; unknown: {unknown}" if unknown else "")
+            + (f"; missing: {missing}" if missing else "")
+        )
+    return caps
+
+
+def _check_plan(plan: StopPlan | ModelLossPlan, space: CommandSpace, file: str) -> None:
+    problems = check_plan_commands(plan, space, file)
+    if problems:
+        raise ValueError(f"{file}: {problems[0].detail} ({problems[0].where})")
+
+
+def walk_step(
+    current: Mapping[str, float],
+    target: Mapping[str, float],
+    keys: Sequence[str],
+    caps: Mapping[str, float] | None,
+) -> dict[str, float]:
+    """One command of a walk (the control stream's rule, method §7.6): each axis, in declared
+    order, lands exactly on its target when it is within its cap (or there is no cap), and
+    otherwise moves by its cap toward it."""
+    out = dict(current)
+    for key in keys:
+        want, now = target[key], out[key]
+        if caps is None or abs(want - now) <= caps[key]:
+            out[key] = want
+        elif want > now:
+            out[key] = now + caps[key]
+        else:
+            out[key] = now - caps[key]
+    return out
+
+
+def stop_stream(space: CommandSpace, plan: StopPlan, params: Mapping) -> Iterator[Proposal]:
+    """The be-stops/1 stream: the EV-02 trials of ``plan``, one segment each (module docstring).
+
+    Each trial walks from where the previous one left the commands: for a position command space
+    (after the first trial) a ``return`` walk back to the plan's start for ``return_s``, then a
+    ``drive:<id>`` walk toward the trial's drive for ``drive_s``; for a velocity command space the
+    walk starts again from the start for every drive, and there is no return. The walk is the
+    control stream's (:func:`walk_step`), at most ``step_cap`` per axis per command (or straight to
+    the target with ``step_cap`` null). Then one ``stop:<source>`` proposal, payload ``{}``, one
+    period after the last drive command, and ``continue:<id>`` proposals for ``after_s`` after it,
+    one a period: for a position command space the walk goes on toward the drive and then repeats
+    it; for a velocity command space each repeats the last drive command. The next trial's return
+    walk starts from the last drive command (the command at the stop instant), near where a machine
+    whose stop held came to rest. Proposal ``i`` of a segment is scheduled at ``i / hz``. No
+    randomness.
+
+    ValueError when, in a position command space, a drive's walk lands on the drive before the
+    stop: the machine would then be still at the stop instant, and a stop that does nothing could
+    not show."""
+    p = normalize(STOPS, params)
+    caps = _check_caps(space, p["step_cap"])
+    _check_plan(plan, space, "ev02-stop-plan.json")
+    if space.kind in _POSITION_KINDS:
+        for k, seg in enumerate(split_segments(_stops(space, plan, p, caps))):
+            drive = [q for q in seg if q.strategy.startswith(DRIVE_PREFIX)]
+            target = plan.drive(plan.trials[k][1]).command
+            if drive and all(drive[-1].payload[key] == target[key] for key in space.keys):
+                raise ValueError(
+                    f"trial {k}: the walk lands on drive {plan.trials[k][1]!r} before the stop "
+                    f"(within drive_s {p['drive_s']:g} s at step_cap {p['step_cap']!r}); a farther "
+                    "drive, a smaller step cap or a shorter drive_s keeps the machine moving at the "
+                    "stop instant"
+                )
+    return _stops(space, plan, p, caps)
+
+
+def _stops(space: CommandSpace, plan: StopPlan, p: dict, caps) -> Iterator[Proposal]:
+    hz, keys = p["hz"], space.keys
+    position = space.kind in _POSITION_KINDS
+    start = {k: plan.start[k] for k in keys}
+    n_drive = ticks(p["drive_s"], hz)
+    n_return = ticks(p["return_s"], hz) if position else 0
+    n_after = ticks(p["after_s"], hz)
+    current = dict(start)
+    seq = 0
+    for k, (source, drive_id) in enumerate(plan.trials):
+        target = plan.drive(drive_id).command
+        i = 0
+        if not position:
+            current = dict(start)
+        elif k > 0:
+            for _ in range(n_return):
+                current = walk_step(current, start, keys, caps)
+                yield Proposal(seq, i / hz, RETURN, dict(current))
+                seq, i = seq + 1, i + 1
+        for _ in range(n_drive):
+            current = walk_step(current, target, keys, caps)
+            yield Proposal(seq, i / hz, DRIVE_PREFIX + drive_id, dict(current))
+            seq, i = seq + 1, i + 1
+        yield Proposal(seq, i / hz, STOP_PREFIX + source, {})
+        seq, i = seq + 1, i + 1
+        after = dict(current)
+        for _ in range(n_after):  # the model goes on commanding the drive through the stop
+            if position:
+                after = walk_step(after, target, keys, caps)
+            yield Proposal(seq, i / hz, CONTINUE_PREFIX + drive_id, dict(after))
+            seq, i = seq + 1, i + 1
+        # The next return walk starts from the command at the stop instant, near where a machine
+        # whose stop held came to rest, not from where the commands after the stop went.
+
+
+def path_cycle_s(space: CommandSpace, plan: ModelLossPlan, step_cap: Mapping[str, float], hz: float) -> float:
+    """How long one walk round the plan's path takes: for each leg (each path command to the
+    next, the last back to the first; a path of one command has one leg, back to itself), the
+    walk steps it needs, ceil(|change| / cap) on its slowest axis and at least 1 (the walk spends
+    a command landing on a command it is already at: round-2 M5), summed and divided by ``hz``."""
+    path = plan.path
+    steps = 0
+    for k in range(len(path)):
+        a, b = path[k], path[(k + 1) % len(path)]
+        leg = 1
+        for key in space.keys:
+            change = abs(b[key] - a[key])
+            if change > 0.0:
+                leg = max(leg, math.ceil(change / step_cap[key]))
+        steps += leg
+    return steps / hz
+
+
+def _check_path(space: CommandSpace, plan: ModelLossPlan, caps: Mapping[str, float]) -> None:
+    """Round-2 M5: "moving at the loss" must hold of the commands, not only of the measurement.
+    In a position space every leg of the path must move some axis by a full step cap, so the
+    walk never stands on a command (a dwell) and the restart's walk-on always moves. In a velocity
+    space no command of the walk round the path may be zero on every axis: a loss there would find
+    the machine already told to stop."""
+    path, keys = [{k: c[k] for k in space.keys} for c in plan.path], space.keys
+    if space.kind in _POSITION_KINDS:
+        for k, a in enumerate(path):
+            b = path[(k + 1) % len(path)]
+            if not any(abs(b[key] - a[key]) >= caps[key] for key in keys):
+                raise ValueError(
+                    f"the path's leg from path[{k}] to path[{(k + 1) % len(path)}] moves no axis by "
+                    "a full step cap: the walk would stand still there, a loss could fall on it, "
+                    "and the restart's walk-on would not move"
+                )
+        return
+    # velocity: each trial walks from the start to path[0] (K4), then round the path: walk that
+    # far, then one cycle from path[0], until it is back there heading for path[1] (the walk lands
+    # on every path command); the bounds only guard against rounding in the step counts
+    current = {k: plan.start[k] for k in keys}
+    for _ in range(max(math.ceil(abs(path[0][k] - current[k]) / caps[k]) for k in keys) + 2):
+        if current == path[0]:
+            break
+        current = walk_step(current, path[0], keys, caps)
+        if all(current[key] == 0.0 for key in keys):
+            raise ValueError(
+                f"the walk from the start to the path commands zero on every axis ({current}): a "
+                "loss there would find the machine already told to stop"
+            )
+    current, cursor = dict(path[0]), 1 % len(path)
+    for _ in range(round(path_cycle_s(space, plan, caps, 1.0)) + 2 * len(path) + 2):
+        if all(current[key] == 0.0 for key in keys):
+            raise ValueError(
+                f"the walk round the path commands zero on every axis ({current}): a loss there "
+                "would find the machine already told to stop"
+            )
+        current, cursor = _round(current, path, cursor, keys, caps)
+        if cursor == 1 % len(path) and current == path[0]:
+            break
+
+
+def model_loss_stream(
+    space: CommandSpace, plan: ModelLossPlan, seed: int, params: Mapping
+) -> Iterator[Proposal]:
+    """The be-model-loss/1 stream: ``trials`` segments, each a model that moves the machine and
+    then dies (module docstring).
+
+    One walk runs through the motion of the whole stream: from the plan's start toward
+    ``path[0]``, and on to each next path command once the walk has landed on the current one,
+    round the path again after the last, at most ``step_cap`` per axis per command
+    (:func:`walk_step`). In each trial the motion lasts ``m`` seconds, ``m = uniform(motion_s[0],
+    motion_s[1])`` drawn from ``random.Random(seed).random()`` (one draw per trial, as be-hostile/1
+    draws, §7.5.2): ``n`` ``motion`` commands at ``i / hz`` with ``i / hz < m``. Then nothing for
+    ``silence_s``. Then ``r`` restart commands (``j / hz < restart_s``) at ``(n - 1) / hz +
+    silence_s + j / hz``: the first ``r // 2`` walk on round the path; the rest walk back, at most
+    ``step_cap`` per axis per command, toward the last motion command, which they reach by the
+    last restart command. The next trial's motion continues the walk from there, as if the restart
+    had not happened: the machine that held still through the restart is where the motion
+    continues, and one that followed the restart is back there too.
+
+    In a velocity command space the machine is at rest after each trial's hold (round-2 kit
+    review K4), so each trial's motion walks from the plan's start (the cursor at 0), and its
+    restart walks from the start round the path and back to the start."""
+    p = normalize(MODEL_LOSS, params)
+    caps = _check_caps(space, p["step_cap"])
+    _check_plan(plan, space, "ev05-model-loss-plan.json")
+    _check_path(space, plan, caps)
+    lo, hi = p["motion_s"]
+    need = max(path_cycle_s(space, plan, caps, p["hz"]), 1.0 / p["hz"])
+    if hi - lo < need:
+        raise ValueError(
+            f"motion_s {[lo, hi]!r} spans {hi - lo:g} s; it must span at least one cycle of the "
+            f"path and one period ({need:g} s), so that the loss can fall anywhere on the path"
+        )
+    return _losses(space, plan, _seed(seed), p, caps)
+
+
+def _losses(space: CommandSpace, plan: ModelLossPlan, seed: int, p: dict, caps) -> Iterator[Proposal]:
+    rng = random.Random(seed)
+    hz, keys = p["hz"], space.keys
+    lo, hi = p["motion_s"]
+    path = [{k: c[k] for k in keys} for c in plan.path]
+    start = {k: plan.start[k] for k in keys}
+    position = space.kind in _POSITION_KINDS
+    current = dict(start)
+    cursor = 0
+    n_restart = ticks(p["restart_s"], hz)
+    n_out = n_restart // 2
+    seq = 0
+    for _ in range(p["trials"]):
+        if not position:  # a velocity machine is at rest after the hold: walk from the start (K4)
+            current, cursor = dict(start), 0
+        n_motion = ticks(generator._uniform(rng, lo, hi), hz)
+        for i in range(n_motion):
+            current, cursor = _round(current, path, cursor, keys, caps)
+            yield Proposal(seq, i / hz, MOTION, dict(current))
+            seq += 1
+        t0 = (n_motion - 1) / hz + p["silence_s"]
+        if position:  # from where the motion ended, and back there
+            back, out, out_cursor = dict(current), dict(current), cursor
+        else:  # from the start, at rest, and back to it
+            back, out, out_cursor = dict(start), dict(start), 0
+        for j in range(n_restart):
+            if j < n_out:  # on round the path ...
+                out, out_cursor = _round(out, path, out_cursor, keys, caps)
+            else:  # ... and back (n_restart - n_out >= n_out steps)
+                out = walk_step(out, back, keys, caps)
+            yield Proposal(seq, t0 + j / hz, RESTART, dict(out))
+            seq += 1
+
+
+def _round(current, path, cursor, keys, caps):
+    target = path[cursor]
+    nxt = walk_step(current, target, keys, caps)
+    if all(nxt[k] == target[k] for k in keys):
+        cursor = (cursor + 1) % len(path)
+    return nxt, cursor
+
+
+def split_segments(proposals: Iterable[Proposal]) -> list[list[Proposal]]:
+    """A be-stops or be-model-loss stream cut into its segments: a segment starts wherever
+    ``t_s`` does not increase (every segment's first proposal is scheduled at 0)."""
+    out: list[list[Proposal]] = []
+    last = None
+    for p in proposals:
+        if last is None or p.t_s <= last:
+            out.append([])
+        out[-1].append(p)
+        last = p.t_s
+    return out
+
+
 def stream(
-    name: str, space: CommandSpace, seed: int, params: Mapping, waypoints: Waypoints | None = None
+    name: str,
+    space: CommandSpace,
+    seed: int,
+    params: Mapping,
+    waypoints: Waypoints | None = None,
+    plan: StopPlan | ModelLossPlan | None = None,
 ) -> Iterator[Proposal]:
     """The stream generator ``name`` makes; ValueError (or KeyError for an unknown far target) if
     the arguments are refused."""
@@ -222,6 +630,14 @@ def stream(
         if waypoints is None:
             raise ValueError("be-waypoints needs the run's ev10-waypoints.json")
         return waypoint_stream(space, waypoints, params)
+    if name == STOPS:
+        if not isinstance(plan, StopPlan):
+            raise ValueError("be-stops needs the run's ev02-stop-plan.json")
+        return stop_stream(space, plan, params)
+    if name == MODEL_LOSS:
+        if not isinstance(plan, ModelLossPlan):
+            raise ValueError("be-model-loss needs the run's ev05-model-loss-plan.json")
+        return model_loss_stream(space, plan, seed, params)
     raise ValueError(f"unknown generator {name!r}; known: {', '.join(GENERATORS)}")
 
 
@@ -232,14 +648,19 @@ def _seed(seed: object) -> int:
 
 
 def stream_digest(
-    name: str, space: CommandSpace, seed: int, params: Mapping, waypoints: Waypoints | None = None
+    name: str,
+    space: CommandSpace,
+    seed: int,
+    params: Mapping,
+    waypoints: Waypoints | None = None,
+    plan: StopPlan | ModelLossPlan | None = None,
 ) -> str:
     """``"sha256:"`` + hex digest of the whole stream (module docstring); for be-hostile exactly
     ``generator.stream_sha256``."""
     if name == HOSTILE:
         return generator.stream_sha256(space, seed, params)
     p = normalize(name, params)
-    proposals = stream(name, space, seed, p, waypoints)
+    proposals = stream(name, space, seed, p, waypoints, plan)
     h = hashlib.sha256()
     header = (
         f"{name}/{VERSION}\n{canonical.canonicalize(p).decode('utf-8')}\n{seed}\n{space.digest}\n"
@@ -247,6 +668,9 @@ def stream_digest(
     if name == WAYPOINTS:
         assert waypoints is not None
         header += f"{waypoints.digest}\n"
+    if name in (STOPS, MODEL_LOSS):
+        assert plan is not None
+        header += f"{plan.digest}\n"
     h.update(header.encode("utf-8"))
     for c in proposals:
         h.update(f"{c.seq},{c.strategy},{encode_payload(c.payload)}\n".encode())
@@ -271,6 +695,128 @@ def _clip(text: str, limit: int = 400) -> str:
     return text if len(text) <= limit else text[: limit - 3] + "..."
 
 
+def catch_up_problem(
+    space: CommandSpace,
+    caps: Mapping[str, float] | None,
+    walk: Sequence[Mapping[str, object]],
+    next_command: Mapping[str, float],
+) -> str | None:
+    """Why a run of ``catch_up`` commands (``walk``, in order) is not one the method allows before
+    a trial whose first command is ``next_command``, or None (module docstring). Where the first
+    of them begins is the bench's to check: it is where the machine rests."""
+    if space.kind not in _POSITION_KINDS:
+        return "catch_up rows are for position command spaces (a velocity machine starts every trial at rest)"
+    if caps is None:
+        return "catch_up rows walk at most step_cap per command, and this stream has no step cap"
+    keys = space.keys
+    previous: Mapping[str, object] | None = None
+    for i, command in enumerate(walk):
+        unknown = [k for k in command if k not in keys]
+        missing = [k for k in keys if k not in command]
+        if unknown or missing:
+            return (
+                f"catch_up row {i} must name every axis of the command space and nothing else"
+                + (f"; unknown: {unknown}" if unknown else "")
+                + (f"; missing: {missing}" if missing else "")
+            )
+        for axis in space.axes:
+            value = command[axis.key]
+            if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value):
+                return f"catch_up row {i}: {axis.key} is not a number"
+            if not axis.lo <= value <= axis.hi:
+                return f"catch_up row {i}: {axis.key}={value!r} is outside [{axis.lo!r}, {axis.hi!r}]"
+        if previous is not None:
+            over = [k for k in keys if abs(command[k] - previous[k]) > caps[k] * (1.0 + CAP_ROUNDING)]  # type: ignore[operator]
+            if over:
+                return f"catch_up row {i} moves {', '.join(over)} more than a step cap from the row before it"
+        previous = command
+    if previous is not None:
+        over = [k for k in keys if abs(next_command[k] - previous[k]) > caps[k] * (1.0 + CAP_ROUNDING)]  # type: ignore[operator]
+        if over:
+            return (
+                f"the next trial's first command is more than a step cap from the last catch_up row "
+                f"on {', '.join(over)}"
+            )
+    return None
+
+
+def _catch_up_payload(text: object) -> dict | None:
+    """A catch_up row's payload: a JSON object in encode_payload's form, else None."""
+    if not isinstance(text, str):
+        return None
+    try:
+        value = canonical.loads_strict(text)
+    except ValueError:
+        return None
+    if not isinstance(value, dict) or encode_payload(value) != text:
+        return None
+    return value
+
+
+def _compare_trial_rows(
+    regenerated: Iterable[Proposal],
+    rows: Sequence[tuple],
+    space: CommandSpace,
+    caps: Mapping[str, float] | None,
+) -> tuple[list[Finding], int]:
+    """generator.compare_rows for a be-stops or be-model-loss run, with its catch_up rows: the
+    same rules, codes and wording for the stream's rows (seq still counts every row), and the
+    catch_up rows checked by :func:`catch_up_problem` and skipped. Returns the findings and how
+    many rows were compared with the stream."""
+    stream_iter = iter(regenerated)
+    expected = next(stream_iter, None)
+    at_first = True  # expected is the stream's first proposal
+    run: list[tuple[int, dict]] = []
+    compared = 0
+
+    def run_finding() -> Finding | None:
+        where = f"rows[{run[0][0]}]"
+        if expected is None:
+            problem: str | None = "catch_up rows after the last trial"
+        elif at_first or expected.t_s != 0.0:
+            problem = "catch_up rows come only between two trials, right before a trial's first command"
+        else:
+            problem = catch_up_problem(space, caps, [c for _, c in run], expected.payload)
+        return None if problem is None else Finding("STREAM_CATCH_UP_INVALID", "error", _clip(problem), where)
+
+    for i, (seq, strategy, payload_json) in enumerate(rows):
+        where = f"rows[{i}]"
+        n = generator._seq_number(seq)
+        if n != i:
+            found = f"seq {n}" if n is not None else f"seq {seq!r}, which is not a whole number"
+            detail = f"row {i} has {found}; rows carry seq 0, 1, 2, ... in order"
+            return [Finding("STREAM_SEQ_GAP", "error", _clip(detail), where)], compared
+        if strategy == CATCH_UP:
+            payload = _catch_up_payload(payload_json)
+            if payload is None:
+                detail = f"catch_up row {i}: the payload is not a JSON object as encode_payload writes it"
+                return [Finding("STREAM_CATCH_UP_INVALID", "error", detail, where)], compared
+            run.append((i, payload))
+            continue
+        if run:
+            bad = run_finding()
+            if bad is not None:
+                return [bad], compared
+            run = []
+        if expected is None:
+            detail = f"the stream has {compared} commands; the rows go on past it, from seq {i}"
+            return [Finding("STREAM_TOO_LONG", "error", detail, where)], compared
+        want = encode_payload(expected.payload)
+        if strategy != expected.strategy or payload_json != want:
+            detail = f"seq {i}: the stream has {expected.strategy} {want}; the row has {strategy} {payload_json}"
+            return [Finding("STREAM_MISMATCH", "error", _clip(detail), where)], compared
+        compared += 1
+        expected, at_first = next(stream_iter, None), False
+    if run:
+        bad = run_finding()
+        if bad is not None:
+            return [bad], compared
+    if expected is not None:
+        detail = f"the rows are the first {compared} commands of the stream, which goes on (the run stopped early)"
+        return [Finding("STREAM_PREFIX", "info", detail)], compared
+    return [], compared
+
+
 def check(
     name: object,
     version: object,
@@ -279,6 +825,7 @@ def check(
     params: object,
     rows: Iterable[tuple],
     waypoints: Waypoints | None = None,
+    plan: StopPlan | ModelLossPlan | None = None,
 ) -> StreamCheck:
     """Regenerate the declared stream, digest it, and compare it with ``(seq, strategy,
     payload_json)`` rows. The rows may be a prefix of the stream (a run that stopped early: then
@@ -301,15 +848,15 @@ def check(
             None,
             None,
         )
-    bound = _expected_commands(name, p, waypoints)
+    bound = _expected_commands(name, p, waypoints, plan)
     if bound > MAX_STREAM_COMMANDS:
         detail = f"the declared stream would hold up to {bound:.0f} commands; core regenerates at most {MAX_STREAM_COMMANDS}"
         return StreamCheck(
             (Finding("STREAM_TOO_LARGE", "error", detail, "/generator/params"),), None, None, None
         )
     try:
-        digest = stream_digest(name, space, seed, p, waypoints)
-        regenerated = stream(name, space, seed, p, waypoints)
+        digest = stream_digest(name, space, seed, p, waypoints, plan)
+        regenerated = stream(name, space, seed, p, waypoints, plan)
     except (ValueError, KeyError) as e:
         text = e.args[0] if isinstance(e, KeyError) and e.args else str(e)
         return StreamCheck(
@@ -319,8 +866,11 @@ def check(
             None,
         )
     rows = list(rows)
-    found = generator.compare_rows(regenerated, rows)
+    if name in (STOPS, MODEL_LOSS):
+        found, compared = _compare_trial_rows(regenerated, rows, space, p["step_cap"])
+    else:
+        found, compared = generator.compare_rows(regenerated, rows), len(rows)
     if any(f.severity == "error" for f in found):
         return StreamCheck(tuple(found), digest, None, None)
     aborted = any(f.code == "STREAM_PREFIX" for f in found)
-    return StreamCheck(tuple(found), digest, len(rows), aborted)
+    return StreamCheck(tuple(found), digest, compared, aborted)

@@ -266,7 +266,9 @@ def score(inp: ScoringInput) -> dict:
         speed_limit_mps=v_max,
         speed_min_frac=profile["approach_speed_min_frac"],
         tolerance_speed_frac=profile["tolerance_speed_frac"],
-        sigma_m=sigma_used,
+        # the speed classification's allowance uses σ capped at max_sigma_jitter_m (round-4
+        # review): above the cap a run cannot PASS, and no stop from above the limit is judged
+        sigma_m=min(sigma_used, profile["max_sigma_jitter_m"]),
         rest_radius_m=rest_radius,
     )
     spacing = command_spacing(p.commands)

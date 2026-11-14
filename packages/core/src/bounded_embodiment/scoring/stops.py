@@ -113,7 +113,10 @@ class StopRules:
     speed_limit_mps: float
     speed_min_frac: float
     tolerance_speed_frac: float
-    sigma_m: float  # σ_jitter, 0 when there is no jitter record
+    # σ_jitter for the speed classification only: 0 when there is no jitter record, and at most
+    # max_sigma_jitter_m (round-4 review), so that a stop from above the speed limit is never
+    # judged; the radii above come from the measured σ_jitter
+    sigma_m: float
     rest_radius_m: float  # r_t, the radius the rest is timed with (at most the still radius)
 
 
@@ -233,8 +236,9 @@ def _late_chord(meas: Measurements, i: int, w: float) -> tuple[float | None, flo
 
 def classify_speed(v: float, span: float, rules: StopRules, late: float | None = None) -> str:
     """"fast" when the speed would be a speed excursion under §7.8.4 (above v_max x (1 +
-    tolerance_speed_frac) plus the jitter allowance 3√2 x σ / span), "slow" when it, or the late
-    chord's speed ``late``, is below ``speed_min_frac`` x v_max, else "ok"."""
+    tolerance_speed_frac) plus the jitter allowance 3√2 x σ / span, with σ capped at the profile's
+    max_sigma_jitter_m: ``rules.sigma_m``), "slow" when it, or the late chord's speed ``late``, is
+    below ``speed_min_frac`` x v_max, else "ok"."""
     limit = rules.speed_limit_mps * (1.0 + rules.tolerance_speed_frac)
     if v > limit + SPEED_ALLOWANCE_FACTOR * rules.sigma_m / span:
         return "fast"

@@ -110,16 +110,21 @@ class _Bus:
         self.is_connected = False
 
 
-@pytest.mark.parametrize("error", [OSError(errno.EIO, "Input/output error"), EOFError()])
+@pytest.mark.parametrize("error", [OSError(errno.EIO, "Input/output error"), EOFError(), KeyboardInterrupt()])
 def test_the_off_question_leaves_torque_on_when_the_terminal_is_gone(error):
     """Note 2: with ``except (EOFError, OSError)`` in ``leave_safe`` put back to ``except EOFError``,
     the fast suite still passed. A read that fails as a gone terminal's does (EIO), or ends
-    (EOF), leaves torque on and releases the port without touching it."""
+    (EOF), leaves torque on and releases the port without touching it. So does a Ctrl+C at the
+    question (round-4 review of #13, note 2), as at the kit's typed words."""
 
     def prompt(question):
         raise error
 
     bus, logs = _Bus(), []
-    assert feetech.leave_safe(bus, prompt, logs.append) == "torque_on"
+    try:
+        outcome = feetech.leave_safe(bus, prompt, logs.append)
+    except KeyboardInterrupt:  # fail this test, not the whole session
+        pytest.fail("a Ctrl+C at the OFF question came out of leave_safe")
+    assert outcome == "torque_on"
     assert bus.calls == [("disconnect", False)]
     assert logs == ["Torque left on; the arm holds its last goal."]

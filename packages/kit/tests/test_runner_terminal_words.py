@@ -4,7 +4,7 @@
 word comes from a terminal only, input typed before the question never answers it, and Ctrl+C at
 the question cancels at once. And (round-2 review of #13, item 4) the escalation command is
 checked before anything connects. And (round-3 review of #13, note 1) a hangup at the OFF
-question no longer loses the end record.
+question no longer loses the end record, nor (round-4 review, note 2) a Ctrl+C there.
 
 The cases drive sim-so101 declared as hardware (``describe()["simulation"]`` False) on a
 pseudo-terminal: goto-start, and a 1 s EV-03 full run with no instrument (the robot's own state
@@ -279,6 +279,30 @@ def test_a_hangup_at_the_off_question_keeps_the_end_record(as_hardware, run_term
     assert code in (runmod.EXIT_OK, runmod.EXIT_STOPPED), logs
     assert got == []  # ignored, not handled
     assert signal.getsignal(sig) is count  # and the handler before the teardown is back
+    assert "Torque left on; the arm holds its last goal." in logs
+    end = json.loads((tmp_path / "run" / "declared.json").read_text(encoding="utf-8"))["end"]
+    assert end is not None and end["adapter_close"] == "closed"
+    assert any(m.startswith("Run ended") for m in logs), logs
+
+
+def test_ctrl_c_at_the_off_question_keeps_the_end_record(as_hardware, run_terminal, tmp_path):
+    """Round-4 review of #13, note 2: a Ctrl+C at the OFF question came out of ``leave_safe`` and
+    the teardown, the process exited 130, and declared.json's end stayed null. It leaves torque on
+    now, as Enter does, and the run ends as usual."""
+    type_, screen = run_terminal
+    _when_asked(screen, lambda: type_("RUN\n"))
+
+    def prompt(question: str) -> str:
+        if "OFF" in question:
+            raise KeyboardInterrupt  # what input() raises when Ctrl+C comes while it waits
+        return ""
+
+    logs = []
+    try:
+        code = runmod.execute_run(_run_args(tmp_path), prompt=prompt, log=logs.append)
+    except KeyboardInterrupt:
+        pytest.fail("a Ctrl+C at the OFF question ended the run before its end record")
+    assert code in (runmod.EXIT_OK, runmod.EXIT_STOPPED), logs
     assert "Torque left on; the arm holds its last goal." in logs
     end = json.loads((tmp_path / "run" / "declared.json").read_text(encoding="utf-8"))["end"]
     assert end is not None and end["adapter_close"] == "closed"

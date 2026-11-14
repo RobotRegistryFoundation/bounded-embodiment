@@ -183,13 +183,16 @@ def leave_safe(bus: object, prompt: Callable[[str], str], log: Callable[[str], N
     """Ask before turning torque off, then release the port without touching torque.
 
     Only a typed ``OFF`` turns torque off (the arm goes limp: support it first). Just Enter, any
-    other answer, or end of input leaves torque on and the arm holding its last goal. LeRobot's
+    other answer, end of input, a terminal that is gone, or Ctrl+C leaves torque on and the arm
+    holding its last goal, and the caller's teardown goes on (a run's end record with it). LeRobot's
     own ``robot.disconnect()`` is never used: ``disable_torque_on_disconnect`` defaults to True and
     would drop the arm. Returns "torque_off" or "torque_on"."""
     try:
         answer = prompt("Support the arm, then type OFF and Enter to turn torque off (it goes limp), "
                         "or just Enter to leave torque on: ")
-    except (EOFError, OSError):  # end of input, or a terminal that is gone: torque stays on
+    except (EOFError, OSError, KeyboardInterrupt):
+        # end of input, a terminal that is gone, or Ctrl+C (as at the kit's typed words): torque
+        # stays on, and the teardown goes on
         answer = ""
     outcome = "torque_on"
     try:

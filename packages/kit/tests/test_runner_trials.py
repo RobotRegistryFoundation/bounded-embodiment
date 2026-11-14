@@ -958,3 +958,20 @@ def test_the_simulated_rover_reports_its_pose_at_the_capture_instant_when_its_ph
     finally:
         a._physics_quit = real_quit
         a.close()
+
+
+def test_the_end_of_the_run_says_when_an_external_stop_may_still_be_in_force():
+    """Round-3 kit review, note 3: when the last trial cuts power, nothing resets it, and the end of
+    the run did not say so (the documented command line ended with be-estop still present). An
+    external stop that was issued and not reset since is now named at the end of the run."""
+    from types import SimpleNamespace
+
+    segs = (TrialSegment((), "trial 5 (power_loss)", "stop", "power_loss", 0.8, 0.5, True),
+            TrialSegment((), "trial 6 (power_loss)", "stop", "power_loss", 0.8, 0.5, True))
+    thread = _bare_thread(segments=segs)
+    thread.trials[0].update(issued="issued", reset="done", command="exited")
+    thread.trials[1].update(issued="issued", reset=None, command="exited")
+    warnings = runmod._source_command_warnings(SimpleNamespace(command=thread))
+    assert len(warnings) == 1 and warnings[0].startswith("*** trial 6 (power_loss): its power_loss was issued")
+    thread.trials[1]["issued"] = "external_timeout"  # not issued: nothing to reset
+    assert runmod._source_command_warnings(SimpleNamespace(command=thread)) == []

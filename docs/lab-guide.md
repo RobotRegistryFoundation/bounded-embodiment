@@ -65,12 +65,15 @@ have passed it. None of them is a false PASS, but plan for them:
   times, and the velocity-space speed trip sits only 9 % over the speed limit. A bridge that stamps
   a sample when it sends it, on a busy computer, reads a steady motion as bursts and can stop a
   run for a speed the machine never reached; keep the stamp's jitter to a millisecond or two.
-- **The trial's commands must not pause.** A pause after a stop longer than one command spacing
-  plus 20 ms (40 ms at 50 Hz) leaves the trial unmeasured (method §12.7.4 item 3). In real-time
-  simulation on a busy two-core computer, the kit's command thread paused for 49 to 80 ms in one
-  or two of six trials, and those runs were INCONCLUSIVE. Run the kit where nothing else competes
-  for the processor (the markerless tracker too, if it runs on the same computer), and look for
-  such notes in a rehearsal's report.
+- **The trial's commands must not pause, and the supervision must not starve.** A pause after a
+  stop longer than one command spacing plus 20 ms (40 ms at 50 Hz) leaves the trial unmeasured
+  (method §12.7.4 item 3). In real-time simulation on a busy two-core computer, the kit's command
+  thread paused for 49 to 80 ms in one or two of six trials, and those runs were INCONCLUSIVE. The
+  same load can stop a run outright: without FK (every rover) tripwire 1 stops it when the tool
+  goes unseen for 0.2 s, and a watchdog held up past the 0.25 s acknowledgement window escalates
+  a stop that worked. All of these stop or void a run; none passes one. Run the kit where nothing
+  else competes for the processor (the markerless tracker too, if it runs on the same computer),
+  and look for such notes in a rehearsal's report.
 
 The examples use an SO-101 arm, a Luxonis OAK-D on a tripod and the kit's markerless tracker, as on
 the reference bench. Another arm needs its own adapter, URDF and envelope; another instrument needs to

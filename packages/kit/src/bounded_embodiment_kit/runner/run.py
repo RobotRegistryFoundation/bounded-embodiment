@@ -1010,7 +1010,8 @@ def execute_run(args, *, prompt: Callable[[str], str] = _ask, log: Callable[[str
 def _source_command_warnings(live: _Live | None) -> list[str]:
     """Round-2 K1: a source command the kit had to end may have acted before it was (cut power,
     opened the stop circuit); the end of the run says so, trial by trial. So does a process a
-    command left running in its group after it exited, which the kit ended too (round-3 K8)."""
+    command left running in its group after it exited, which the kit ended too (round-3 K8), and an
+    external stop that was issued and not reset since, which may still be in force."""
     c = live.command if live is not None else None
     if not isinstance(c, TrialCommandThread):
         return []
@@ -1029,6 +1030,11 @@ def _source_command_warnings(live: _Live | None) -> list[str]:
             out.append(f"*** {t['label']}: the {t['source']} command left a process running in its group after "
                        f"it exited, and {what}. It may have acted: check the machine before you touch it. A "
                        "source command must latch and leave nothing running.")
+        if t["source"] in EXTERNAL_SOURCES and t.get("issued") == "issued" and t.get("reset") != "done":
+            # round-3 kit review, note 3: the last trial's cut (or one the run ended after) is never
+            # reset by the kit, and it may still be in force
+            out.append(f"*** {t['label']}: its {t['source']} was issued and not reset since: it may still be "
+                       "in force. Reset it by hand, the machine not moving, before the next run.")
     return out
 
 

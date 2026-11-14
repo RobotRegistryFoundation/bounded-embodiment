@@ -14,8 +14,8 @@ point's measurements after that instant (method §12.6, §13.6):
   ``still_window_s`` stays within the still radius r of (and the instrument kept measuring to the
   end of that window); the settled position: the mean of the measurements from there to the end
   of that window, and its time the last of them;
-- the held position: the mean of the measurements from the settled position's time to the end of
-  the hold, many of them at rest;
+- the held position: the mean of the measurements over the next ``still_window_s`` from the
+  settled position's time (within the hold), all of them at rest;
 - the rest: the first measurement from the still one to the settled one that lies within the rest
   radius r_t (smaller than r, noise-scaled) of the held position, or the still measurement when
   none does;
@@ -32,11 +32,13 @@ travel comes after it: the stop time is early by the time the point takes to cov
 uniform deceleration a, at most sqrt(2 r_t / a): 45 ms at 1 m/s^2 and 89 ms at 0.25 m/s^2 with
 r_t = 1 mm; 55 ms and 110 ms with r_t = 1.5 mm, the most that ``max_sigma_jitter_m`` = 0.5 mm
 allows), and late by about one spacing of the measurements (more only when noise carries the
-first measurement at rest out of r_t). The held position is a mean over the whole hold, not over
-the still window: at low rates the still window holds three or four measurements, one of them
-still moving, and their mean can sit farther than r_t from the point at rest (round-2 review,
-M2). The stop distance and the hold are measured from and to the settled position, so they are
-not shortened by it. The settled position is a mean so that the hold compares each measurement
+first measurement at rest out of r_t). The held position is a mean over the still window after
+the settled one, not over the still window itself: at low rates the still window holds three or
+four measurements, one of them still moving, and their mean can sit farther than r_t from the
+point at rest (round-2 review, M2). Nor is it a mean over the whole hold: a point that creeps
+inside the hold radius drags that mean away from where it came to rest, and the rest then fell
+back to the still measurement, early, or came late (round-3 review, finding 8). The stop distance
+and the hold are measured from and to the settled position, so they are not shortened by it. The settled position is a mean so that the hold compares each measurement
 with a steadier reference than one noisy measurement.
 
 Everything here is a pure function of the measurements; arithmetic is ``+ - * /``, ``math.sqrt``
@@ -358,10 +360,13 @@ def measure_stop(
         if hold_to is not None and hold_to > out.hold_until_s:
             out.hold_until_s = hold_to
         out.hold_displacement_m = _farthest(data, out.settled, i_settled, out.hold_until_s)
-        # The rest is timed against where the point held still: the mean of the measurements
-        # from the settled position's time to the end of the hold, many of them at rest. The still
-        # window's mean can sit up to r short of that at low rates (round-2 M2).
-        i_held = bisect.bisect_right(data.times, out.hold_until_s) - 1
+        # The rest is timed against where the point held still just after it settled: the mean
+        # of the measurements over one still window from the settled position's time, inside the
+        # hold. The still window's own mean can sit up to r short of that at low rates (round-2
+        # M2); a mean over the whole hold moved with any creep inside the hold radius, and the rest
+        # then fell back to the still measurement, early, or came late (round-3 finding 8).
+        held_to = min(out.hold_until_s, out.settled_t_s + rules.still_window_s)
+        i_held = bisect.bisect_right(data.times, held_to) - 1
         held = _mean(data, i_settled, max(i_settled, i_held))
         i_rest = i_still
         for m in range(i_still, i_settled + 1):

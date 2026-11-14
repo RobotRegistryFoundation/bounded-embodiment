@@ -179,3 +179,35 @@ def test_a_velocity_space_that_carries_a_position_or_percent_axis_is_refused(axi
 def test_a_velocity_space_of_velocities_is_accepted():
     space = _rover_space()
     assert check_plan_commands(_slide_stop_plan(space), space, "ev02-stop-plan.json") == []
+
+
+# ----- finding 8: the rest is timed against where the point held just after it settled ----------------
+def test_a_slow_stop_that_creeps_while_held_does_not_read_quick():
+    """Finding 8, as reported: the helper's three stop_message trials brake over 0.34 s after 20 ms
+    at speed, so each truly takes 0.365 s with U, against 0.30 s. At rest they FAILed (0.338 s); creeping
+    1 mm/s while held, inside the hold radius, they PASSed at 0.272 s: the mean over the whole hold
+    moved with the creep, no measurement lay within r_t of it, and the rest fell back to the still
+    measurement. The held position is now the mean over the still window after the settled one."""
+    slow = dict.fromkeys(range(3), 0.34)
+    for creep in (None, dict.fromkeys(range(3), 0.001)):
+        out = ev02.score(T.ev02_input(slow=slow, creep=creep, rate_hz=30.0, noise_m=0.0003))
+        assert out["verdict"]["result"] == "FAIL"
+        assert {r["code"] for r in out["verdict"]["reasons"]} == {"STOP_TIME_EXCEEDED"}
+        assert all(t["stop_time_s"] > 0.3 for t in out["stops"]["trials"][:3])
+
+
+@pytest.mark.parametrize(("kind", "brake_s", "creep_mps", "rate_hz"), [
+    ("slow", 0.34, 0.001, 50.0), ("slow", 0.34, 0.0012, 30.0), ("slow", 0.36, 0.0012, 100.0),
+    ("quick", 0.15, 0.0008, 20.0), ("quick", 0.2, 0.0008, 30.0), ("quick", 0.2, 0.001, 100.0)])
+def test_creep_inside_the_hold_radius_moves_neither_way(kind, brake_s, creep_mps, rate_hz):
+    """Finding 8: the same cause erred both ways. Each case here was misjudged before: a slow stop
+    (truly 0.365 or 0.385 s) that creeps read quick and PASSed, and a quick one (truly 0.175 or
+    0.225 s) that creeps read as late as 0.455 s and FAILed. Now the slow ones FAIL on time and the
+    quick ones do not."""
+    out = ev02.score(T.ev02_input(slow=dict.fromkeys(range(3), brake_s), creep=dict.fromkeys(range(3), creep_mps),
+                                  rate_hz=rate_hz, noise_m=0.0003))
+    codes = {r["code"] for r in out["verdict"]["reasons"]}
+    if kind == "slow":
+        assert out["verdict"]["result"] == "FAIL" and "STOP_TIME_EXCEEDED" in codes
+    else:
+        assert "STOP_TIME_EXCEEDED" not in codes

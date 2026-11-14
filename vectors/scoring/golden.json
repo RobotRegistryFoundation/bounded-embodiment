@@ -89,7 +89,7 @@
       "scorer": "ev02-stop/1",
       "result": "PASS",
       "reasons": [],
-      "sha256": "sha256:7d5050e57d04c5dfd6c700544675b8493a0364e2d1f9065eeba765bf7abd6380"
+      "sha256": "sha256:d4c61a9d382e6c9fcb5b9c8362cc75214ed4b41ba07e20bdd642b6dfe78eae25"
     },
     {
       "name": "ev02-fail-late-far-creep",
@@ -100,7 +100,7 @@
         "STOP_NOT_HELD",
         "STOP_TIME_EXCEEDED"
       ],
-      "sha256": "sha256:5eec278c872f3427b77b76d5d10b798d8bb65c9bd6579655995f81ef518a0d9a"
+      "sha256": "sha256:40b1c0ec9e8e79c28a60b60b6ad97c1cfbfb384b5d4500db22a0e9f177dc71d6"
     },
     {
       "name": "ev02-inconclusive-simulation",
@@ -139,7 +139,7 @@
         "LOSS_RESUMED_EARLY",
         "LOSS_STOP_TIME_EXCEEDED"
       ],
-      "sha256": "sha256:a8f8ac4c4e2acd86cd660ec8cdf98dd3f314ecf0577f314b66060aa2a390dd09"
+      "sha256": "sha256:0331e8155729604c77c2aa36521c90a51007d0014b43ff63b65c055009cef020"
     },
     {
       "name": "ev05-inconclusive-commands-rule",
@@ -148,7 +148,7 @@
       "reasons": [
         "LOSS_TRIALS_TOO_FEW"
       ],
-      "sha256": "sha256:3bf4c9b2cd788546736a51ce3025206517f93bb31651be2219ab9cb55342c011"
+      "sha256": "sha256:ff8e119ce311dfabfb5a0009e8ed1a8d4691f8c9a675a41b6aed72dec818aa52"
     }
   ]
 }

@@ -337,9 +337,9 @@
         "approach_late_span_s": 0.0799999999999983,
         "approach": "ok",
         "still_t_s": 20.54,
-        "rest_t_s": 20.58,
+        "rest_t_s": 20.62,
         "settled_t_s": 20.82,
-        "stop_time_s": 0.384999999999999,
+        "stop_time_s": 0.4250000000000017,
         "stop_distance_m": 0.05970170918172558,
         "hold_until_s": 24.195,
         "hold_displacement_m": 0.0012703512182462478,
@@ -553,7 +553,7 @@
     {
       "alg": "Ed25519",
       "kid": "JJdiTUjDxOdGPEUxDG7iofB6pXrYDw9x3jGC_j6-djc",
-      "sig": "FvO9GSPAcWwPw9SgcfT_JbHdnqaLoUbdGHVY065ELsiESgwE6GG7uY86aip2osg-KCSJ0pvvrq0GH1hMYLBhCw"
+      "sig": "y8APLvC6FZLT4isQRWm9pmp92oxBFDA5EMGQnI6z5nCShYR2k5HeetScOLzj5I_m5ulEhkqOaZKIUELgfxrdDQ"
     }
   ]
 }

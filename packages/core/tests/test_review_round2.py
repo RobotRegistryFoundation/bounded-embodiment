@@ -83,10 +83,10 @@ def test_a_spare_trial_cannot_hide_a_stop_row_recorded_late(tmp_path, shift_s):
     """Finding 3: with one spare hardwired trial, ev02-fail's late, far stop recorded 0.1 s late
     read 0.245 s and 41 mm from the moved instant, its trial was only "inadequate", the spare
     trial made up the count, and the run PASSed (consistent). A late stop row now leaves its trial
-    unmeasured, so the run is INCONCLUSIVE, never PASS. With the 0.3 mm jitter record the EV-02
-    vectors carry since M2, the stop recorded 0.1 s late still reads too slow (0.285 s against
-    0.25 s), and a failure an unmeasured trial shows counts, so that shift FAILs; 0.15 s is now
-    the shift at which the moved stop reads inside the limits (0.235 s), as 0.1 s did."""
+    unmeasured, so the run is INCONCLUSIVE, never PASS. Since round-3 finding 8 the stop reads
+    0.425 s unmoved, so recorded 0.1 or 0.15 s late it still reads too slow (0.325 s and 0.275 s
+    against 0.25 s), and a failure an unmeasured trial shows counts, so those shifts FAIL; 0.25 s
+    is the shift at which the moved stop reads inside the limits (0.175 s)."""
     G = golden()
     trials = G.EV02_TRIALS + [("hardwired_stop", "x_plus")]
     run = tmp_path / "run"
@@ -103,7 +103,7 @@ def test_a_spare_trial_cannot_hide_a_stop_row_recorded_late(tmp_path, shift_s):
     codes = [r["code"] for r in res.verdict["reasons"]]
     if shift_s is None:
         assert res.verdict["result"] == "FAIL" and codes == ["STOP_DISTANCE_EXCEEDED", "STOP_TIME_EXCEEDED"]
-    elif shift_s == 0.1:
+    elif shift_s in (0.1, 0.15):
         assert res.verdict["result"] == "FAIL" and codes == ["STOP_TIME_EXCEEDED"]
     else:
         assert res.verdict["result"] == "INCONCLUSIVE" and "STOP_TRIAL_UNMEASURED" in codes

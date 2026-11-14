@@ -230,7 +230,8 @@ UNMEASURED_LATE = ("INCONCLUSIVE", ["STOP_DRIVES_TOO_FEW", "STOP_TRIALS_TOO_FEW"
 
 
 @pytest.mark.parametrize(("shift_s", "derived"), [(0.1, ("FAIL", ["STOP_TIME_EXCEEDED"])),
-                                                  (0.15, UNMEASURED_LATE), (0.25, UNMEASURED_LATE)])
+                                                  (0.15, ("FAIL", ["STOP_TIME_EXCEEDED"])),
+                                                  (0.25, UNMEASURED_LATE)])
 def test_a_stop_recorded_late_is_caught_whatever_the_shift(tmp_path: Path, shift_s: float,
                                                             derived: tuple) -> None:
     """Review finding 5: moving ev02-fail's late stop row by +0.10 s or +0.15 s (rather than the
@@ -238,9 +239,9 @@ def test_a_stop_recorded_late_is_caught_whatever_the_shift(tmp_path: Path, shift
     A stop row more than a command spacing and 20 ms after its last drive row now leaves the trial
     unmeasured (round-2 M3), so the re-signed PASS is caught at every shift: core derives
     INCONCLUSIVE however many trials the run has (test_review_round2), or FAIL when the stop,
-    timed from the moved row, is still too slow (+0.10 s: 0.285 s against 0.25 s with the
-    0.3 mm jitter record the EV-02 vectors carry since round-2 M2; a failure an unmeasured trial
-    shows still counts)."""
+    timed from the moved row, is still too slow. Since round-3 finding 8 times the rest against
+    the still window after the settled position, the stop reads 0.425 s unmoved, so +0.10 s gives
+    0.325 s and +0.15 s 0.275 s against 0.25 s; a failure an unmeasured trial shows still counts."""
     g = golden()
     run = copy_run("ev02-fail", tmp_path)
     report = read_report(run)

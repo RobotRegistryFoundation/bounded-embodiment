@@ -5,6 +5,7 @@ moves, and the adapters' stop sources (trigger_stop, reset_stop, the simulated e
 The simulated runs themselves are in test_runner_trials_sim.py."""
 from __future__ import annotations
 
+import itertools
 import json
 import sys
 import threading
@@ -27,7 +28,11 @@ from bounded_embodiment_kit.adapters.sim_rover import SimRoverAdapter
 from bounded_embodiment_kit.runner import run as runmod
 from bounded_embodiment_kit.runner.kin import ArmFK
 from bounded_embodiment_kit.runner.limits import DEFAULT
-from bounded_embodiment_kit.runner.trials import TrialSegment, _between_trials, group_alive
+from bounded_embodiment_kit.runner.trials import (
+    TrialSegment,
+    _between_trials,
+    group_alive,
+)
 from bounded_embodiment_kit.runner.watchdog import StopLatch, TrialWatch, trial_trip
 
 # ----- the trial tripwire (a pure function) ----------------------------------------------------------
@@ -953,7 +958,7 @@ def test_the_simulated_rover_reports_its_pose_at_the_capture_instant_when_its_ph
         while time.perf_counter() < t_end:
             rows.append((time.perf_counter(), truth()["base"][0]))
             time.sleep(0.005)
-        speeds = [(x1 - x0) / (t1 - t0) for (t0, x0), (t1, x1) in zip(rows, rows[1:]) if t1 - t0 > 0.002]
+        speeds = [(x1 - x0) / (t1 - t0) for (t0, x0), (t1, x1) in itertools.pairwise(rows) if t1 - t0 > 0.002]
         assert Stall.done and max(speeds) < 0.55, max(speeds)
     finally:
         a._physics_quit = real_quit

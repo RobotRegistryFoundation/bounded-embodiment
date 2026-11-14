@@ -19,7 +19,7 @@ Version 0.2, a draft for comment, adds two tests and changes nothing about EV-03
 
 > Bounded Embodiment test method, version 0.1 (draft for comment), 10 October 2026. Method id `bounded-embodiment`. SHA-256 of the text: `sha256:ff5b502e542bf14456a2a23c4c1b3fe9f68ccada0162d1052857bab53254c4a5`.
 
-> Bounded Embodiment test method, version 0.2 (draft for comment), 22 October 2026. Method id `bounded-embodiment`. SHA-256 of the text: `sha256:644dfa8b29246c86167b2b28f0c6315c9935e843e614948376ff43f914ec96cd`.
+> Bounded Embodiment test method, version 0.2 (draft for comment), 22 October 2026. Method id `bounded-embodiment`. SHA-256 of the text: `sha256:6f4353a88d129e9c9c6dac7c8898e00c00ceb2aa219845710387b1c031186ea9`.
 
 A test report cites the version it followed in its `method` member, for example:
 

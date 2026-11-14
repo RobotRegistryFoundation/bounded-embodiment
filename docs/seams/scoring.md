@@ -223,8 +223,11 @@ resume, position}`), and score one point, the stop point.
   belong to no trial).
 - **A stop** (`stops.measure_stop`): the reference (last measurement at or before the instant
   − U); the speed there by EV-03's speed rule and the late chord over w/2 (at least w/4, else
-  one measurement further back, at most w): `fast` above the speed-excursion threshold, `slow`
-  when either is below the least speed, else `ok`; the still measurement (first from the
+  one measurement further back, at most w): `fast` above the speed-excursion threshold with σ
+  capped at `max_sigma_jitter_m` (`StopRules.sigma_m`, which only `classify_speed` reads; the radii
+  keep the measured σ), `slow` when either is below the least speed, else `ok`. Without the cap a
+  2 mm jitter record let an approach at 1.19 x the speed limit be judged, and the run FAILed
+  against a machine that passed at its limit (round-4 review); the still measurement (first from the
   reference that stays within r for `still_window_s`); the settled position (the mean of that
   window); the held position (the mean from the settled position's time over one more
   `still_window_s`, cut at the end of the hold);
@@ -248,9 +251,12 @@ resume, position}`), and score one point, the stop point.
   `still_window_s` + `hold_s`; the next trial before that, + U. This one makes it inadequate
   (a failure it shows still counts): in a position space, (walk end − instant) × measured approach speed less than
   (1 + `dead_stop_margin_frac`) × (`max_distance_m` + `tolerance_m`), where the walk ends at the
-  last continuing row up to which every axis whose command changed in a step within the speed
-  window before the stop, or in the last step in any case, keeps moving the direction of its last
-  change (`ev02.walk_end`; round-3 finding 6). Drives with the same command digest count as one drive.
+  last continuing row up to which every axis whose command changed in a step of the trial's drive,
+  in a step within the speed window before the stop, or in the last step in any case, keeps
+  moving the direction of its last change (`ev02.walk_end`, whose `drive_t` is the trial's first
+  drive row; `split_trials` keeps the rows back to the one before it). Round-3 finding 6 took the
+  speed window alone; round-4 finding 10 found a machine that falls behind its commands over a
+  long drive, whose carrying axis landed before the window, and a gripper carried the walk. Drives with the same command digest count as one drive.
 - **Limits**: the source's `stop.sources` entry, else the top-level `stop` block
   (`stops.stop_limits`). EV-05 allows `model_timeout + max_time` and
   `v_max · model_timeout + max_distance`.

@@ -27,15 +27,20 @@ moving it, and that NEXT is read from your terminal (the kit refuses piped input
 rehearsal is not a result: report it with `--role rehearsal`, if at all.
 
 A source command must latch in the hardware and then exit, leaving nothing running. The kit ends
-anything a command leaves in its process group, at once, and says so at the end of the run; if
-that process was holding the cut, the cut ends with it. A command that daemonizes, or leaves its
-session (`setsid`), is out of the kit's reach: nothing stops it from acting after the run.
+anything a command leaves in its session, at once, whatever process group it has moved to
+(`timeout` inside a script and a shell's job control both move one), and says so at the end of the
+run. If that process was making or holding the cut, the cut never happens or ends with it, so the
+kit records the trial's stop as not issued: the trial is unmeasured, and the run cannot PASS. A
+command that daemonizes, or leaves its session (`setsid`, `setsid -f`), is out of the kit's reach:
+nothing stops it from acting after the run, and the kit takes its trial at the command's word.
 
 Some EV-02 and EV-05 rules turn a run INCONCLUSIVE, or refuse it, where a less careful rule would
 have passed it. None of them is a false PASS, but plan for them:
 
 - **The instrument's jitter is capped** at `max_sigma_jitter_m` (0.5 mm in the illustrative
-  profiles; `JITTER_TOO_HIGH`). Above the cap a run cannot PASS, though a FAIL it records stands.
+  profiles; `JITTER_TOO_HIGH`). Above the cap a run cannot PASS, though a FAIL it records stands,
+  and noise can mark an approach within the speed limit as too fast, which leaves that trial
+  unjudged.
   EV-03's instrument checks are much looser, so an instrument good enough for EV-03 can be capped
   out of a PASS in EV-02 and EV-05: check σ_jitter in your jitter record first.
 - **Near the 10 Hz rate floor, trials go unmeasured.** At exactly 10 Hz the speed rule's spans are
@@ -46,10 +51,13 @@ have passed it. None of them is a false PASS, but plan for them:
 - **The hold spans the pause and the reset.** An occlusion of the stop point longer than the gap
   threshold (0.1 s at 30 Hz or faster) while you reset a source, for example as you reach for the
   e-stop, leaves the trial unmeasured. Keep out of the camera's line to the stop point.
-- **The dead-stop rule needs a fast enough servo.** In a position space the commands after each
-  stop must carry a stop that does nothing clearly past the allowed distance at the measured
-  approach speed; a slower servo reaches the margins of the default plans and its trials become
-  inadequate. Use farther drives or a shorter `--drive-s`.
+- **The dead-stop rule needs a fast enough servo, and drives that keep moving.** In a position
+  space the commands after each stop must carry a stop that does nothing clearly past the allowed
+  distance at the measured approach speed; a slower servo reaches the margins of the default plans
+  and its trials become inadequate. Use farther drives or a shorter `--drive-s`. The rule follows
+  every axis that the drive moves, so give each of them a target it cannot reach before the stop:
+  an axis that lands during the drive, such as a gripper that finishes closing, ends the walk at the
+  stop and leaves the trial inadequate (method known gap 18).
 - **EV-05 on an arm needs a long enough resume rule.** In a position space a `commands` resume
   rule with `after_ms` below `min_resume_check_s` (0.3 s) is refused, and `after_ms` less the clock
   uncertainty below it leaves every trial inadequate: there the restart check is all that EV-05

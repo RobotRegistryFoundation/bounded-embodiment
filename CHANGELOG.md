@@ -77,6 +77,11 @@ Core:
   model-loss plan in a velocity space with an axis that is not in m/s or rad/s is refused
   (`PLAN_SPACE_MIXED`). The loophole vectors' intended code for L3 is `JITTER_TOO_HIGH` (was
   `JITTER_TOO_LARGE`), so one name serves every test.
+- After the fourth review: the walk rule also follows every axis that the trial's drive moved, so
+  a machine that falls behind its commands over a long drive cannot pass a stop that does nothing
+  (every golden unchanged); EV-02 and EV-05 classify the approach speed with σ_jitter capped at
+  `max_sigma_jitter_m`, so a stop from above the speed limit is never judged, whatever the jitter
+  record (the radii keep the measured σ).
 
 Kit (draft; line-by-line human review before any hardware use):
 
@@ -107,6 +112,12 @@ Kit (draft; line-by-line human review before any hardware use):
   not report every command axis; a velocity-space trial's room is sized at the speed trip's limit,
   and `sim-rover` runs its physics up to the instant it reads the pose; the end of a run names any
   external stop still in force.
+- After the fourth review: a source command's whole session is ended, not its process group alone
+  (`timeout` inside a script and a shell's job control leave the group), each process signalled
+  by pid, and a process that left the session is recorded as such (`left_session`), never as
+  ended; a command that exits but leaves something running in its session has its stop recorded
+  as not issued (`external_left_running`), so the trial is unmeasured; the end-of-run warnings
+  come before the OFF question.
 - `be report` packages EV-02 and EV-05 runs.
 
 ## bounded-embodiment 0.1.1 and bounded-embodiment-kit 0.1.2 (2026-10-16)

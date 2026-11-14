@@ -160,17 +160,26 @@ differs:
   a session of its own so a Ctrl+C at the bench does not reach it, never waited for on this
   thread). A helper thread waits up to `estop_timeout_s` for the command; a non-zero exit, a
   timeout or a failure to start trips the latch, and the row records why. Ending a command means
-  its whole process group (`end_group`, round-3 K8): SIGTERM, a wait until no member is left
-  (read from /proc, zombies aside, since an init that does not reap orphans leaves them for
-  good), then SIGKILL after a 0.5 s grace; the waits run in real time, whatever clock the run
-  keeps. When a command exits, anything it left in its group is ended at once and recorded as the
-  trial's `left_running` (`SIGTERM`, `SIGKILL` or `survived`), with a line in the log and at the
-  end of the run; that alone does not stop the run. Every group is checked again when the run
-  ends, except one whose helper is still ending it. A command that daemonizes or calls `setsid`
-  leaves the group and is out of reach (the lab guide says so). Any other source fails
-  closed (`no_way_to_issue`). The row's `result`: `applied/triggered`, `applied/issued`, or
-  `not_applied` with `trigger_raised:<Type>`, `external_failed:<Type>`,
-  `external_returncode:<n>`, `external_timeout`, `external_unfinished` or `no_way_to_issue`. Rows
+  its whole session (`end_session`, round-4 K11): every process whose session id is the
+  command's pid, read from /proc (zombies aside, since an init that does not reap orphans leaves
+  them for good), each signalled with `os.kill`: SIGTERM, a wait until none is left, then SIGKILL
+  after a 0.5 s grace, a process forked meanwhile signalled too; the waits run in real time,
+  whatever clock the run keeps. Round 3 ended the process group (`killpg`), which `timeout`
+  inside a script and a shell's job control (`set -m`) leave without leaving the session; without
+  /proc the kit still ends the leader's process group. When a command exits, anything it left in
+  its session is ended at once and recorded as the trial's `left_running` (`SIGTERM`, `SIGKILL`,
+  `survived` or `left_session`), and the stop row records the stop as not issued
+  (`external_left_running`, round-4 kit note 1): what the kit ended may have been the cut, so
+  the trial is unmeasured. A line in the log and at the end of the run says so; that alone does
+  not stop the run, unless a process survived SIGKILL or left the session. `outside_group`
+  counts the processes found that had left the command's process group but not its session.
+  Every session is checked again when the run ends, except one whose helper is still ending it.
+  A process that leaves the session (`setsid`, `setsid -f`, a daemon) is out of reach (the lab
+  guide says so); one the kit saw before it left, still running, is recorded as `left_session`
+  and trips the latch, never as ended. Any other source fails closed (`no_way_to_issue`). The
+  row's `result`: `applied/triggered`, `applied/issued`, or `not_applied` with
+  `trigger_raised:<Type>`, `external_failed:<Type>`, `external_returncode:<n>`,
+  `external_timeout`, `external_unfinished`, `external_left_running` or `no_way_to_issue`. Rows
   sent while a command's outcome is unknown are written after the stop row, in order, and NEXT is
   not asked, nor anything reset, until the command has finished (a command still running might
   cut power later).
@@ -225,12 +234,15 @@ differs:
 - After the last trial's pause the latch trips with `finished`, as at the end of any stream; the
   end-of-run stop and its acknowledgement follow as for EV-03. The end of the run names every
   external stop (`hardwired_stop`, `power_loss`) that was issued and not reset since, and asks the
-  operator to reset it by hand before the next run (round-3 kit note 3).
+  operator to reset it by hand before the next run (round-3 kit note 3). These lines, and those
+  about source commands the kit had to end, come before the teardown (`_close_live`), whose OFF
+  question has the operator touch the arm (round-4 kit note 2).
 - declared.json's `end.trials` records, per trial, its label, source, instant, how the stop was
   issued (`triggered`, `issued`, `silence`, or the error), the reset (`done`, `not needed`, or
-  `failed: ...`), the start check's words, and `left_running` (what the kit had to end in the
-  source command's group after it exited, or null); `end.first_stop_t_s` is when the runner's own stop
-  was first executed.
+  `failed: ...`), the start check's words, `left_running` (what the kit had to end in the
+  source command's session after it exited, or null) and `outside_group` (how many of the
+  processes it found had left the command's process group, or null); `end.first_stop_t_s` is when
+  the runner's own stop was first executed.
 
 ## Tripwires
 
@@ -411,7 +423,7 @@ EV-02 and EV-05 trial runs (added 22 Oct, draft; `packages/kit/tests/_trials_sim
 `test_runner_trials_sim.py`, on the virtual clock, through the test-only wrappers in
 `_trial_gates.py`):
 
-6. **The eleven simulated cases behave as designed** (`_trials_sim.py`; every simulation is
+6. **The seventeen simulated cases behave as designed** (`_trials_sim.py`; every simulation is
    INCONCLUSIVE at step 1, so the verdict steps 2 and 3 give is what is checked). A stop that
    works, or a 0.3 s heartbeat with a manual resume, runs every trial to the end and scores
    PASS-shaped. A wrapper that accepts the stop and ignores it: the rover runs on, tripwire 3 trips
@@ -426,7 +438,11 @@ EV-02 and EV-05 trial runs (added 22 Oct, draft; `packages/kit/tests/_trials_sim
    on (nothing was cut) and tripwire 3 trips at 1.30 s; on the arm the command's 5 s timeout trips
    the latch; either way the runner's stop follows within one state period and the stop row says
    the stop was not issued (`external_unfinished`, `external_timeout`), so the trial is unmeasured
-   (`STOP_TRIAL_UNMEASURED`). The bare rover in EV-05 keeps its last velocity and tripwire 3 ends
+   (`STOP_TRIAL_UNMEASURED`). A power-loss command that backgrounds its cut
+   (`sh -c '(sleep 0.3; touch ESTOP) &'`) exits at once, and the kit ends what it left in its
+   session, so the cut never happens: the rover runs on until tripwire 3 trips, and the stop row
+   says the stop was not issued (`external_left_running`), so the trial is unmeasured and the run
+   INCONCLUSIVE-shaped, not a FAIL against a machine that never lost power (round-4 kit note 1). The bare rover in EV-05 keeps its last velocity and tripwire 3 ends
    trial 1 at 1.80 s (0.90 m; 1.02 m to rest). The bare sim-so101 in EV-05 holds its last goal
    through the silence, then follows the restart at once: FAIL-shaped, `LOSS_RESUMED_EARLY`, and
    tripwire 3 ends the run.

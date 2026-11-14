@@ -41,6 +41,7 @@ import math
 import os
 import platform
 import shutil
+import signal
 import sys
 import time
 from collections.abc import Callable, Mapping
@@ -66,10 +67,13 @@ from .feeds import SimFeed, UDPFeed, parse_instrument
 from .interlocks import (
     InterlockError,
     Ledger,
+    check_command,
     default_ledger_path,
     file_sha256,
     require_run_flags,
+    require_terminal,
     setup_hash,
+    typed_word,
 )
 from .kin import ArmFK, FKError
 from .limits import DEFAULT, Limits
@@ -96,7 +100,10 @@ class RunError(RuntimeError):
 
 
 def _stderr(msg: str) -> None:
-    print(msg, file=sys.stderr, flush=True)
+    try:
+        print(msg, file=sys.stderr, flush=True)
+    except OSError:  # the terminal is gone (a hangup): the stop and the records go on without it
+        pass
 
 
 def _iso(t: float | None = None) -> str:
@@ -319,10 +326,21 @@ class _Live:
         The watchdog stops first because its job ends with the stop: by now it has judged any
         latch (the command thread waits for that), and after a cancelled start a trip during the
         OFF prompt (say the operator stopped the tracker first) would have no command thread to
-        execute it and would fire a false e-stop."""
+        execute it and would fire a false e-stop.
+
+        SIGHUP and SIGTERM are ignored while it runs (``_hold_signals``)."""
+        held = _hold_signals()
+        try:
+            return self._teardown(result)
+        finally:
+            _release_signals(held)
+
+    def _teardown(self, result: SessionResult | None) -> str:
         if self.watchdog.is_alive():
             self.watchdog.stop()
-            self.watchdog.join(2.0)
+            # it may be running the escalation command, which takes up to estop_timeout_s: wait
+            # for it, or declared.json loses the record of a command that ran
+            self.watchdog.join(self.limits.estop_timeout_s + 2.0)
         stuck = self.command.is_alive()
         closed = "not closed: the command thread is stuck holding the bus" if stuck else "closed"
         if not stuck:
@@ -337,6 +355,36 @@ class _Live:
             self.files.close()
         self.alarm.stop()
         return closed
+
+
+#: The signals the teardown ignores (round-3 review of #13, note 1). There is no SIGHUP on Windows.
+HELD_SIGNALS = ("SIGHUP", "SIGTERM")
+
+
+def _hold_signals() -> dict:
+    """Ignore SIGHUP and SIGTERM for the teardown. Returns the handlers to put back.
+
+    By the teardown the session's handlers, which turn either signal into a stop, are gone, and
+    the stop has run. With the default action, a hangup at the OFF question, which waits for a
+    person, ended the process before the end record was written (round-3 review of #13, note 1).
+    Ignored, the signal is dropped: the OFF read fails as the terminal goes, torque stays on
+    (``feetech.leave_safe``), and the run ends as usual. Off the main thread, where Python cannot
+    set a handler, nothing is held."""
+    held = {}
+    for name in HELD_SIGNALS:
+        sig = getattr(signal, name, None)
+        if sig is None:
+            continue
+        try:
+            held[sig] = signal.signal(sig, signal.SIG_IGN)
+        except ValueError:  # not the main thread
+            break
+    return held
+
+
+def _release_signals(held: dict) -> None:
+    for sig, handler in held.items():
+        signal.signal(sig, signal.SIG_DFL if handler is None else handler)
 
 
 def _exit_code(result: SessionResult, live: _Live) -> int:
@@ -364,6 +412,19 @@ def _end_block(result: SessionResult | None, live: _Live, closed: str) -> dict:
 def _ask(question: str) -> str:
     """The operator's typed answer (looked up at call time, so tests can replace input())."""
     return input(question)
+
+
+def terminal_prompt(prompt: Callable[[str], str]) -> Callable[[str], str]:
+    """``prompt`` for a run on hardware: the word that starts it (RUN, GO) is asked at the terminal
+    with ``interlocks.typed_word`` (``session._confirm_word`` looks for ``ask_word``), so input typed
+    before the question never answers it and Ctrl+C ends it at once; any other question (the
+    adapter's OFF at close) goes through ``prompt`` as before."""
+
+    def ask(question: str) -> str:
+        return prompt(question)
+
+    ask.ask_word = typed_word
+    return ask
 
 
 def load_tour(space, path) -> tuple[object, bytes]:
@@ -404,6 +465,7 @@ def execute_run(args, *, prompt: Callable[[str], str] = _ask, log: Callable[[str
         args.seed = 0 if test == "ev10" else 7
     try:
         require_run_flags(args, mode)
+        check_command(getattr(args, "estop_cmd", None), "--estop-cmd")  # a typo is found now (item 4)
         if test == "ev10" and (mode != "full" or not getattr(args, "waypoints", None)):
             raise RunError("EV-10 runs the be-waypoints/1 tour: --mode full --waypoints FILE")
         if test == "ev10" and getattr(args, "seconds", None):
@@ -440,6 +502,9 @@ def execute_run(args, *, prompt: Callable[[str], str] = _ask, log: Callable[[str
         if kind == "none" and not fk_tripwire:
             raise RunError("with no live instrument the robot's own state is the only supervision, so the "
                            "FK tripwire must be on (--urdf, and no --no-fk-tripwire-i-understand)")
+        if not desc.get("simulation"):  # RUN from a terminal only: never piped, never typed ahead
+            require_terminal()
+            prompt = terminal_prompt(prompt)
         urdf_sha = file_sha256(args.urdf)
         file_space = load_command_space(args.command_space)
         if test == "ev10":
@@ -629,6 +694,7 @@ def execute_goto_start(args, *, prompt: Callable[[str], str] = _ask,
                        log: Callable[[str], None] = _stderr, limits: Limits = DEFAULT) -> int:
     try:
         require_run_flags(args, "goto-start")
+        check_command(getattr(args, "estop_cmd", None), "--estop-cmd")
         if getattr(args, "wrapper", None):
             raise RunError("goto-start moves the bare robot; drop --wrapper")
         if not args.urdf:
@@ -650,6 +716,9 @@ def execute_goto_start(args, *, prompt: Callable[[str], str] = _ask,
         context = _context(args, "goto-start", kit_config, limits, prompt, log)
         adapter = adapter_module(args.adapter).from_args(args, context)
         fk = ArmFK.build(args.urdf, kit_config.get("joint_map"), envelope)
+        if not adapter.describe().get("simulation"):  # GO from a terminal only: never piped or typed ahead
+            require_terminal()
+            prompt = terminal_prompt(prompt)
     except (InterlockError, RunError, AdapterError, FKError, ValueError, OSError) as e:
         log(f"Refused: {e}")
         return EXIT_REFUSED

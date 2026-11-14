@@ -988,7 +988,7 @@ def execute_run(args, *, prompt: Callable[[str], str] = _ask, log: Callable[[str
                           wait_still=True)
     finally:
         if live is not None:
-            closed = live.teardown(result)
+            closed = _close_live(live, result, log)
         else:  # failed before the session existed: nothing moved, but the robot is connected
             adapter.close()
     end_pair = clock.end_pair()
@@ -1003,9 +1003,19 @@ def execute_run(args, *, prompt: Callable[[str], str] = _ask, log: Callable[[str
                        "ended_wall": time.time(), "run_dir": str(out.resolve())})
     code = _exit_code(result, live)
     log(f"Run ended ({live.latch.kind}: {live.latch.reason}); exit {code}. Run directory: {out}")
-    for warning in _source_command_warnings(live):
-        log(warning)
     return code
+
+
+def _close_live(live: _Live, result: SessionResult | None, log: Callable[[str], None]) -> str:
+    """The run's teardown, after the warnings about its source commands (round-4 kit review, note
+    2): the teardown's OFF question has the operator touch the arm, so "check the machine before
+    you touch it" comes first. Returns how the adapter was left."""
+    try:
+        for warning in _source_command_warnings(live):
+            log(warning)
+    finally:  # the teardown runs whatever happens above, a Ctrl+C included
+        closed = live.teardown(result)
+    return closed
 
 
 def _source_command_warnings(live: _Live | None) -> list[str]:
@@ -1013,7 +1023,8 @@ def _source_command_warnings(live: _Live | None) -> list[str]:
     opened the stop circuit); the end of the run says so, trial by trial. So does a process a
     command left running in its session after it exited, which the kit ended too and which leaves
     the trial unmeasured (round-3 K8, round-4 K11 and note 1), and an external stop that was issued
-    and not reset since, which may still be in force."""
+    and not reset since, which may still be in force. ``_close_live`` logs them before the OFF
+    question (round-4 kit review, note 2)."""
     c = live.command if live is not None else None
     if not isinstance(c, TrialCommandThread):
         return []

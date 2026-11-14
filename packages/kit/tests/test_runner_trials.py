@@ -778,6 +778,29 @@ def test_a_process_that_leaves_the_session_is_reported_never_taken_for_ended(tmp
             os.kill(int(pid_file.read_text()), signal.SIGKILL)
 
 
+def test_the_warnings_come_before_the_off_question():
+    """Round-4 kit review, note 2: the end-of-run warnings ("check the machine before you touch
+    it") were logged after the teardown, whose OFF question has the operator touch the arm, and a
+    Ctrl+C there skipped them. ``_close_live`` logs them first, then tears down."""
+    from types import SimpleNamespace
+
+    seg = TrialSegment((), "trial 1 (power_loss)", "stop", "power_loss", 0.8, 0.5, True)
+    thread = _bare_thread(segments=(seg,))
+    thread.trials[0].update(issued="external_timeout", command="SIGTERM")
+    order = []
+    live = SimpleNamespace(command=thread, teardown=lambda result: order.append("OFF question") or "closed")
+    assert runmod._close_live(live, None, order.append) == "closed"
+    assert order[-1] == "OFF question" and order[0].startswith("*** trial 1 (power_loss)")
+
+    def interrupted(line):  # a Ctrl+C while the warnings print must not cost the teardown
+        raise KeyboardInterrupt
+
+    order.clear()
+    with pytest.raises(KeyboardInterrupt):
+        runmod._close_live(live, None, interrupted)
+    assert order == ["OFF question"]
+
+
 def test_the_last_trials_source_command_is_waited_for_before_the_run_finishes(tmp_path):
     """Round-2 kit review N-a: the run's end did not wait for the last trial's source command, so a
     power-loss command still running (sh -c 'touch ESTOP; sleep 4.9') left the last stop row

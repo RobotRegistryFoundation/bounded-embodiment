@@ -235,7 +235,10 @@ def test_a_hung_source_command_never_blocks_the_runners_stop(cases, case_id):
     # round-2 K1: the hung command was ended (at its deadline, or when the run ended before it),
     # and the end of the run says it may have acted
     assert end["trials"][0]["command"] in ("SIGTERM", "SIGKILL")
-    assert any("may have acted" in line for line in s["log_tail"])
+    lines = s["log_tail"]
+    warned = next(i for i, line in enumerate(lines) if "may have acted" in line)
+    if case_id.startswith("so101"):  # round-4 kit review, note 2: the warning comes before the OFF question
+        assert warned < next(i for i, line in enumerate(lines) if line.startswith("? Support the arm"))
 
 
 def test_a_cut_the_kit_had_to_end_leaves_the_trial_unmeasured(cases):

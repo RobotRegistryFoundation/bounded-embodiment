@@ -263,6 +263,7 @@ def run_case(case_id: str, out_dir: str | Path, real_time: bool = False) -> dict
 
     def prompt(question: str) -> str:
         asked.append(question)
+        logs.append(f"? {question}")  # where each question falls among the log lines
         if "Type RUN" in question:
             return "RUN"
         if "Type NEXT" in question:

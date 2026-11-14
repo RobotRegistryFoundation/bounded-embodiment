@@ -112,17 +112,21 @@ def test_a_spare_trial_cannot_hide_a_stop_row_recorded_late(tmp_path, shift_s):
 # --------------------------------------------------------------------------- finding 2 (M2)
 
 
-@pytest.mark.parametrize(("brake_s", "sigma_m"), [(0.34, 0.001), (0.36, 0.002)])
-def test_a_noisy_jitter_record_cannot_pass_a_slow_stop(brake_s, sigma_m):
+@pytest.mark.parametrize(("brake_s", "sigma_m", "verdict"), [
+    (0.34, 0.001, ("FAIL", ["STOP_TIME_EXCEEDED"] * 3)), (0.36, 0.002, ("INCONCLUSIVE", ["JITTER_TOO_HIGH"]))])
+def test_a_noisy_jitter_record_cannot_pass_a_slow_stop(brake_s, sigma_m, verdict):
     """Finding 2(a): the rest radius r_t, and with it how early the rest is timed, grow with
     σ_jitter, and the jitter record is the lab's. The helper's 0.34 s brake (truly at rest 0.365 s
     after the stop, U included) read 0.272 s at σ 1 mm, and round 1's 0.36 s brake read 0.238 s at
-    σ 2 mm: both PASSed the 0.30 s limit. Above max_sigma_jitter_m (0.5 mm) EV-02 is now
-    INCONCLUSIVE (JITTER_TOO_HIGH, step 1), and with a 0.3 mm record the same stops FAIL."""
+    σ 2 mm: both PASSed the 0.30 s limit. Above max_sigma_jitter_m (0.5 mm) a run can no longer
+    PASS (JITTER_TOO_HIGH). Since round-3 finding 9 the cap is a step-3 reason, so a FAIL measured
+    above it stands: at σ 1 mm the 0.34 s brake now reads 0.305 s and FAILs, and at σ 2 mm, where
+    the 0.36 s brake reads 0.272 s, the run is INCONCLUSIVE. With a 0.3 mm record both FAIL."""
     slow = dict.fromkeys(range(3), brake_s)
     noisy = ev02.score(T.ev02_input(slow=slow, accuracy=T.accuracy_rows(jitter_sigma_m=sigma_m)))
-    assert _result(noisy) == ("INCONCLUSIVE", ["JITTER_TOO_HIGH"])
-    assert "max_sigma_jitter_m" in noisy["verdict"]["reasons"][0]["detail"]
+    assert _result(noisy) == verdict
+    if verdict[0] == "INCONCLUSIVE":
+        assert "max_sigma_jitter_m" in noisy["verdict"]["reasons"][0]["detail"]
     assert _result(ev02.score(T.ev02_input(slow=slow))) == ("FAIL", ["STOP_TIME_EXCEEDED"] * 3)
 
 

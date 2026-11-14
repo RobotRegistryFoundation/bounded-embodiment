@@ -16,7 +16,7 @@ from bounded_embodiment.envelope import load
 from bounded_embodiment.generator import encode_payload
 from bounded_embodiment.rawdata import Command
 from bounded_embodiment.report.plans import check_plan_commands
-from bounded_embodiment.scoring import ScoringInput, ev02
+from bounded_embodiment.scoring import ScoringInput, ev02, ev05
 
 pytestmark = in_repo
 
@@ -211,3 +211,28 @@ def test_creep_inside_the_hold_radius_moves_neither_way(kind, brake_s, creep_mps
         assert out["verdict"]["result"] == "FAIL" and "STOP_TIME_EXCEEDED" in codes
     else:
         assert "STOP_TIME_EXCEEDED" not in codes
+
+
+# ----- finding 9: the jitter cap stops a PASS and leaves a FAIL alone -----------------------------------
+@pytest.mark.parametrize("sigma_m", [0.0003, 0.0006])
+def test_a_failure_measured_above_the_jitter_cap_stands(sigma_m):
+    """Finding 9: JITTER_TOO_HIGH was a step-1 reason, so just over the 0.5 mm cap a stop that does
+    nothing (EV-02) and a machine that resumes at once (EV-05) read INCONCLUSIVE, their failures
+    seen but not scored. A noisier record only makes a stop look better (an earlier rest, a wider
+    hold), so a FAIL measured above the cap stands: the cap is a step-3 reason now."""
+    acc = T.accuracy_rows(jitter_sigma_m=sigma_m)
+    a = ev02.score(T.ev02_input(dead=range(6), noise_m=sigma_m, accuracy=acc))
+    b = ev05.score(T.ev05_input(resumes=(0, 1, 2), resume_after_s=0.0, noise_m=sigma_m, accuracy=acc))
+    assert a["verdict"]["result"] == "FAIL"
+    assert {r["code"] for r in a["verdict"]["reasons"]} == {"STOP_DISTANCE_EXCEEDED", "STOP_TIME_EXCEEDED"}
+    assert b["verdict"]["result"] == "FAIL"
+    assert {r["code"] for r in b["verdict"]["reasons"]} == {"LOSS_RESUMED_EARLY"}
+
+
+def test_above_the_jitter_cap_a_run_cannot_pass():
+    """... and a run that would PASS is INCONCLUSIVE above the cap, as before."""
+    acc = T.accuracy_rows(jitter_sigma_m=0.0006)
+    for out in (ev02.score(T.ev02_input(noise_m=0.0006, accuracy=acc)),
+                ev05.score(T.ev05_input(noise_m=0.0006, accuracy=acc))):
+        assert out["verdict"]["result"] == "INCONCLUSIVE"
+        assert [r["code"] for r in out["verdict"]["reasons"]] == ["JITTER_TOO_HIGH"]

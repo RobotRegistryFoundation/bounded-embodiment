@@ -3,7 +3,8 @@
 """RUN and GO on hardware (from the review of PR #12: S3 and N1, on main's own paths): the typed
 word comes from a terminal only, input typed before the question never answers it, and Ctrl+C at
 the question cancels at once. And (round-2 review of #13, item 4) the escalation command is
-checked before anything connects.
+checked before anything connects. And (round-3 review of #13, note 1) a hangup at the OFF
+question no longer loses the end record.
 
 The cases drive sim-so101 declared as hardware (``describe()["simulation"]`` False) on a
 pseudo-terminal: goto-start, and a 1 s EV-03 full run with no instrument (the robot's own state
@@ -11,7 +12,9 @@ supervises) on a planted shakedown. Nothing here touches a real robot, port or n
 from __future__ import annotations
 
 import argparse
+import errno
 import io
+import json
 import os
 import signal
 import sys
@@ -230,3 +233,65 @@ def test_the_escalation_command_is_checked_before_anything_connects(as_hardware,
     assert runmod.execute_goto_start(goto, log=logs.append) == runmod.EXIT_REFUSED
     assert any("--estop-cmd" in m and "does not split" in m for m in logs), logs
     assert as_hardware == []
+
+
+# ----- a hangup at the OFF question (round-3 review of #13, note 1) -------------------------------
+
+
+def _off_question_hangs_up(sig):
+    """The operator's terminal as the connection drops while the OFF question waits: the process
+    gets ``sig``, then the read fails as a gone terminal's does."""
+
+    def prompt(question: str) -> str:
+        if "OFF" in question:
+            os.kill(os.getpid(), sig)
+            raise OSError(errno.EIO, "Input/output error")
+        return ""
+
+    return prompt
+
+
+@pytest.fixture
+def counted(request):
+    """A handler that counts the signal, standing in for its default action, so that a signal
+    that gets through is counted rather than ending pytest."""
+    sig = getattr(signal, request.param)
+    got = []
+
+    def count(signum, frame):
+        got.append(signum)
+
+    previous = signal.signal(sig, count)
+    yield sig, got, count
+    signal.signal(sig, previous)
+
+
+@pytest.mark.parametrize("counted", ["SIGHUP", "SIGTERM"], indirect=True)
+def test_a_hangup_at_the_off_question_keeps_the_end_record(as_hardware, run_terminal, tmp_path, counted):
+    """Note 1: the session's handlers are gone by the teardown, so a hangup at the OFF question
+    ended the process (exit 129) and declared.json's end stayed null. The teardown ignores SIGHUP
+    and SIGTERM now: the read fails, torque stays on, and the run ends as usual."""
+    sig, got, count = counted
+    type_, screen = run_terminal
+    _when_asked(screen, lambda: type_("RUN\n"))
+    logs = []
+    code = runmod.execute_run(_run_args(tmp_path), prompt=_off_question_hangs_up(sig), log=logs.append)
+    assert code in (runmod.EXIT_OK, runmod.EXIT_STOPPED), logs
+    assert got == []  # ignored, not handled
+    assert signal.getsignal(sig) is count  # and the handler before the teardown is back
+    assert "Torque left on; the arm holds its last goal." in logs
+    end = json.loads((tmp_path / "run" / "declared.json").read_text(encoding="utf-8"))["end"]
+    assert end is not None and end["adapter_close"] == "closed"
+    assert any(m.startswith("Run ended") for m in logs), logs
+
+
+@pytest.mark.parametrize("counted", ["SIGHUP"], indirect=True)
+def test_a_hangup_at_the_off_question_after_goto_start_is_ignored(as_hardware, terminal, counted):
+    sig, got, count = counted
+    type_, screen = terminal
+    _when_asked(screen, lambda: type_("GO\n"))
+    logs = []
+    code = runmod.execute_goto_start(_be(*GOTO), prompt=_off_question_hangs_up(sig), log=logs.append)
+    assert code == runmod.EXIT_OK, logs
+    assert got == [] and signal.getsignal(sig) is count
+    assert "Torque left on; the arm holds its last goal." in logs

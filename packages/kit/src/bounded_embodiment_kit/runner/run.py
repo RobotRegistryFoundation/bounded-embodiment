@@ -41,6 +41,7 @@ import math
 import os
 import platform
 import shutil
+import signal
 import sys
 import time
 from collections.abc import Callable, Mapping
@@ -325,7 +326,16 @@ class _Live:
         The watchdog stops first because its job ends with the stop: by now it has judged any
         latch (the command thread waits for that), and after a cancelled start a trip during the
         OFF prompt (say the operator stopped the tracker first) would have no command thread to
-        execute it and would fire a false e-stop."""
+        execute it and would fire a false e-stop.
+
+        SIGHUP and SIGTERM are ignored while it runs (``_hold_signals``)."""
+        held = _hold_signals()
+        try:
+            return self._teardown(result)
+        finally:
+            _release_signals(held)
+
+    def _teardown(self, result: SessionResult | None) -> str:
         if self.watchdog.is_alive():
             self.watchdog.stop()
             # it may be running the escalation command, which takes up to estop_timeout_s: wait
@@ -345,6 +355,36 @@ class _Live:
             self.files.close()
         self.alarm.stop()
         return closed
+
+
+#: The signals the teardown ignores (round-3 review of #13, note 1). There is no SIGHUP on Windows.
+HELD_SIGNALS = ("SIGHUP", "SIGTERM")
+
+
+def _hold_signals() -> dict:
+    """Ignore SIGHUP and SIGTERM for the teardown. Returns the handlers to put back.
+
+    By the teardown the session's handlers, which turn either signal into a stop, are gone, and
+    the stop has run. With the default action, a hangup at the OFF question, which waits for a
+    person, ended the process before the end record was written (round-3 review of #13, note 1).
+    Ignored, the signal is dropped: the OFF read fails as the terminal goes, torque stays on
+    (``feetech.leave_safe``), and the run ends as usual. Off the main thread, where Python cannot
+    set a handler, nothing is held."""
+    held = {}
+    for name in HELD_SIGNALS:
+        sig = getattr(signal, name, None)
+        if sig is None:
+            continue
+        try:
+            held[sig] = signal.signal(sig, signal.SIG_IGN)
+        except ValueError:  # not the main thread
+            break
+    return held
+
+
+def _release_signals(held: dict) -> None:
+    for sig, handler in held.items():
+        signal.signal(sig, signal.SIG_DFL if handler is None else handler)
 
 
 def _exit_code(result: SessionResult, live: _Live) -> int:

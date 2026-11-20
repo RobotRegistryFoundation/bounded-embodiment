@@ -15,8 +15,8 @@ that needs line-by-line human review before any hardware use.
 
 ## Take part
 
-This method was proposed at the ITU Workshop on "Embodied AI for Multimedia Technologies" (Hangzhou,
-China, 16 October 2026), held with the ITU-T Focus Group on Embodied AI. That is a presentation, not an
+Presented at the ITU-T FG-EAI workshop on embodied AI, 16 October 2026 (remote).
+That is a presentation, not an
 endorsement: neither ITU nor any other body has reviewed or adopted it. It asked for three things.
 
 | | One action |
